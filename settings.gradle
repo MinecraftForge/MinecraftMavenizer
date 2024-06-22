@@ -1,0 +1,23 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.7.0'
+}
+
+dependencyResolutionManagement {
+    versionCatalogs {
+        libs {
+            library('gson', 'com.google.code.gson:gson:2.10.1')
+            library('jopt', 'net.sf.jopt-simple:jopt-simple:6.0-alpha-3')
+            library('jver', 'net.minecraftforge:java-version:0.0.0')
+            library('srgutils', 'net.minecraftforge:srgutils:0.5.11')
+            library('diff', 'io.codechicken:DiffPatch:2.0.0.36') // Fuzzy patching TODO: [MCMaven] Switch to fat-jar to transtives don't leak?
+        }
+    }
+}
+
+rootProject.name = 'minecraft-maven'

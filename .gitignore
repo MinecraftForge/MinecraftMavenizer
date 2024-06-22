@@ -1,0 +1,10 @@
+/**/.gradle/
+/**/.classpath
+/**/.project
+/**/.settings/
+/**/bin/
+/**/test/
+/**/build/
+/repo/
+/cache/
+/_old_mdks_/

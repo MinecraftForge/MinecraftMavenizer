@@ -1,0 +1,1 @@
+package net.minecraftforge.mcmaven.mcpconfig;

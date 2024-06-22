@@ -1,0 +1,20 @@
+plugins {
+    id 'java-library'
+    id 'net.minecraftforge.licenser' version '1.0.1'
+}
+
+repositories {
+    mavenCentral()
+}
+
+license {
+    header rootProject.file('../LICENSE-header.txt')
+    newLine false
+}
+
+dependencies {
+    implementation gradleApi()
+    implementation 'org.ow2.asm:asm:9.7'
+    implementation 'org.ow2.asm:asm-tree:9.7'
+    implementation 'org.ow2.asm:asm-util:9.7'
+}
