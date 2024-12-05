@@ -14,34 +14,57 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import net.minecraftforge.jver.api.IJavaInstall;
-import net.minecraftforge.jver.api.IJavaLocator;
+import net.minecraftforge.java_version.api.IJavaInstall;
+import net.minecraftforge.java_version.api.IJavaLocator;
+import net.minecraftforge.mcmaven.util.Log;
+import org.jspecify.annotations.Nullable;
 
+/** Represents the JDK cache for this tool. */
 public class JDKCache {
     private boolean attemptedLocate = false;
-    private final File FAILED_MARKER = new File("FAILED TO DOWNLOAD FROM DISCO");
     private final Map<Integer, File> jdks = new HashMap<>();
     private final IJavaLocator disco;
 
+    /**
+     * Initializes the JDK cache with the given cache directory.
+     *
+     * @param cache The cache directory
+     */
     public JDKCache(File cache) {
         this.disco = IJavaLocator.disco(cache);
     }
 
-    public File get(int version) {
+    // TODO: [MCMaven][JDKCache] Make this thread safe. If this method is accessed concurrently, the same JDK could be downloaded more than once.
+    /**
+     * Gets the JDK for the given version.
+     *
+     * @param version The version to get
+     * @return The JDK, or {@code null} if it could not be found or downloaded
+     */
+    public @Nullable File get(int version) {
         if (!attemptedLocate)
-            attempLocate();
+            attemptLocate();
 
+        // check cache. stop immediately if we get a hit.
         File ret = jdks.get(version);
-        if (ret != null)
-            return ret == FAILED_MARKER ? null : ret;
+        if (ret != null) return ret;
 
         IJavaInstall downloaded = disco.provision(version); // Implementation detail, we only download jdks, so no need to check here
-        ret = downloaded == null ? FAILED_MARKER : downloaded.home();
-        jdks.putIfAbsent(version, ret);
-        return ret == FAILED_MARKER ? null : ret;
+        if (downloaded == null) return null;
+        ret = downloaded.home();
+
+        // not sure how this would ever hit. but just in case...
+        var old = jdks.putIfAbsent(version, ret);
+        if (old != null) {
+            Log.error("JDKCache: Downloaded JDK " + version + " is replacing an existing download! It was probably downloaded by another thread.");
+            Log.error("JDKCache: Old JDK: " + old);
+            // TODO Throw exception here
+        }
+
+        return ret;
     }
 
-    private void attempLocate() {
+    private void attemptLocate() {
         if (attemptedLocate)
             return;
         attemptedLocate = true;

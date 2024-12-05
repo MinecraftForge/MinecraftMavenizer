@@ -1,5 +1,16 @@
 package net.minecraftforge.mcmaven.cache;
 
+import net.minecraftforge.mcmaven.util.Artifact;
+import net.minecraftforge.mcmaven.util.DownloadUtils;
+import net.minecraftforge.mcmaven.util.HashFunction;
+import net.minecraftforge.mcmaven.util.Log;
+import net.minecraftforge.mcmaven.util.Util;
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -7,19 +18,8 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-
-import org.w3c.dom.Document;
-import org.w3c.dom.NodeList;
-import org.xml.sax.SAXException;
-
-import net.minecraftforge.mcmaven.util.Artifact;
-import net.minecraftforge.mcmaven.util.DownloadUtils;
-import net.minecraftforge.mcmaven.util.HashFunction;
-import net.minecraftforge.mcmaven.util.Log;
-import net.minecraftforge.mcmaven.util.Util;
-
+// TODO: [MCMaven][MavenCache] Handle download failures properly
+/** Represents the maven cache for this tool. */
 public class MavenCache {
     protected HashFunction[] known_hashes = new HashFunction[] {
         // can't use SHA256/512 as gradle doesn't always update those files. Depending on version used to publish
@@ -31,6 +31,13 @@ public class MavenCache {
     private final String name;
     private final String repo;
 
+    /**
+     * Initializes a new maven cache with the given name, repository, and cache directory.
+     *
+     * @param name The name
+     * @param repo The repo
+     * @param root The cache directory
+     */
     public MavenCache(String name, String repo, File root) {
         this.name = name;
         this.cache = new File(root, "maven");
@@ -41,23 +48,64 @@ public class MavenCache {
         Log.log(message);
     }
 
+    /**
+     * Downloads a maven artifact.
+     *
+     * @param artifact The artifact
+     * @return The downloaded artifact
+     *
+     * @throws IOException If an error occurs while downloading the file
+     */
+    @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
     public File download(Artifact artifact) {
         return download(false, artifact.getPath());
     }
 
+    /**
+     * Downloads the maven metadata for an artifact.
+     *
+     * @param artifact The artifact
+     * @return The downloaded maven metadata
+     *
+     * @throws IOException If an error occurs while downloading the file
+     * @see #downloadVersionMeta(Artifact)
+     */
+    @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
     public File downloadMeta(Artifact artifact) {
         return download(true, artifact.getGroup().replace('.', '/') + '/' + artifact.getName() + "/maven-metadata.xml");
     }
 
+    /**
+     * Downloads the maven metadata for an artifact and its version.
+     *
+     * @param artifact The artifact
+     * @return The downloaded maven metadata
+     *
+     * @throws IOException If an error occurs while downloading the file
+     */
+    @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
     public File downloadVersionMeta(Artifact artifact) {
         return download(true, artifact.getGroup().replace('.', '/') + '/' + artifact.getName() + '/' + artifact.getVersion() + "/maven-metadata.xml");
     }
 
+    /**
+     * Downloads a maven file.
+     *
+     * @param changing If we should ignore the cache
+     * @param path     The path of the file to download
+     * @return The downloaded file
+     *
+     * @throws IOException If an error occurs while downloading the file
+     */
+    @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
     protected File download(boolean changing, String path) {
         var target = new File(cache, path);
 
         if (target.exists()) {
             boolean invalidHash = false;
+
+            // TODO [MCMaven][Cache] Double check hashes of existing files
+            // maybe set it so we only do this for files from forge maven?
             /* check if existing files don't match the hash for the file, this would happen if something corrupted the file
              * But honestly just a waste of time.
             var existingTypes = new ArrayList<HashFunction>();
@@ -130,10 +178,24 @@ public class MavenCache {
         }
     }
 
-    protected void downloadFile(File target, String path) {
-        DownloadUtils.downloadFile(target, this.repo + path);
+    /**
+     * Downloads a maven file.
+     *
+     * @param target The file to download to
+     * @param path   The path of the file to download
+     * @throws IOException If an error occurs while downloading the file
+     */
+    protected void downloadFile(File target, String path) throws IOException {
+        // TODO Currently there is no handling if the download fails. For now, I'm throwing the exception.
+        var ret = DownloadUtils.downloadFile(target, this.repo + path);
+        if (!ret)
+            throw new IOException("Failed to download " + this.repo + path);
     }
 
+    /**
+     * @param artifact The artifact
+     * @return All the available versions of the artifact
+     */
     public List<String> getVersions(Artifact artifact) {
         File meta = downloadMeta(artifact);
         try (InputStream input = new FileInputStream(meta)) {

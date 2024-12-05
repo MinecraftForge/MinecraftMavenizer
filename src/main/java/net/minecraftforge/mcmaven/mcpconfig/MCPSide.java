@@ -1,6 +1,10 @@
 package net.minecraftforge.mcmaven.mcpconfig;
 
+import net.minecraftforge.mcmaven.util.Artifact;
+
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MCPSide {
     private final MCP mcp;
@@ -27,13 +31,40 @@ public class MCPSide {
         return this.mcp;
     }
 
+    public List<Artifact> getMCLibraries() {
+        var artifacts = new ArrayList<Artifact>();
+
+        // minecraft version.json libs + mcpconfig libs + userdev libs
+        // also for module metadata (same order)
+        for (var lib : this.getTasks().getLibraries()) {
+            var os = lib.os();
+            var name = lib.name();
+            var artifact = os != null ? Artifact.from(name, os) : Artifact.from(name);
+            artifacts.add(artifact);
+        }
+
+        return artifacts;
+    }
+
+    public List<Artifact> getMCPConfigLibraries() {
+        var artifacts = new ArrayList<Artifact>();
+
+        for (var lib : this.mcp.getConfig().getLibraries(this.side)) {
+            var artifact = Artifact.from(lib);
+            artifacts.add(artifact);
+        }
+
+        return artifacts;
+    }
+
+    // TODO delete this after we've implemented the alternative
     /*
     List<RepositoryArtifact> buildArtifacts(Dependency dep, boolean sources) {
         var metadata = metadata(dep);
         SingleFileOutput bin = null;
         SingleFileOutput src = null;
         if (Util.isSourceDisabled()) {
-            /**
+            /*
              * Sources are disabled so take the pre-decomp jar
              * Make intermediate -> named mapping file
              * Run through Jar Renamer

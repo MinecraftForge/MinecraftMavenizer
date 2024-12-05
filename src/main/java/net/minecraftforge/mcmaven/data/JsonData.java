@@ -3,6 +3,7 @@ package net.minecraftforge.mcmaven.data;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -12,6 +13,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonIOException;
 import com.google.gson.JsonSyntaxException;
 
+// TODO [MCMaven][Documentation] Document
 public class JsonData {
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting()
@@ -115,5 +117,14 @@ public class JsonData {
     }
     private static <T> T fromJson(String data, Class<T> classOfT) throws JsonSyntaxException, JsonIOException {
         return GSON.fromJson(data, classOfT);
+    }
+
+    public static String toJson(Object src) {
+        return GSON.toJson(src);
+    }
+    public static void toJson(Object src, File file) throws IOException {
+        try (var writer = new FileWriter(file)) {
+            GSON.toJson(src, writer);
+        }
     }
 }

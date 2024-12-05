@@ -1,15 +1,22 @@
 package net.minecraftforge.mcmaven.cache;
 
-import java.io.File;
-
 import net.minecraftforge.mcmaven.util.Constants;
 
+import java.io.File;
+
+/** Represents the cache for this tool. */
 public class Cache {
     public final File root;
     public final JDKCache jdks;
     public final MavenCache forge;
     public final MinecraftMavenCache mojang;
 
+    /**
+     * Makes a new cache with the given root and JDK cache directories.
+     *
+     * @param root     The root cache directory.
+     * @param jdkCache The JDK cache directory.
+     */
     public Cache(File root, File jdkCache) {
         this.root = root;
         this.jdks = new JDKCache(jdkCache);

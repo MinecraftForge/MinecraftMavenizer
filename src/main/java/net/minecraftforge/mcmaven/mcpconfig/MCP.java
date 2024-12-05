@@ -11,6 +11,10 @@ import net.minecraftforge.mcmaven.data.JsonData;
 import net.minecraftforge.mcmaven.data.MCPConfig;
 import net.minecraftforge.mcmaven.util.Artifact;
 
+// TODO [MCMaven][Documentation] Document
+/**
+ * The MCP build process.
+ */
 public class MCP {
     private final MCPConfigRepo repo;
     private final Artifact name;
@@ -90,7 +94,7 @@ public class MCP {
         // java_version
         if (config.spec < 4 && config.functions != null) {
             for (var func : config.functions.values()) {
-                if (func.java_version != null)
+                if (func.java_version() != null)
                     throw new IllegalStateException("Invalid MCP Config: " + name + " - Function `java_version` property is only supported on spec 4 or higher, found spec: " + config.spec);
             }
         }
@@ -123,4 +127,5 @@ public class MCP {
     public File getBuildFolder() {
         return this.build;
     }
+
 }

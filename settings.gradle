@@ -13,9 +13,16 @@ dependencyResolutionManagement {
         libs {
             library('gson', 'com.google.code.gson:gson:2.10.1')
             library('jopt', 'net.sf.jopt-simple:jopt-simple:6.0-alpha-3')
-            library('jver', 'net.minecraftforge:java-version:0.0.0')
+            library('jver', 'net.minecraftforge:java-version:1.0.2')
             library('srgutils', 'net.minecraftforge:srgutils:0.5.11')
             library('diff', 'io.codechicken:DiffPatch:2.0.0.36') // Fuzzy patching TODO: [MCMaven] Switch to fat-jar to transtives don't leak?
+
+            library('jspecify-annotations', 'org.jspecify:jspecify:1.0.0')
+            library('errorprone-core', 'com.google.errorprone:error_prone_core:2.36.0')
+            library('nullaway', 'com.uber.nullaway:nullaway:0.12.1')
+
+            library('fastcsv', 'de.siegmar:fastcsv:3.4.0')
+            library('commonsio', 'commons-io:commons-io:2.18.0')
         }
     }
 }

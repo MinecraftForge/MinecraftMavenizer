@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+// TODO: [MCMaven][Documentation] Document from MinecraftForge/MinecraftForge
 public class PromosSlim {
     private String homepage;
     private Map<String, String> promos;

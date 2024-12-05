@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+// TODO: [MCMaven][Documentation] Document from MinecraftForge/MCPConfig
 public class MCPConfig extends Config {
     public String version; // Minecraft version
     public Map<String, Object> data;
@@ -35,13 +36,13 @@ public class MCPConfig extends Config {
         return ret == null ? Collections.emptyList() : ret;
     }
 
-    public static class Function {
-        public String version; //Maven artifact for the jar to run
-        public String repo; //Maven repo to download the jar from
-        public List<String> args;
-        public List<String> jvmargs;
-        public Integer java_version;
-
+    public record Function(
+        String version,
+        String repo,
+        List<String> args,
+        List<String> jvmargs,
+        Integer java_version
+    ) {
         public int getJavaVersion(MCPConfig.V2 parent) {
             return java_version == null ? parent.java_target : java_version;
         }

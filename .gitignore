@@ -8,3 +8,10 @@
 /repo/
 /cache/
 /_old_mdks_/
+
+# Tool Output - Jonathan uses the run directory
+/run/
+/output/
+
+# Jonathan's IntelliJ Fuckery
+/.idea/
