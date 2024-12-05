@@ -37,7 +37,7 @@ public class JDKCache {
 
         IJavaInstall downloaded = disco.provision(version); // Implementation detail, we only download jdks, so no need to check here
         ret = downloaded == null ? FAILED_MARKER : downloaded.home();
-        ret = jdks.putIfAbsent(version, ret);
+        jdks.putIfAbsent(version, ret);
         return ret == FAILED_MARKER ? null : ret;
     }
 

@@ -1,5 +1,6 @@
 plugins {
     id 'java-library'
+    id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.licenser' version '1.0.1'
     id 'net.minecraftforge.gradleutils' version '2.3.6'
@@ -81,5 +82,13 @@ publishing {
     }
     repositories {
         maven gradleutils.publishingForgeMaven
+    }
+}
+
+idea {
+    module {
+        // IntelliJ IDEA does not do this by itself anymore...
+        downloadJavadoc = true
+        downloadSources = true
     }
 }
