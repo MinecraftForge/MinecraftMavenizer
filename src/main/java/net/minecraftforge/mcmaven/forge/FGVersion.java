@@ -1,9 +1,17 @@
 package net.minecraftforge.mcmaven.forge;
 
+import net.minecraftforge.mcmaven.util.ComparableVersion;
+import org.jspecify.annotations.Nullable;
+
 import java.util.LinkedHashMap;
 import java.util.SequencedMap;
-import net.minecraftforge.mcmaven.util.ComparableVersion;
 
+/**
+ * Represents a ForgeGradle version.
+ *
+ * @see <a href="https://github.com/MinecraftForge/ForgeGradle"><code>MinecraftForge/ForgeGradle</code> on
+ * GitHub.com</a>
+ */
 public enum FGVersion {
     v1_1("1.1"),
     v1_2("1.2"),
@@ -13,6 +21,7 @@ public enum FGVersion {
     v2_3("2.3"),
     /**
      * Gradle 3.9, MCPConfig v1
+     * <p>
      * The whole switch to data driven configs!
      */
     v3  ("3"),
@@ -22,17 +31,21 @@ public enum FGVersion {
     v4  ("4"),
     /**
      * Gradle 7, MCPConfig v3-4
-     * Some legacy work that never actually got anywhere.
-     * JarInJar disaster
+     * <p>
+     * Some legacy work that never actually got anywhere. Also, JarInJar disaster.
      *
-     * Changed mappings artifact to runtime only dependency
-     * Support for extracting bundled server jar file
-     * Support for custom mapping channels
+     * <ul>
+     *     <li>Changed mappings artifact to runtime only dependency</li>
+     *     <li>Support for extracting bundled server jar file</li>
+     *     <li>Support for custom mapping channels</li>
+     * </ul>
      */
     v5  ("5"),
     /**
-     * Support for Gradle 8, bunch of changes to how run configs are integrated into the
-     * IDE/Gradle but nothing of importance to how artifacts are generated.
+     * Gradle 8
+     * <p>
+     * A bunch of changes to how run configs are integrated into the IDE/Gradle but nothing of importance to how
+     * artifacts are generated.
      */
     v6  ("6");
 
@@ -47,7 +60,8 @@ public enum FGVersion {
         return this.comp.toString();
     }
 
-    private static SequencedMap<FGVersion, ComparableVersion> FORGE_TO_FG = new LinkedHashMap<>();
+    private static final SequencedMap<FGVersion, ComparableVersion> FORGE_TO_FG = new LinkedHashMap<>();
+
     private static void forge(FGVersion fg, String forge) {
         FORGE_TO_FG.put(fg, new ComparableVersion(forge));
     }
@@ -72,7 +86,13 @@ public enum FGVersion {
         //forge(v6_0_24, "1.20.6-50.0.1");
     }
 
-    public static FGVersion fromForge(String version) {
+    /**
+     * Gets the ForgeGradle version that corresponds to the given Forge version.
+     *
+     * @param version the Forge version
+     * @return the ForgeGradle version, or {@code null} if none
+     */
+    public static @Nullable FGVersion fromForge(String version) {
         var ver = new ComparableVersion(version);
         for (var entry : FORGE_TO_FG.reversed().entrySet()) {
             if (entry.getValue().compareTo(ver) <= 0)

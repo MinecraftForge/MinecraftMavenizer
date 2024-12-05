@@ -9,9 +9,15 @@ import net.minecraftforge.mcmaven.util.Constants;
 import net.minecraftforge.mcmaven.util.HashFunction;
 import net.minecraftforge.mcmaven.util.Util;
 
+/** Represents the Minecraft maven cache for this tool. */
 public class MinecraftMavenCache extends MavenCache {
     private final File mcDir = new File(Util.getMCDir(), "libraries");
 
+    /**
+     * Initializes a new maven cache with the given cache directory.
+     *
+     * @param root The cache directory
+     */
     public MinecraftMavenCache(File root) {
         super("mojang", Constants.MOJANG_MAVEN, root);
 
@@ -21,12 +27,21 @@ public class MinecraftMavenCache extends MavenCache {
         };
     }
 
+    /**
+     * Downloads an artifact using the given library download information.
+     *
+     * @param lib The library download information
+     * @return The downloaded file
+     *
+     * @throws IOException If an error occurs while downloading the file
+     */
+    @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
     public File download(LibraryDownload lib) {
         return this.download(false, lib.path);
     }
 
     @Override
-    protected void downloadFile(File target, String path) {
+    protected void downloadFile(File target, String path) throws IOException {
         if (!mcDir.exists()) {
             super.downloadFile(target, path);
             return;

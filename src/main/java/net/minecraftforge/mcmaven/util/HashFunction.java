@@ -15,6 +15,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Locale;
 
+// TODO [MCMaven][Documentation] Document
 public enum HashFunction {
     MD5   ("md5",      32),
     SHA1  ("SHA-1",    40),

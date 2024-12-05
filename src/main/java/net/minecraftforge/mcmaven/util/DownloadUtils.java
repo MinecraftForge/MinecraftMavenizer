@@ -4,6 +4,15 @@
  */
 package net.minecraftforge.mcmaven.util;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
+import com.google.gson.stream.JsonWriter;
+import org.jspecify.annotations.Nullable;
+
+import javax.net.ssl.SSLHandshakeException;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -17,16 +26,28 @@ import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import javax.net.ssl.SSLHandshakeException;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.TypeAdapter;
-import com.google.gson.internal.bind.TypeAdapters;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
+public final class DownloadUtils {
+    private static final TypeAdapter<String> STRING = new TypeAdapter<String>() {
+        @Override
+        public String read(JsonReader in) throws IOException {
+            JsonToken peek = in.peek();
+            if (peek == JsonToken.NULL) {
+                in.nextNull();
+                return null;
+            }
+            /* coerce booleans to strings for backwards compatibility */
+            if (peek == JsonToken.BOOLEAN) {
+                return Boolean.toString(in.nextBoolean());
+            }
+            return in.nextString();
+        }
+        @Override
+        public void write(JsonWriter out, String value) throws IOException {
+            out.value(value);
+        }
+    };
 
-public class DownloadUtils {
     // A GSO parser that prints good looking output, and treats empty strings as nulls
     public static final Gson GSON = new GsonBuilder()
         .setLenient()
@@ -37,12 +58,12 @@ public class DownloadUtils {
                 if (value == null || value.isEmpty())
                     out.nullValue();
                 else
-                    TypeAdapters.STRING.write(out, value);
+                    STRING.write(out, value);
             }
 
             @Override
             public String read(final JsonReader in) throws IOException {
-                String value = TypeAdapters.STRING.read(in);
+                String value = STRING.read(in);
                 return value != null && value.isEmpty() ? null : value; // Read empty strings as null
             }
         })
@@ -70,7 +91,7 @@ public class DownloadUtils {
                 con.setReadTimeout(timeout);
 
                 if (con instanceof HttpURLConnection) {
-                    HttpURLConnection hcon = (HttpURLConnection)con;
+                    HttpURLConnection hcon = (HttpURLConnection) con;
                     hcon.setRequestProperty("User-Agent", "MinecraftMaven");
                     hcon.setRequestProperty("accept", "application/json");
                     hcon.setInstanceFollowRedirects(false);
@@ -98,7 +119,7 @@ public class DownloadUtils {
                 }
             }
             return con;
-        } catch (SSLHandshakeException e ) {
+        } catch (SSLHandshakeException e) {
             Log.error("Failed to establish connection to " + address);
             e.printStackTrace();
             return null;
@@ -109,7 +130,13 @@ public class DownloadUtils {
         }
     }
 
-    public static String downloadString(String url) {
+    /**
+     * Downloads a string from the given URL, effectively acting as {@code curl}.
+     *
+     * @param url The URL to download from
+     * @return The downloaded string, or {@code null} if the download failed
+     */
+    public static @Nullable String downloadString(String url) {
         try {
             URLConnection connection = getConnection(url);
             if (connection != null) {
@@ -131,6 +158,13 @@ public class DownloadUtils {
         return null;
     }
 
+    /**
+     * Downloads a file from the given URL into the target file, effectively acting as {@code wget}.
+     *
+     * @param target The file to download to
+     * @param url    The URL to download from
+     * @return {@code true} if the download was successful
+     */
     public static boolean downloadFile(File target, String url) {
         try {
             Util.ensureParent(target);

@@ -5,7 +5,8 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.function.Supplier;
 
-public interface Task {
+/** Represents a task that can be executed. Tasks in this tool <strong>will always</strong> provide a file. */
+public interface Task extends Supplier<File> {
     public static Task named(String name, Supplier<File> supplier) {
         return named(name, Collections.emptySet(), supplier);
     }
@@ -14,8 +15,21 @@ public interface Task {
         return new Simple(name, deps, supplier);
     }
 
+    /**
+     * Executes the task. If it has already been executed, the work will be skipped and the file will be provided
+     * instantly.
+     *
+     * @return The file provided by this task
+     */
     File execute();
+
+    /** @return The name of this task */
     String name();
+
+    @Override
+    default File get() {
+        return this.execute();
+    }
 
     public static class Simple implements Task {
         private final String name;
@@ -35,7 +49,10 @@ public interface Task {
                 for (var dep : deps)
                     dep.execute();
                 Log.log(name);
+                Log.push();
                 this.file = supplier.get();
+                Log.debug("-> " + this.file.toString());
+                Log.pop();
             }
             return this.file;
         }

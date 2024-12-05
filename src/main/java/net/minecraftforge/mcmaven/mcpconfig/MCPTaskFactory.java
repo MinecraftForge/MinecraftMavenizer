@@ -9,11 +9,13 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.jar.JarEntry;
@@ -35,16 +37,18 @@ import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
 import net.minecraftforge.mcmaven.cache.MavenCache;
 import net.minecraftforge.mcmaven.data.JsonData;
 import net.minecraftforge.mcmaven.data.MCPConfig;
-import net.minecraftforge.mcmaven.data.MinecraftVersion.LibraryDownload;
 import net.minecraftforge.mcmaven.util.Artifact;
 import net.minecraftforge.mcmaven.util.Constants;
 import net.minecraftforge.mcmaven.util.HashStore;
 import net.minecraftforge.mcmaven.util.Log;
+import net.minecraftforge.mcmaven.util.OS;
 import net.minecraftforge.mcmaven.util.ProcessUtils;
 import net.minecraftforge.mcmaven.util.Task;
 import net.minecraftforge.mcmaven.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
+import org.jspecify.annotations.Nullable;
 
+// TODO [MCMaven][Documentation] Document
 public class MCPTaskFactory {
     private final MCPConfig.V2 cfg;
     private final MCPSide side;
@@ -56,6 +60,8 @@ public class MCPTaskFactory {
     private Task predecomp = null;
     private Task mappings = null;
     private Task last = null;
+
+    private @Nullable List<Lib> libraries = null;
 
     private MCPTaskFactory(MCPTaskFactory parent, File build, Task predecomp) {
         this.parent = parent;
@@ -183,7 +189,7 @@ public class MCPTaskFactory {
         return ret;
     }
 
-    private Task findData(String name) {
+    public Task findData(String name) {
         if (this.parent != null)
             return this.parent.findData(name);
 
@@ -514,18 +520,11 @@ public class MCPTaskFactory {
         var json = JsonData.minecraftVersion(jsonF);
 
         var buf = new StringBuilder();
-
-        record Lib(String coord, LibraryDownload dl) {}
-        var libs = new ArrayList<Lib>();
-
-        //TODO: [MCMaven][MCP] Add function to filter libraries based on current operating systems
-        for (var lib : json.libraries) {
-            libs.add(new Lib(lib.name, lib.downloads.artifact));
-            if (lib.downloads.classifiers != null)
-                lib.downloads.classifiers.forEach((k, v) -> libs.add(new Lib(lib.name + ':' + k, v)));
-        }
+        var libs = json.getLibs();
 
         var cache = this.side.getMCP().getCache();
+
+        var downloadedLibs = new ArrayList<Lib>();
 
         for (var lib : libs) {
             if (!lib.dl().url.toString().startsWith(Constants.MOJANG_MAVEN))
@@ -535,7 +534,10 @@ public class MCPTaskFactory {
 
             buf.append("-e=").append(target.getAbsolutePath()).append('\n');
 
+            downloadedLibs.add(new Lib(lib.coord(), target, lib.os()));
         }
+
+        this.libraries = downloadedLibs;
 
         Util.ensureParent(output);
         try (var os = new FileOutputStream(output)) {
@@ -544,6 +546,12 @@ public class MCPTaskFactory {
         } catch (IOException e) {
             return Util.sneak(e);
         }
+    }
+
+    public record Lib(String name, File file, @Nullable OS os) {}
+
+    public List<Lib> getLibraries() {
+        return Objects.requireNonNull(this.libraries, "Libraries have not been downloaded yet");
     }
 
     private Task listLibrariesBundle(String name, Map<String, String> step) {
@@ -613,6 +621,94 @@ public class MCPTaskFactory {
         }
     }
 
+    // TODO change task name??? This should only ever be ran on joined side
+    public Task getMappings(String mappings) {
+        var client = this.side.getMCP().getMinecraftTasks().versionFile("client_mappings", "txt");
+        var server = this.side.getMCP().getMinecraftTasks().versionFile("server_mappings", "txt");
+        return Task.named("officialMappings",
+            Set.of(this.mappings, client, server),
+            () -> getMappings(mappings, client, server)
+        );
+    }
+
+    // TODO: Implement other mappings than official
+    // TODO: cache tool and output
+    private File getMappings(String channel, Task clientTask, Task serverTask) {
+        var mcp = this.side.getMCP();
+        var tool = mcp.getCache().forge.download(Constants.INSTALLER_TOOLS);
+
+        var output = new File(this.build, "data/mappings/official.zip");
+        var log = new File(this.build, "data/mappings/official.txt");
+
+        var mappings = this.mappings.execute();
+        var client = clientTask.execute();
+        var server = serverTask.execute();
+
+        var cache = HashStore.fromFile(output);
+        cache.add("tool", tool);
+        cache.add("mappings", mappings);
+        cache.add("client", client);
+        cache.add("server", server);
+
+        if (output.exists() && cache.exists())
+            return output;
+
+        var args = List.of(
+            "--task",
+            "MAPPINGS_CSV",
+            "--srg",
+            mappings.getAbsolutePath(),
+            "--client",
+            client.getAbsolutePath(),
+            "--server",
+            server.getAbsolutePath(),
+            "--output",
+            output.getAbsolutePath()
+        );
+
+        var jdk = mcp.getCache().jdks.get(Constants.INSTALLER_TOOLS_JAVA_VERSION);
+        if (jdk == null)
+            throw new IllegalStateException("Failed to find JDK for version " + Constants.INSTALLER_TOOLS_JAVA_VERSION);
+
+        int ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, Collections.emptyList(), args);
+        if (ret != 0)
+            throw new IllegalStateException("Failed to run MCP Step, See log: " + log.getAbsolutePath());
+
+        cache.save();
+        return output;
+    }
+
+    public Task getClientExtra() {
+        var client = this.side.getMCP().getMinecraftTasks().versionFile("client", "jar");
+        return Task.named("clientExtra",
+            Set.of(client, this.mappings),
+            () -> getClientExtra(client, mappings)
+        );
+    }
+
+    private File getClientExtra(Task clientTask, Task mappingsTask) {
+        var client = clientTask.execute();
+        var mappings = mappingsTask.execute();
+
+        var output = new File(this.build, "clientExtra.jar");
+
+        var cache = HashStore.fromFile(output);
+        cache.add("client", client);
+        cache.add("mappings", mappings);
+
+        if (output.exists() && cache.isSame())
+            return output;
+
+        try {
+            Util.splitJar(client, mappings, output, false, false);
+        } catch (IOException e) {
+            Util.sneak(e);
+        }
+
+        cache.save();
+        return output;
+    }
+
     private Task execute(String name, Map<String, String> step, MCPConfig.Function func) {
         var args = new HashMap<String, TaskOrArg>();
         var deps = new HashSet<Task>();
@@ -637,8 +733,8 @@ public class MCPTaskFactory {
         args.put("log", new TaskOrArg("log", null, log.getAbsolutePath()));
 
         // Fill substitutions in arguments, also builds dependencies on extract tasks
-        var jvmArgs = fillArgs(func.jvmargs, args, deps);
-        var runArgs = fillArgs(func.args, args, deps);
+        var jvmArgs = fillArgs(func.jvmargs(), args, deps);
+        var runArgs = fillArgs(func.args(), args, deps);
 
         return Task.named(name, deps,
             () -> execute(jvmArgs, runArgs, func, log, output)
@@ -647,8 +743,8 @@ public class MCPTaskFactory {
 
     private File execute(List<TaskOrArg> jvmArgs, List<TaskOrArg> runArgs, MCPConfig.Function func, File log, File output) {
         // First download the tool
-        var maven = new MavenCache("mcp-tools", func.repo, this.side.getMCP().getCache().root);
-        var toolA = Artifact.from(func.version);
+        var maven = new MavenCache("mcp-tools", func.repo(), this.side.getMCP().getCache().root);
+        var toolA = Artifact.from(func.version());
         var tool = maven.download(toolA);
 
         var cache = HashStore.fromFile(output);

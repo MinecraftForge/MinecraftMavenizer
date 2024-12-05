@@ -7,6 +7,35 @@ import java.util.Map;
 import net.minecraftforge.mcmaven.cache.Cache;
 import net.minecraftforge.mcmaven.util.Artifact;
 
+/*
+ * Provides the following artifacts:
+ *
+ * net.minecraft:
+ *   client:
+ *     MCPVersion:
+ *       srg - Srg named SLIM jar file.
+ *       srg-sources - Srg named decompiled/patched code.
+ *   server:
+ *     MCPVersion:
+ *       srg - Srg named SLIM jar file.
+ *       srg-sources - Srg named decompiled/patched code.
+ *   joined:
+ *     MCPVersion:
+ *       .pom - Pom meta linking against net.minecraft:client:extra and net.minecraft:client:data
+ *       '' - Notch named merged jar file
+ *       srg - Srg named jar file.
+ *       srg-sources - Srg named decompiled/patched code.
+ *   mappings_{channel}:
+ *     MCPVersion|MCVersion:
+ *       .zip - A zip file containing SRG -> Human readable field and method mappings.
+ *         Current supported channels:
+ *         'stable', 'snapshot': MCP's crowdsourced mappings.
+ *         'official': Official mappings released by Mojang.
+ *
+ *   Note: It does NOT provide the Obfed named jars for server and client, as that is provided by MinecraftRepo.
+ */
+// client extra
+// TODO [MCMaven][Documentation] Document
 public class MCPConfigRepo {
     private final Map<Artifact, MCP> versions = new HashMap<>();
     private final Map<String, MinecraftTasks> mcTasks = new HashMap<>();

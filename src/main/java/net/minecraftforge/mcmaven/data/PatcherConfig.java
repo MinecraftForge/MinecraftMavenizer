@@ -6,6 +6,7 @@ import java.util.Map;
 
 import net.minecraftforge.mcmaven.util.Artifact;
 
+// TODO: [MCMaven][Documentation] Document from MinecraftForge/MCPConfig
 public class PatcherConfig extends Config {
     public String mcp;    // Do not specify this unless there is no parent.
     public String parent; // To fully resolve, we must walk the parents until we hit null, and that one must specify a MCP value.

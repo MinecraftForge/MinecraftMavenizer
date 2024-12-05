@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+// TODO [MCMaven][Documentation] Document
 public class HashStore {
     private final HashFunction HASH = HashFunction.SHA1;
 

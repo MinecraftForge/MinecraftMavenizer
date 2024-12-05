@@ -34,27 +34,34 @@ import net.minecraftforge.mcmaven.util.ProcessUtils;
 import net.minecraftforge.mcmaven.util.Task;
 import net.minecraftforge.mcmaven.util.Util;
 
+// TODO: [MCMaven] This class needs to be split off into some sort of abstract class so that other patching processes can be implemented.
+// The current way this is implemented by trying to parse a specific config is not that great. And if we want to support other versions, this HAS to be abstracted.
+/**
+ * This class is responsible for the <strong>entire</strong> patching process. It continues work after MCP has
+ * decompiled the game.
+ */
 class Patcher {
     private final ForgeRepo forge;
     private final Artifact name;
     private final File data;
-    private final PatcherConfig.V2 config;
+    public final PatcherConfig.V2 config;
     private final Patcher parent;
     private final MCP mcp;
-    private final File globalBuild;
-    private final File build;
 
     private final Map<String, Task> extracts = new HashMap<>();
     private final Task downloadSources;
     private final Task predecomp;
     private final Task last;
 
+    /**
+     * Creates a new Patcher for the given Forge repo.
+     *
+     * @param forge The forge repo
+     * @param name  The development artifact (usually userdev)
+     */
     Patcher(ForgeRepo forge, Artifact name) {
         this.forge = forge;
         this.name = name;
-
-        this.build = new File(this.forge.cache.root, "forge/" + this.name.getFolder());
-        this.globalBuild = new File(this.build.getParentFile(), ".global");
 
         this.data = this.forge.cache.forge.download(name);
         if (!this.data.exists())
@@ -98,7 +105,7 @@ class Patcher {
             var sass = extractSASs();
             var hash = HashFunction.SHA1.sneakyHash(ats, sass);
             var mcpver = this.getMCP().getName().getVersion();
-            var dir = new File(this.globalBuild, "mcp/" + mcpver + '/' + this.name.getName() + '/' + hash);
+            var dir = new File(this.forge.globalBuild, "mcp/" + mcpver + '/' + this.name.getName() + '/' + hash);
 
             if (!this.config.getAts().isEmpty()) {
                 var tmp = predecomp;
@@ -119,7 +126,7 @@ class Patcher {
 
         while (!stack.isEmpty()) {
             var patcher = stack.pop();
-            var root = patcher == this ? this.build : new File(this.build, "parent-" + patcher.name.getName());
+            var root = patcher == this ? this.forge.build : new File(this.forge.build, "parent-" + patcher.name.getName());
 
             if (patcher.config.processor != null)
                 last = patcher.postProcess(last, root);
@@ -128,17 +135,17 @@ class Patcher {
                 last = patcher.patch(last, root);
 
             if (patcher.config.sources != null)
-                last = patcher.inject(last, root);
+                last = patcher.injectSources(last, root);
         }
 
         this.last = last;
     }
 
-    private void log(String message) {
+    private static void log(String message) {
         Log.log(message);
     }
 
-    private void debug(String message) {
+    private static void debug(String message) {
         Log.debug(message);
     }
 
@@ -176,10 +183,76 @@ class Patcher {
             throw except("Missing parent or mcp entry");
     }
 
-    private MCP getMCP() {
+    /** @return The instance of MCP used to decompile the game */
+    public MCP getMCP() {
         return this.mcp == null ? this.parent.getMCP() : this.mcp;
     }
 
+    public List<Artifact> getArtifacts() {
+        // TODO MOVE ALL THIS LOGIC TO SOME SORT OF "ARTIFACT LIST GENERATOR" IN ARTIFACT.JAVA
+        var artifacts = new ArrayList<Artifact>() /*{
+            private final Set<NonVersionedArtifact> distincts = new HashSet<>();
+
+            @Override
+            public boolean add(Artifact artifact) {
+                var nonVersioned = NonVersionedArtifact.of(artifact);
+                if (distincts.contains(nonVersioned)) {
+                    this.removeIf(a -> {
+                        var result = nonVersioned.is(a);
+                        if (result)
+                            log("Replacing artifact " + a + " with new version " + a.getVersion());
+
+                        return result;
+                    });
+                    distincts.remove(nonVersioned);
+                }
+
+                distincts.add(nonVersioned);
+                return super.add(artifact);
+            }
+
+            record NonVersionedArtifact(String group, String name, @Nullable String classifier) {
+                static NonVersionedArtifact of(Artifact artifact) {
+                    return new NonVersionedArtifact(artifact.getGroup(), artifact.getName(), artifact.getClassifier());
+                }
+
+                boolean is(Artifact artifact) {
+                    return this.group.equals(artifact.getGroup())
+                        && this.name.equals(artifact.getName())
+                        && (this.classifier == null || this.classifier.equals(artifact.getClassifier()));
+                }
+            }
+        }*/;
+
+        for (var lib : this.config.libraries) {
+            var artifact = Artifact.from(lib);
+            artifacts.add(artifact);
+        }
+
+        return artifacts;
+    }
+
+    public List<File> getClasspath() {
+        var classpath = new ArrayList<File>();
+
+        // minecraft version.json libs + mcpconfig libs + userdev libs
+        // also for module metadata (same order)
+        for (var lib : this.getMCP().getSide("joined").getTasks().getLibraries()) {
+            classpath.add(lib.file());
+        }
+
+        for (var lib : this.getMCP().getConfig().getLibraries("joined")) {
+            classpath.add(this.forge.cache.forge.download(Artifact.from(lib)));
+        }
+
+        for (var lib : this.config.libraries) {
+            classpath.add(this.forge.cache.forge.download(Artifact.from(lib)));
+        }
+
+        return classpath;
+    }
+
+    /** @return The final unnamed sources */
     public Task getUnnamedSources() {
         return this.last;
     }
@@ -216,7 +289,7 @@ class Patcher {
         if (files.isEmpty())
             return null;
 
-        var output = new File(this.build, filename);
+        var output = new File(this.forge.build, filename);
         var cache = HashStore.fromFile(output);
         cache.add("data", this.data);
 
@@ -260,7 +333,7 @@ class Patcher {
     private File extractSingleTask(String key, String value) {
         var idx = value.lastIndexOf('/');
         var filename = idx == -1 ? value : value.substring(idx);
-        var target = new File(this.build, "data/" + key + '/' + filename);
+        var target = new File(this.forge.build, "data/" + key + '/' + filename);
 
         var cache = HashStore.fromFile(target);
         cache.add("data", this.data);
@@ -482,18 +555,18 @@ class Patcher {
         }
     }
 
-    private Task inject(Task input, File outputDir) {
+    private Task injectSources(Task input, File outputDir) {
         if (this.downloadSources == null)
             return input;
 
-        var output = new File(outputDir, "injected.jar");
-        return Task.named("inject[" + this.name.getName() + ']',
+        var output = new File(outputDir, "injectedSources.jar");
+        return Task.named("injectSources[" + this.name.getName() + ']',
             Set.of(input, this.downloadSources),
-            () -> injectImpl(input, output)
+            () -> injectSourcesImpl(input, output)
         );
     }
 
-    private File injectImpl(Task inputTask, File output) {
+    private File injectSourcesImpl(Task inputTask, File output) {
         var input = inputTask.execute();
         var sources = this.downloadSources.execute();
 

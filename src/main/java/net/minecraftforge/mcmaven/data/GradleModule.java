@@ -1,0 +1,271 @@
+package net.minecraftforge.mcmaven.data;
+
+import net.minecraftforge.mcmaven.util.Artifact;
+import net.minecraftforge.mcmaven.util.OS;
+import net.minecraftforge.mcmaven.util.Util;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * @see <a
+ * href="https://github.com/gradle/gradle/blob/master/platforms/documentation/docs/src/docs/design/gradle-module-metadata-latest-specification.md">Gradle
+ * Module Metadata 1.1 Spec</a>
+ */
+public class GradleModule {
+    /** must be present and the first value of the JSON object. Its value must be {@code "1.1"} */
+    public String formatVersion = "1.1";
+    /** optional. */
+    public Component component;
+    /** optional. */
+    public CreatedBy createdBy;
+    /** optional. */
+    public List<Variant> variants;
+
+    public static GradleModule of(String group, String name, String version) {
+        var module = new GradleModule();
+        module.component = new Component();
+        module.component.group = group;
+        module.component.module = name;
+        module.component.version = version;
+        return module;
+    }
+
+    public Variant variant() {
+        return this.variant(new Variant());
+    }
+
+    public Variant variant(Variant variant) {
+        if (variants == null)
+            variants = new ArrayList<>();
+
+        variants.add(variant);
+        return variant;
+    }
+
+    /** Describes the identity of the component contained in the module. */
+    public static class Component {
+        /** The group of this component. */
+        public String group;
+        /** The module name of this component. */
+        public String module;
+        /** The version of this component. */
+        public String version;
+        /**
+         * optional. When present, indicates where the metadata for the component may be found. When missing, indicates
+         * that this metadata file defines the metadata for the whole component.
+         */
+        public String url;
+    }
+
+    /** Describes the producer of this metadata file and the contents of the module. */
+    public static class CreatedBy {
+        /** optional. */
+        public Gradle gradle;
+
+        /** Describes the Gradle instance that produced the contents of the module. */
+        public static class Gradle {
+            /** The version of Gradle. */
+            public String version;
+            /** optional. The buildId for the Gradle instance. */
+            public String buildId;
+        }
+    }
+
+    /** Describes a variant of the component. */
+    public static class Variant {
+        /** The name of the variant. */
+        public String name;
+        /** The attributes of the variant. */
+        public Map<String, Object> attributes;
+        /** The files of the variant. */
+        public List<File> files;
+        /** The dependencies of the variant. */
+        public List<Dependency> dependencies;
+        /** The dependency constraints of the variant. */
+        public List<DependencyConstraint> dependencyConstraints;
+        /** The capabilities of the variant. */
+        public List<Capability> capabilities;
+        /** Information about where the metadata and files of this variant are available. */
+        public AvailableAt availableAt;
+
+        public static Variant ofNative(OS os) {
+            return Util.make(new Variant(), variant -> {
+                variant.name = os.key().toLowerCase();
+                variant.attributes = Map.of(
+                    "org.gradle.usage", "java-runtime",
+                    "org.gradle.category", "library",
+                    "org.gradle.dependency.bundling", "external",
+                    "org.gradle.libraryelements", "jar",
+                    "net.minecraftforge.native.operatingSystem", os.key().toLowerCase()
+                );
+                variant.dependencies = new ArrayList<>();
+            });
+        }
+
+        /** Describes a file of a variant. */
+        public static class File {
+            /** The name of the file. */
+            public String name;
+            /** The URL of the file. */
+            public String url;
+            /** The size of the file. */
+            public Long size;
+            /** The SHA-1 checksum of the file. */
+            public String sha1;
+            /** The SHA-256 checksum of the file. */
+            public String sha256;
+            /** The SHA-512 checksum of the file. */
+            public String sha512;
+            /** The MD5 checksum of the file. */
+            public String md5;
+        }
+
+        /** Describes a dependency of a variant. */
+        public static class Dependency {
+            /** The group of the dependency. */
+            public String group;
+            /** The module name of the dependency. */
+            public String module;
+            /** The version of the dependency. */
+            public Version version;
+            /** The exclusions that apply to this dependency. */
+            public List<Exclude> excludes;
+            /** A explanation why the dependency is used. */
+            public String reason;
+            /** Attributes that will override the consumer attributes during dependency resolution for this specific dependency. */
+            public Map<String, Object> attributes;
+            /** Declares the capabilities that the dependency must provide in order to be selected. */
+            public List<Capability> requestedCapabilities;
+            /** If set to true, all strict versions of the target module will be treated as if they were defined on the variant defining this dependency. */
+            public Boolean endorseStrictVersions;
+            /** Includes additional information to be used if the dependency points at a module that did not publish Gradle module metadata. */
+            public ThirdPartyCompatibility thirdPartyCompatibility;
+
+            public void setArtifactSelector(ThirdPartyCompatibility.ArtifactSelector selector) {
+                if (this.thirdPartyCompatibility == null)
+                    this.thirdPartyCompatibility = new ThirdPartyCompatibility();
+
+                thirdPartyCompatibility.artifactSelector = selector;
+            }
+
+            public static Dependency of(Artifact artifact) {
+                return Util.make(new Dependency(), dependency -> {
+                    dependency.group = artifact.getGroup();
+                    dependency.module = artifact.getName();
+                    dependency.version = new Dependency.Version();
+                    dependency.version.requires = artifact.getVersion();
+
+                    if (artifact.getClassifier() != null || !artifact.getExtension().equals("jar")) {
+                        dependency.setArtifactSelector(ThirdPartyCompatibility.ArtifactSelector.of(artifact));
+                    }
+
+                    // TODO get per-dependency attributes working sometime in the future
+                    /*
+                    if (artifact instanceof Artifact.WithOS withOS) {
+                        dependency.attributes = Map.of(
+                            "net.minecraftforge.native.operatingSystem", withOS.os.key().toLowerCase()
+                        );
+                    }
+                    */
+                });
+            }
+
+            /** Describes the version of a dependency. */
+            public static class Version {
+                /** The required version for this dependency. */
+                public String requires;
+                /** The preferred version for this dependency. */
+                public String prefers;
+                /** A strictly enforced version requirement for this dependency. */
+                public String strictly;
+                /** An array of rejected versions for this dependency. */
+                public List<String> rejects;
+            }
+
+            /** Defines the exclusions that apply to this dependency. */
+            public static class Exclude {
+                /** The group to exclude from transitive dependencies, or wildcard '*' if any group may be excluded. */
+                public String group;
+                /** The module to exclude from transitive dependencies, or wildcard '*' if any module may be excluded. */
+                public String module;
+            }
+
+            /** Includes additional information to be used if the dependency points at a module that did not publish Gradle module metadata. */
+            public static class ThirdPartyCompatibility {
+                /** Information to select a specific artifact of the dependency that is not mentioned in the dependency's metadata. */
+                public ArtifactSelector artifactSelector;
+
+                /** Information to select a specific artifact. */
+                public static class ArtifactSelector {
+                    /** The name of the artifact. */
+                    public String name;
+                    /** The type of the artifact. */
+                    public String type;
+                    /** The extension of the artifact. */
+                    public String extension;
+                    /** The classifier of the artifact. */
+                    public String classifier;
+
+                    public static ArtifactSelector of(Artifact artifact) {
+                        return Util.make(new ArtifactSelector(), selector -> {
+                            selector.name = artifact.getName();
+                            selector.type = artifact.getExtension();
+                            selector.extension = artifact.getExtension();
+                            selector.classifier = artifact.getClassifier();
+                        });
+                    }
+                }
+            }
+        }
+
+        /** Describes a dependency constraint of a variant. */
+        public static class DependencyConstraint {
+            /** The group of the dependency constraint. */
+            public String group;
+            /** The module name of the dependency constraint. */
+            public String module;
+            /** The version constraint of the dependency constraint. */
+            public Version version;
+            /** A explanation why the constraint is used. */
+            public String reason;
+            /** Attributes that will override the consumer attributes during dependency resolution for this specific dependency. */
+            public Map<String, Object> attributes;
+
+            /** Describes the version of a dependency constraint. */
+            public static class Version {
+                /** The required version for this dependency constraint. */
+                public String requires;
+                /** The preferred version for this dependency constraint. */
+                public String prefers;
+                /** A strictly enforced version requirement for this dependency constraint. */
+                public String strictly;
+                /** An array of rejected versions for this dependency constraint. */
+                public List<String> rejects;
+            }
+        }
+
+        /** Describes a capability of a variant. */
+        public static class Capability {
+            /** The group of the capability. */
+            public String group;
+            /** The name of the capability. */
+            public String name;
+            /** The version of the capability. */
+            public String version;
+        }
+
+        /** Information about where the metadata and files of this variant are available. */
+        public static class AvailableAt {
+            /** The location of the metadata file that describes the variant. */
+            public String url;
+            /** The group of the module. */
+            public String group;
+            /** The name of the module. */
+            public String module;
+            /** The version of the module. */
+            public String version;
+        }
+    }
+}

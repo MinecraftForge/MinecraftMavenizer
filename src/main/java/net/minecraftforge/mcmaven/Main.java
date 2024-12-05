@@ -17,28 +17,48 @@ import net.minecraftforge.mcmaven.util.Constants;
 import net.minecraftforge.mcmaven.util.DownloadUtils;
 import net.minecraftforge.mcmaven.util.Log;
 
+// TODO [MCMaven] Make an actual API with an api package.
+/**
+ * Main entry point for the tool.
+ *
+ * @see #main(String[])
+ */
 public class Main {
+    /**
+     * The entry point for the Minecraft Mavenizer. Details on usage can be found by running the program with the
+     * {@code --help} flag.
+     *
+     * @param args The command line arguments
+     * @throws Exception If any kind of error occurs
+     */
     public static void main(String[] args) throws Exception {
         OptionParser parser = new OptionParser();
         parser.allowsUnrecognizedOptions();
+
+        // help message
         var helpO = parser.accepts("help", "Displays this help message and exits");
 
+        // root cache directory
         var cacheO = parser.accepts("cache",
             "Directory to store data needed for this program")
             .withRequiredArg().ofType(File.class).defaultsTo(new File("cache"));
 
+        // jdk cache directory
         var jdkCacheO = parser.accepts("jdk-cache",
             "Directory to store jdks downloaded from the disoco api")
             .withRequiredArg().ofType(File.class).defaultsTo(new File("cache/jdks"));
 
+        // artifact version (NOT "display the program version")
         var versionO = parser.accepts("version",
             "The specific artifact version to generate, if none is specified, will attempt the 'latest' and 'recommended' for each Minecraft version")
             .withOptionalArg().ofType(String.class);
 
+        // artifact to generate
         var artifactO = parser.accepts("artifact",
             "The artifact to attempt to generate, see the code for supported formats")
             .withRequiredArg().ofType(String.class).defaultsTo(Constants.FORGE_ARTIFACT);
 
+        // root output directory
         var outputO = parser.accepts("output",
             "Root directory to generate the maven repository")
             .withRequiredArg().ofType(File.class).defaultsTo(new File("output"));
@@ -74,7 +94,7 @@ public class Main {
         var version = options.valueOf(versionO);
         var caches = new Cache(cache, jdkCache);
 
-        log("Minecarft Mavenizer v0.0.0");
+        log("Minecarft Mavenizer v0.1.0");
         log("  Output:    " + output.getAbsolutePath());
         log("  Cache:     " + cache.getAbsolutePath());
         log("  JDK Cache: " + jdkCache.getAbsolutePath());
