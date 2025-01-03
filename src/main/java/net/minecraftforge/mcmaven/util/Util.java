@@ -1,6 +1,7 @@
 package net.minecraftforge.mcmaven.util;
 
 import net.minecraftforge.srgutils.IMappingFile;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 
 import java.io.ByteArrayOutputStream;
@@ -440,6 +441,20 @@ public class Util {
         }
     }
 
+    /**
+     * Sneakily deletes a file or directory on JVM exit using {@link FileUtils#forceDeleteOnExit(File)} and
+     * {@link #sneak(Throwable)}.
+     *
+     * @param file The file to delete
+     */
+    public static void sneakyDeleteOnExit(File file) {
+        try {
+            FileUtils.forceDeleteOnExit(file);
+        } catch (IOException e) {
+            // TODO Handle this exception instead of throw?
+            Util.sneak(e);
+        }
+    }
 
     /**
      * Allows the given {@link Throwable} to be thrown without needing to declare it in the method signature or

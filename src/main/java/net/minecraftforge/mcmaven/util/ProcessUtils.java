@@ -291,14 +291,12 @@ public final class ProcessUtils {
             throw new RuntimeException("Javac failed to execute! Exit code " + process.exitCode);
         }
 
-        var ret = Util.makeJar(outputClasses, sourcesOutput, nonSourceFiles, outputJar);
         try {
-            FileUtils.deleteDirectory(sourcesOutput);
-            FileUtils.deleteDirectory(outputClasses);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+            return Util.makeJar(outputClasses, sourcesOutput, nonSourceFiles, outputJar);
+        } finally {
+            Util.sneakyDeleteOnExit(sourcesOutput);
+            Util.sneakyDeleteOnExit(outputClasses);
         }
-        return ret;
     }
 
     private static File makeClasspathFile(File workDir, String classpathArg) {
