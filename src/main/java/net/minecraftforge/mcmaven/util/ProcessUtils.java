@@ -113,10 +113,6 @@ public final class ProcessUtils {
      * @return The exit code of the process
      */
     public static int runCommand(File workDir, Consumer<String> lines, String... args) {
-        for (var arg : args) {
-            Log.log(arg);
-        }
-
         Process process;
         try {
             var builder = new ProcessBuilder(args)
