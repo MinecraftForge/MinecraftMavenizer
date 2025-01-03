@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Forge Development LLC and contributors
+ * SPDX-License-Identifier: LGPL-2.1-only
+ */
 package net.minecraftforge.mcmaven.forge;
 
 import java.io.File;
@@ -388,8 +392,8 @@ class Patcher {
         if (jdk == null)
             throw new IllegalStateException("Failed to find JDK for version " + Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
 
-        int ret = ProcessUtils.runJar(jdk, globalBase, log, tool, Collections.emptyList(), args);
-        if (ret != 0)
+        var ret = ProcessUtils.runJar(jdk, globalBase, log, tool, Collections.emptyList(), args);
+        if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to run Access Transformer, See log: " + log.getAbsolutePath());
 
         cache.save();
@@ -422,8 +426,8 @@ class Patcher {
         if (jdk == null)
             throw new IllegalStateException("Failed to find JDK for version " + Constants.SIDE_STRIPPER_JAVA_VERSION);
 
-        int ret = ProcessUtils.runJar(jdk, globalBase, log, tool, Collections.emptyList(), args);
-        if (ret != 0)
+        var ret = ProcessUtils.runJar(jdk, globalBase, log, tool, Collections.emptyList(), args);
+        if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to run Side Stripper, See log: " + log.getAbsolutePath());
 
         cache.save();
@@ -492,8 +496,8 @@ class Patcher {
             throw new IllegalStateException("Failed to find JDK for version " + java_version);
 
 
-        int ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, data.getJvmArgs(), args);
-        if (ret != 0)
+        var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, data.getJvmArgs(), args);
+        if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to run MCP Step, See log: " + log.getAbsolutePath());
 
         cache.save();

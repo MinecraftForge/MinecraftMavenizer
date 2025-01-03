@@ -15,6 +15,7 @@ import net.minecraftforge.mcmaven.forge.ForgeRepo;
 import net.minecraftforge.mcmaven.util.Artifact;
 import net.minecraftforge.mcmaven.util.Constants;
 import net.minecraftforge.mcmaven.util.DownloadUtils;
+import net.minecraftforge.mcmaven.util.JarVersionLookupHandler;
 import net.minecraftforge.mcmaven.util.Log;
 
 // TODO [MCMaven] Make an actual API with an api package.
@@ -94,7 +95,7 @@ public class Main {
         var version = options.valueOf(versionO);
         var caches = new Cache(cache, jdkCache);
 
-        log("Minecarft Mavenizer v0.1.0");
+        log("Minecarft Mavenizer " + JarVersionLookupHandler.getInfo(Main.class).impl().version().orElse(""));
         log("  Output:    " + output.getAbsolutePath());
         log("  Cache:     " + cache.getAbsolutePath());
         log("  JDK Cache: " + jdkCache.getAbsolutePath());

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Forge Development LLC and contributors
+ * SPDX-License-Identifier: LGPL-2.1-only
+ */
 package net.minecraftforge.mcmaven.util;
 
 import net.minecraftforge.srgutils.IMappingFile;
@@ -123,6 +127,11 @@ public class Util {
         }
 
         return files;
+    }
+
+    public static void ensure(File path) {
+        ensureParent(path);
+        path.mkdir();
     }
 
     public static void ensureParent(File path) {

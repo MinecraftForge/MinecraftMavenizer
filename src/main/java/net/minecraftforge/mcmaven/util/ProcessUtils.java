@@ -5,7 +5,6 @@
 package net.minecraftforge.mcmaven.util;
 
 import net.minecraftforge.java_version.util.OS;
-import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 
 import java.io.BufferedReader;
@@ -113,6 +112,8 @@ public final class ProcessUtils {
      * @return The exit code of the process
      */
     public static int runCommand(File workDir, Consumer<String> lines, String... args) {
+        Log.debug("Running Command: " + String.join(" ", args));
+
         Process process;
         try {
             var builder = new ProcessBuilder(args)
@@ -176,7 +177,7 @@ public final class ProcessUtils {
      * @param run      The program arguments
      * @return The exit code of the process
      */
-    public static int runJar(File javaHome, File workDir, File logFile, File tool, List<String> jvm, List<String> run) {
+    public static Result runJar(File javaHome, File workDir, File logFile, File tool, List<String> jvm, List<String> run) {
         Util.ensureParent(logFile);
         try (var log = new PrintWriter(new FileWriter(logFile), true)) {
             String classpath = tool.getAbsolutePath();
@@ -207,16 +208,17 @@ public final class ProcessUtils {
             args.add(main);
             args.addAll(run);
 
+            var consoleLog = new ArrayList<String>();
             lines = line -> {
+                consoleLog.add(line);
                 log.println(line);
             };
 
             int ret = runCommand(workDir, lines, args.toArray(String[]::new));
             System.currentTimeMillis();
-            System.out.println();
 
             log.flush();
-            return ret;
+            return new Result(consoleLog, ret);
         } catch (IOException e) {
             return sneak(e);
         }
@@ -224,7 +226,7 @@ public final class ProcessUtils {
 
     public static File recompileJar(File javaHome, List<File> classpath, File sourcesJar, File outputJar, File workDir) {
         // classpath arg
-        var classpathFile = makeClasspathFile(workDir, makeClasspathArg(classpath));
+        var classpathString = makeClasspathString(classpath);
 
         // unzip sources jar
         var sourcesOutput = new File(workDir, "recompileSources");
@@ -253,36 +255,32 @@ public final class ProcessUtils {
 
         // track source files
         var sourcePath = new StringBuilder();
-        var sourceFiles = Util.listFiles(sourcesOutput);
         var nonSourceFiles = new ArrayList<File>();
-        for (var sourceFile : sourceFiles) {
+
+        var sourceFiles = Util.listFiles(sourcesOutput).iterator();
+        while (sourceFiles.hasNext()) {
+            var sourceFile = sourceFiles.next();
             var absolutePath = sourceFile.getAbsolutePath();
             if (absolutePath.endsWith(".java")) {
-                sourcePath.append(sourceFile.getAbsolutePath()).append(' ');
+                sourcePath.append(wrap(sourceFile.getAbsolutePath().replace('\\', '/')));
+                if (sourceFiles.hasNext()) {
+                    sourcePath.append("\n\t");
+                }
             } else {
                 nonSourceFiles.add(sourceFile);
             }
         }
 
-        var sourcePathOutput = new File(workDir, "recompile_sourcepath.txt");
-        Util.ensureParent(sourcePathOutput);
-        try (var os = new FileOutputStream(sourcePathOutput)) {
-            os.write(sourcePath.deleteCharAt(sourcePath.lastIndexOf(" ")).toString().getBytes(StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            Util.sneak(e);
-        }
-
         var outputClasses = new File(workDir, "classes");
-        Util.ensureParent(outputClasses);
-        outputClasses.mkdir();
+        Util.ensure(outputClasses);
         var args = List.of(
             "-nowarn",
-            "-d",
-            outputClasses.getAbsolutePath(),
-            "@" + sourcePathOutput.getAbsolutePath()
+            "-d " + wrap(outputClasses.getAbsolutePath()),
+            "-classpath " + wrap(classpathString),
+            sourcePath.toString()
         );
 
-        var process = ProcessUtils.runJavac(javaHome, workDir, new File(outputJar.getAbsolutePath() + ".log"), classpathFile, args);
+        var process = ProcessUtils.runJavac(javaHome, workDir, new File(outputJar.getAbsolutePath() + ".log"), args);
         if (process.exitCode != 0) {
             Log.error("Javac failed to execute! Exit code " + process.exitCode);
             Log.error("--- BEGIN JAVAC LOG ---");
@@ -299,50 +297,56 @@ public final class ProcessUtils {
         }
     }
 
-    private static File makeClasspathFile(File workDir, String classpathArg) {
-        var classpath = new File(workDir, "recompile_classpath.txt");
-        Util.ensureParent(classpath);
-        try (var os = new FileOutputStream(classpath)) {
-            if (classpathArg.charAt(classpathArg.length() - 1) == File.pathSeparatorChar)
-                os.write(classpathArg.substring(0, classpathArg.length() - 1).getBytes(StandardCharsets.UTF_8));
-            else
-                os.write(classpathArg.getBytes(StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            Util.sneak(e);
-        }
+    private static String makeClasspathString(List<File> classpath) {
+        var classpathArg = new StringBuilder().append("");
 
-        return classpath;
-    }
-
-    private static String makeClasspathArg(List<File> classpath) {
-        var classpathArg = new StringBuilder().append("-classpath ");
-
-        for (var file : classpath) {
-            classpathArg.append(file.getAbsolutePath()).append(File.pathSeparator);
+        var it = classpath.iterator();
+        while (it.hasNext()) {
+            var file = it.next();
+            classpathArg.append(file.getAbsolutePath().replace('\\', '/'));
+            if (it.hasNext())
+                classpathArg.append(File.pathSeparator);
         }
 
         return classpathArg.toString();
     }
 
-    public static Result runJavac(File javaHome, File workDir, File logFile, File classpathFile, List<String> run) {
+    private static Result runJavac(File javaHome, File workDir, File logFile, List<String> args) {
         Util.ensureParent(logFile);
         try (var log = new PrintWriter(new FileWriter(logFile), true)) {
-            String classpath = "@" + classpathFile.getAbsolutePath();
+            var argsAll = Util.make(new StringBuilder(), s -> {
+                var it = args.iterator();
+                while (it.hasNext()) {
+                    s.append(it.next());
+                    if (it.hasNext())
+                        s.append('\n');
+                }
+            }).toString();
+
+            var argsFile = new File(workDir, "recompile_args.txt");
+            Util.ensureParent(argsFile);
+            try (var os = new FileOutputStream(argsFile)) {
+                os.write(argsAll.getBytes(StandardCharsets.UTF_8));
+            } catch (IOException e) {
+                sneak(e);
+            }
+
+            var argsString = "@" + argsFile.getAbsolutePath();
+
             var launcher = new File(javaHome, "bin/javac" + OS.CURRENT.exe());
             Consumer<String> lines = line -> {
                 Log.log(line);
                 log.println(line);
             };
-            lines.accept("Javac:     " + launcher.getAbsolutePath());
-            lines.accept("Classpath: " + classpath);
-            lines.accept("Work Dir:  " + workDir.getAbsolutePath());
-            lines.accept("Arguments: " + run.stream().collect(Collectors.joining(", ", "'", "'")));
-            log.println("====================================");
+            lines.accept("Javac:         " + launcher.getAbsolutePath());
+            lines.accept("Argument File: " + argsFile.getAbsolutePath());
+            log.println("Arguments:");
+            log.println(argsAll);
+            lines.accept("====================================");
 
-            var args = new ArrayList<String>();
-            args.add(launcher.getAbsolutePath());
-            args.addAll(run);
-            args.add(classpath);
+            var command = new ArrayList<String>();
+            command.add(launcher.getAbsolutePath());
+            command.add(argsString);
 
             var consoleLog = new ArrayList<String>();
             lines = line -> {
@@ -350,9 +354,8 @@ public final class ProcessUtils {
                 log.println(line);
             };
 
-            int ret = runCommand(workDir, lines, args.toArray(String[]::new));
+            int ret = runCommand(workDir, lines, command.toArray(String[]::new));
             System.currentTimeMillis();
-            System.out.println();
 
             log.flush();
             return new Result(consoleLog, ret);
@@ -365,6 +368,10 @@ public final class ProcessUtils {
         try (var jar = new JarFile(tool)) {
             return jar.getManifest().getMainAttributes().getValue(Attributes.Name.MAIN_CLASS);
         }
+    }
+
+    private static String wrap(String s) {
+        return s == null ? null : "\"" + s + "\"";
     }
 
     @SuppressWarnings("unchecked")

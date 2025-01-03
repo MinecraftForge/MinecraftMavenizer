@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Forge Development LLC and contributors
+ * SPDX-License-Identifier: LGPL-2.1-only
+ */
 package net.minecraftforge.mcmaven.mcpconfig;
 
 import java.io.BufferedReader;
@@ -670,8 +674,8 @@ public class MCPTaskFactory {
         if (jdk == null)
             throw new IllegalStateException("Failed to find JDK for version " + Constants.INSTALLER_TOOLS_JAVA_VERSION);
 
-        int ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, Collections.emptyList(), args);
-        if (ret != 0)
+        var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, Collections.emptyList(), args);
+        if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to run MCP Step, See log: " + log.getAbsolutePath());
 
         cache.save();
@@ -764,8 +768,8 @@ public class MCPTaskFactory {
         if (jdk == null)
             throw new IllegalStateException("Failed to find JDK for version " + java_version);
 
-        int ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, jvm, run);
-        if (ret != 0)
+        var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, jvm, run);
+        if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to run MCP Step, See log: " + log.getAbsolutePath());
 
         cache.save();

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Forge Development LLC and contributors
+ * SPDX-License-Identifier: LGPL-2.1-only
+ */
 module net.minecraftforge.mcmaven {
     exports net.minecraftforge.mcmaven.cache;
     exports net.minecraftforge.mcmaven.data;

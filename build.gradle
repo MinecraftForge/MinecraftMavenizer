@@ -105,7 +105,7 @@ compileJava {
 }
 
 changelog {
-    from '1.0'
+    from '0.0'
 }
 
 publishing {
