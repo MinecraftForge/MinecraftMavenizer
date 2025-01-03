@@ -258,9 +258,6 @@ public class Util {
     private static void makeJarInternal(File dir, List<File> classes, JarOutputStream jos) throws IOException {
         for (var file : classes) {
             String entryName = file.getAbsoluteFile().toString().substring(dir.getAbsolutePath().length() + 1).replace('\\', '/');
-            JarEntry jarEntry = getStableEntryJar(entryName);
-            jos.putNextEntry(jarEntry);
-
             writeEntry(jos, new Info(entryName, () -> {
                 try {
                     return new FileInputStream(file);
@@ -268,8 +265,6 @@ public class Util {
                     return sneak(e);
                 }
             }));
-
-            jos.closeEntry();
         }
     }
 
@@ -445,7 +440,6 @@ public class Util {
         }
     }
 
-    // TODO: This is honestly a pretty bad practice, but it works for now. We should consider removing this near 1.0.0.
 
     /**
      * Allows the given {@link Throwable} to be thrown without needing to declare it in the method signature or
