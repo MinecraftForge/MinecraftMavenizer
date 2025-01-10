@@ -275,7 +275,7 @@ public final class ProcessUtils {
         Util.ensure(outputClasses);
         var args = List.of(
             "-nowarn",
-            "-d " + wrap(outputClasses.getAbsolutePath()),
+            "-d " + wrap(outputClasses.getAbsolutePath().replace('\\', '/')),
             "-classpath " + wrap(classpathString),
             sourcePath.toString()
         );
