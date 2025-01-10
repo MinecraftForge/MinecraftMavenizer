@@ -331,7 +331,7 @@ public final class ProcessUtils {
                 sneak(e);
             }
 
-            var argsString = "@" + argsFile.getAbsolutePath();
+            var argsString = "@" + argsFile.getAbsolutePath().replace('\\', '/');
 
             var launcher = new File(javaHome, "bin/javac" + OS.CURRENT.exe());
             Consumer<String> lines = line -> {
@@ -345,7 +345,7 @@ public final class ProcessUtils {
             lines.accept("====================================");
 
             var command = new ArrayList<String>();
-            command.add(launcher.getAbsolutePath());
+            command.add(launcher.getAbsolutePath().replace('\\', '/'));
             command.add(argsString);
 
             var consoleLog = new ArrayList<String>();
