@@ -9,29 +9,15 @@ plugins {
     id 'org.gradlex.extra-java-module-info' version '1.8'
 }
 
-repositories {
-    maven gradleutils.forgeMaven
-    mavenCentral()
-    mavenLocal()
-}
-
+final displayName = 'Minecraft Mavenizer'
+description = 'A pure-blooded Java tool to generate a maven repository for Minecraft artifacts.'
 group = 'net.minecraftforge'
 version = gitversion.version.tagOffset
 println('Version: ' + version)
 
-dependencies {
-    implementation libs.jopt
-    implementation libs.gson
-    implementation libs.jver
-    implementation libs.srgutils
-    implementation libs.diff
-
-    // FOR MCPNames -- TODO CLEAN UP LATER
-    implementation libs.fastcsv
-    implementation libs.commonsio
-
-    // Static Analysis
-    compileOnly libs.nulls
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    withSourcesJar()
 }
 
 extraJavaModuleInfo {
@@ -41,31 +27,63 @@ extraJavaModuleInfo {
     automaticModule(libs.srgutils, 'net.minecraftforge.srgutils')
 }
 
+repositories {
+    maven gradleutils.forgeMaven
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    implementation libs.jopt
+    implementation libs.gson
+    implementation libs.jver
+    implementation libs.srgutils
+    implementation libs.diff
+
+    implementation libs.fastcsv
+    implementation libs.commonsio
+
+    // Static Analysis
+    compileOnly libs.nulls
+}
+
 license {
     header project.file('LICENSE-header.txt')
     newLine false
     exclude '**/ComparableVersion.java' // Apache class used as source-level dep as to not need the hundred+ other classes the library pulls in
 }
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(17)
-    withSourcesJar()
-}
-
 jar {
     manifest {
         attributes([
-            'Main-Class': 'net.minecraftforge.mcmaven.Main'
-        ] as LinkedHashMap)
-        attributes([
-            'Specification-Title':   'Minecraft Maven',
+            'Specification-Title':   displayName,
             'Specification-Vendor':  'Forge Development LLC',
             'Specification-Version':  gitversion.version.info.tag,
-            'Implementation-Title':  'Minecraft Maven',
+            'Implementation-Title':  displayName,
             'Implementation-Vendor': 'Forge Development LLC',
             'Implementation-Version': project.version
-        ] as LinkedHashMap, 'net/minecraftforge/mcmaven/')
+        ] as LinkedHashMap, 'net/minecraftforge/mcmaven/cli')
     }
+
+    archiveClassifier = 'slim'
+    exclude 'net/minecraftforge/mcmaven/cli/**'
+}
+
+tasks.named('shadowJar', com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar).configure {
+    manifest {
+        attributes([
+            'Main-Class': 'net.minecraftforge.mcmaven.cli.Main'
+        ] as LinkedHashMap)
+    }
+
+    enableRelocation = true
+    relocationPrefix = 'net.minecraftforge.mcmaven.shadow'
+    archiveClassifier = ''
+    minimize()
+}
+
+artifacts {
+    archives shadowJar
 }
 
 compileJava {
@@ -74,24 +92,28 @@ compileJava {
 
 changelog {
     fromBase()
+    publishAll = false
 }
 
 publishing {
     publications.register('mavenJava', MavenPublication).configure {
+        from components.shadow
+        artifact jar
+
         artifactId = project.name
-        from components.java
+        changelog.publish it
 
-        pom {
-            name = project.name
-            description = 'Minecraft Maven Repo Generator'
-            url = 'https://github.com/MinecraftForge/minecraft-maven'
+        pom { pom ->
+            name = displayName
+            description = project.description
 
-            gradleutils.pom.setGitHubDetails(pom, 'minecraft-maven')
+            gradleutils.pom.setGitHubDetails pom
 
             license gradleutils.pom.licenses.LGPLv2_1
 
             developers {
                 developer gradleutils.pom.Developers.LexManos
+                developer gradleutils.pom.Developers.Jonathing
             }
         }
     }
@@ -100,10 +122,4 @@ publishing {
     }
 }
 
-idea {
-    module {
-        // IntelliJ IDEA does not do this by itself anymore...
-        downloadJavadoc = true
-        downloadSources = true
-    }
-}
+idea.module { downloadSources = downloadJavadoc = true }

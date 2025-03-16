@@ -95,7 +95,7 @@ public class Main {
         var version = options.valueOf(versionO);
         var caches = new Cache(cache, jdkCache);
 
-        log("Minecarft Mavenizer " + JarVersionLookupHandler.getInfo(Main.class).impl().version().orElse(""));
+        JarVersionInfo.of(Main.class).hello(Main::log, true, true);
         log("  Output:    " + output.getAbsolutePath());
         log("  Cache:     " + cache.getAbsolutePath());
         log("  JDK Cache: " + jdkCache.getAbsolutePath());
