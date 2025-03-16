@@ -26,7 +26,7 @@ MinecraftMaven is a standalone Java tool that can be invoked through the command
 java -jar minecraft-maven-0.1.0.jar --version 1.21.3-53.0.25
 ```
 
-For now, MinecraftMaven only supports generating Forge repos (along with its related artifacts such as Client Extra, of course). If you want to read more on how to invoke this tool, read the main method at `net.minecraftforge.mcmaven.Main`.
+For now, MinecraftMaven only supports generating Forge repos (along with its related artifacts such as Client Extra, of course). If you want to read more on how to invoke this tool, read the main method at `net.minecraftforge.mcmaven.cli.Main`.
 
 ## Preliminary Implementation
 

@@ -1,0 +1,68 @@
+/*
+ * Copyright (c) Forge Development LLC and contributors
+ * SPDX-License-Identifier: LGPL-2.1-only
+ */
+package net.minecraftforge.mcmaven.impl.cache;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+
+import net.minecraftforge.mcmaven.impl.data.MinecraftVersion.LibraryDownload;
+import net.minecraftforge.mcmaven.impl.util.Constants;
+import net.minecraftforge.mcmaven.impl.util.HashFunction;
+import net.minecraftforge.mcmaven.impl.util.Util;
+
+/** Represents the Minecraft maven cache for this tool. */
+public class MinecraftMavenCache extends MavenCache {
+    private final File mcDir = new File(Util.getMCDir(), "libraries");
+
+    /**
+     * Initializes a new maven cache with the given cache directory.
+     *
+     * @param root The cache directory
+     */
+    public MinecraftMavenCache(File root) {
+        super("mojang", Constants.MOJANG_MAVEN, root);
+
+        // Can't use MD5 or SHA256 as Mojang doesn't seem to provide them.
+        this.known_hashes = new HashFunction[] {
+            HashFunction.SHA1
+        };
+    }
+
+    /**
+     * Downloads an artifact using the given library download information.
+     *
+     * @param lib The library download information
+     * @return The downloaded file
+     *
+     * @throws IOException If an error occurs while downloading the file
+     */
+    @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
+    public File download(LibraryDownload lib) {
+        return this.download(false, lib.path);
+    }
+
+    @Override
+    protected void downloadFile(File target, String path) throws IOException {
+        if (!mcDir.exists()) {
+            super.downloadFile(target, path);
+            return;
+        }
+
+        var local = new File(mcDir, path.replace('/', File.separatorChar));
+        if (local.exists()) {
+            Util.ensureParent(target);
+            // TODO: [MCMaven] Check hashes for local minecraft archive
+            try {
+                Files.copy(local.toPath(), target.toPath());
+            } catch (IOException e) {
+                Util.sneak(e);
+            }
+            return;
+        }
+
+        super.downloadFile(target, path);
+    }
+}
