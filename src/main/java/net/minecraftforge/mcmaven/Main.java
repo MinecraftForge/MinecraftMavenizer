@@ -107,12 +107,16 @@ public class Main {
             if (version == null) {
                 var data = DownloadUtils.downloadString(Constants.FORGE_PROMOS);
                 var promos = JsonData.promosSlim(data);
-                for (var ver : promos.versions().reversed())
+                for (var i = promos.versions().size() - 1; i >= 0; i--) {
+                    var ver = promos.versions().get(i);
                     proc.process(ver);
+                }
             } else if ("all".equals(version)) {
                 var versions = caches.forge.getVersions(Artifact.from(Constants.FORGE_ARTIFACT));
-                for (var ver : versions.reversed())
+                for (var i = versions.size() - 1; i >= 0; i--) {
+                    var ver = versions.get(i);
                     proc.process(ver);
+                }
             } else {
                 proc.process(version);
             }

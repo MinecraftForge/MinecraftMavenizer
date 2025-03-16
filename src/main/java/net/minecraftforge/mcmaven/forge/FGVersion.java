@@ -7,8 +7,8 @@ package net.minecraftforge.mcmaven.forge;
 import net.minecraftforge.mcmaven.util.ComparableVersion;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.LinkedHashMap;
-import java.util.SequencedMap;
+import java.util.Comparator;
+import java.util.TreeMap;
 
 /**
  * Represents a ForgeGradle version.
@@ -64,7 +64,7 @@ public enum FGVersion {
         return this.comp.toString();
     }
 
-    private static final SequencedMap<FGVersion, ComparableVersion> FORGE_TO_FG = new LinkedHashMap<>();
+    private static final TreeMap<FGVersion, ComparableVersion> FORGE_TO_FG = new TreeMap<>(Comparator.reverseOrder());
 
     private static void forge(FGVersion fg, String forge) {
         FORGE_TO_FG.put(fg, new ComparableVersion(forge));
@@ -98,7 +98,7 @@ public enum FGVersion {
      */
     public static @Nullable FGVersion fromForge(String version) {
         var ver = new ComparableVersion(version);
-        for (var entry : FORGE_TO_FG.reversed().entrySet()) {
+        for (var entry : FORGE_TO_FG.entrySet()) {
             if (entry.getValue().compareTo(ver) <= 0)
                 return entry.getKey();
         }

@@ -21,7 +21,7 @@ public final class Constants {
     public static final String LAUNCHER_MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest.json";
     public static final String MOJANG_MAVEN = "https://libraries.minecraft.net/";
 
-    public static final Artifact ACCESS_TRANSFORMER = Artifact.from("net.minecraftforge:accesstransformers:8.1.1:fatjar");
+    public static final Artifact ACCESS_TRANSFORMER = Artifact.from("net.minecraftforge:accesstransformers:8.2.1:fatjar");
     public static final int ACCESS_TRANSFORMER_JAVA_VERSION = 8;
 
     public static final Artifact SIDE_STRIPPER = Artifact.from("net.minecraftforge:mergetool:1.2.0:fatjar");

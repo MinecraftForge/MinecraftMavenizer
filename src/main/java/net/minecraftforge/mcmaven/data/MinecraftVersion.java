@@ -29,7 +29,7 @@ public class MinecraftVersion {
             if (lib.rules != null && lib.rules.size() != 1)
                 throw new UnsupportedOperationException("Rules were found, but wasn't precisely one??? Rules: %s".formatted(String.valueOf(lib.rules)));
 
-            var os = lib.rules == null ? null : lib.rules.getFirst().os.toOS();
+            var os = lib.rules == null ? null : lib.rules.get(0).os.toOS();
             libs.add(new Lib(lib.name, lib.downloads.artifact, os));
             if (lib.downloads.classifiers != null)
                 lib.downloads.classifiers.forEach((k, v) -> libs.add(new Lib(lib.name + ':' + k, v, os)));
