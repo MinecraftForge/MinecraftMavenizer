@@ -5,6 +5,7 @@
 package buildsrc;
 
 import org.gradle.api.DefaultTask;
+import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
@@ -12,6 +13,9 @@ import org.gradle.api.tasks.TaskAction;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
+
+import javax.inject.Inject;
+
 import static org.objectweb.asm.Opcodes.*;
 
 import java.io.IOException;
@@ -20,19 +24,21 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
 abstract class ClassGeneratorTask extends DefaultTask {
-    @OutputFile
-    abstract RegularFileProperty getOutputFile();
+    @Inject
+    abstract ProjectLayout getLayout();
 
     public ClassGeneratorTask() {
         // I don't think this is necessary, as the build cache should use the hash of this compiled class as the cache key
         // But just in case, this is how to make it always run.
         this.getOutputs().upToDateWhen(t -> false);
-        this.getOutputFile().convention(this.getProject()
-            .getLayout()
+        this.getOutputFile().convention(this.getLayout()
             .getBuildDirectory()
             .file(this.getName() + "/JavaProbe.class")
         );
     }
+
+    @OutputFile
+    abstract RegularFileProperty getOutputFile();
 
     @TaskAction
     public void run() throws IOException {

@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.util;
 
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.Serializable;

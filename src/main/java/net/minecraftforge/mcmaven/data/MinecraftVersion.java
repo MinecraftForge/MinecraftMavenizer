@@ -5,7 +5,7 @@
 package net.minecraftforge.mcmaven.data;
 
 import net.minecraftforge.mcmaven.util.OS;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 import java.net.URL;
 import java.util.ArrayList;

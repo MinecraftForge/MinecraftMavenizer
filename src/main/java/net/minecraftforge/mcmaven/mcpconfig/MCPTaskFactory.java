@@ -50,7 +50,7 @@ import net.minecraftforge.mcmaven.util.ProcessUtils;
 import net.minecraftforge.mcmaven.util.Task;
 import net.minecraftforge.mcmaven.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 // TODO [MCMaven][Documentation] Document
 public class MCPTaskFactory {

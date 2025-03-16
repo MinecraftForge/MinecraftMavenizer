@@ -26,7 +26,7 @@ import net.minecraftforge.mcmaven.util.POMBuilder;
 import net.minecraftforge.mcmaven.util.Task;
 import net.minecraftforge.mcmaven.util.Util;
 import org.apache.commons.io.FileUtils;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;

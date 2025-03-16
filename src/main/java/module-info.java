@@ -9,7 +9,7 @@ module net.minecraftforge.mcmaven {
     exports net.minecraftforge.mcmaven.mcpconfig;
     exports net.minecraftforge.mcmaven.util;
 
-    requires static org.jspecify;
+    requires static org.jetbrains.annotations;
 
     requires com.google.gson;
     requires de.siegmar.fastcsv;

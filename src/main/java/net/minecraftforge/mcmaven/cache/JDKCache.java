@@ -17,7 +17,7 @@ import java.util.Set;
 import net.minecraftforge.java_version.api.IJavaInstall;
 import net.minecraftforge.java_version.api.IJavaLocator;
 import net.minecraftforge.mcmaven.util.Log;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 /** Represents the JDK cache for this tool. */
 public class JDKCache {

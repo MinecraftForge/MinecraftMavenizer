@@ -1,31 +1,22 @@
-//import net.ltgt.gradle.errorprone.ErrorProneOptions
-//import net.ltgt.gradle.nullaway.NullAwayOptions
-
 plugins {
     id 'java-library'
     id 'idea'
     id 'maven-publish'
-    id 'net.minecraftforge.licenser' version '1.0.1'
-    id 'net.minecraftforge.gradleutils' version '2.3.6'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'net.minecraftforge.licenser' version '1.1.1'
+    id 'net.minecraftforge.gradleutils' version '2.4.9'
+    id 'com.gradleup.shadow' version '8.3.6'
 
-    // Enforce jSpecify annotations at compile-time
-//    id 'net.ltgt.errorprone' version '4.1.0'
-//    id 'net.ltgt.nullaway' version '2.1.0'
-
-    // modules
     id 'org.gradlex.extra-java-module-info' version '1.8'
 }
 
 repositories {
-    mavenLocal()
+    maven gradleutils.forgeMaven
     mavenCentral()
-    maven { url = 'https://maven.minecraftforge.net/' }
+    mavenLocal()
 }
 
 group = 'net.minecraftforge'
-
-version = gradleutils.tagOffsetVersion
+version = gitversion.version.tagOffset
 println('Version: ' + version)
 
 dependencies {
@@ -35,36 +26,13 @@ dependencies {
     implementation libs.srgutils
     implementation libs.diff
 
-    // FOR jSpecify
-    api libs.jspecify.annotations
-//    errorprone libs.errorprone.core
-//    errorprone libs.nullaway
-
     // FOR MCPNames -- TODO CLEAN UP LATER
     implementation libs.fastcsv
     implementation libs.commonsio
+
+    // Static Analysis
+    compileOnly libs.nulls
 }
-
-// TODO [MCMaven][Nullability] Add this back in sometime in the future, but only after we add actual API
-// and when we do add it back, make it apply ONLY to the API
-/*
-// Nullability garbage!
-tasks.withType(JavaCompile).configureEach {
-    options.errorprone { ErrorProneOptions errorProne ->
-        errorProne.disableAllChecks = true
-
-        errorProne.nullaway { NullAwayOptions nullAway ->
-            nullAway.jspecifyMode = true
-            nullAway.warn()
-            nullaway.excludedClasses.add('net.minecraftforge.mcmaven.util.ComparableVersion')
-        }
-
-//        errorProne.error("FieldCanBeFinal", "MethodCanBeStatic")
-    }
-}
-
-nullaway.annotatedPackages.add("net.minecraftforge.mcmaven")
- */
 
 extraJavaModuleInfo {
     failOnMissingModuleInfo = false
@@ -92,7 +60,7 @@ jar {
         attributes([
             'Specification-Title':   'Minecraft Maven',
             'Specification-Vendor':  'Forge Development LLC',
-            'Specification-Version':  gradleutils.gitInfo.tag,
+            'Specification-Version':  gitversion.version.info.tag,
             'Implementation-Title':  'Minecraft Maven',
             'Implementation-Vendor': 'Forge Development LLC',
             'Implementation-Version': project.version
@@ -105,7 +73,7 @@ compileJava {
 }
 
 changelog {
-    from '0.0'
+    fromBase()
 }
 
 publishing {

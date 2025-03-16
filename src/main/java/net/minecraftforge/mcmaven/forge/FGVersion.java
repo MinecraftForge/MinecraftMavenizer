@@ -5,7 +5,7 @@
 package net.minecraftforge.mcmaven.forge;
 
 import net.minecraftforge.mcmaven.util.ComparableVersion;
-import org.jspecify.annotations.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.SequencedMap;
