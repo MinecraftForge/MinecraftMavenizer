@@ -6,7 +6,7 @@ package net.minecraftforge.mcmaven.impl.cache;
 
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.DownloadUtils;
-import net.minecraftforge.mcmaven.impl.util.HashFunction;
+import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Log;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import org.w3c.dom.Document;

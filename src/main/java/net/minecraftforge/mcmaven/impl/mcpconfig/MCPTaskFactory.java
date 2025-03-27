@@ -43,7 +43,8 @@ import net.minecraftforge.mcmaven.impl.data.JsonData;
 import net.minecraftforge.mcmaven.impl.data.MCPConfig;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.mcmaven.impl.util.HashStore;
+import net.minecraftforge.util.file.FileUtils;
+import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.Log;
 import net.minecraftforge.mcmaven.impl.util.OS;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
@@ -229,7 +230,7 @@ public class MCPTaskFactory {
             if (entry == null)
                 throw except("Missing data: `" + key + "`: `" + value + "`");
 
-            Util.ensureParent(target);
+            FileUtils.ensureParent(target);
 
             try (var os = new FileOutputStream(target)) {
                 zip.getInputStream(entry).transferTo(os);
@@ -251,7 +252,7 @@ public class MCPTaskFactory {
         cache.add("mcp", getData());
         boolean same = cache.isSame();
 
-        var existing = new HashSet<>(Util.listFiles(base));
+        var existing = new HashSet<>(FileUtils.listFiles(base));
 
         try (var zip = new ZipFile(getData())) {
             var count = 0;
@@ -266,7 +267,7 @@ public class MCPTaskFactory {
                 var relative = e.getName().substring(value.length());
                 var target = new File(base, relative);
                 existing.remove(target);
-                Util.ensureParent(target);
+                FileUtils.ensureParent(target);
 
                 if (!target.exists() || !same) {
                     try (var os = new FileOutputStream(target)) {
@@ -356,7 +357,7 @@ public class MCPTaskFactory {
         if (output.exists())
             output.delete();
 
-        Util.ensureParent(output);
+        FileUtils.ensureParent(output);
 
         try {
             var map = IMappingFile.load(mappings);
@@ -370,7 +371,7 @@ public class MCPTaskFactory {
                while ((entry = is.getNextJarEntry()) != null) {
                    if (entry.isDirectory() || classes.contains(entry.getName()) != whitelist)
                        continue;
-                   os.putNextEntry(Util.getStableEntry(entry));
+                   os.putNextEntry(FileUtils.getStableEntry(entry));
                    is.transferTo(os);
                    os.closeEntry();
                }
@@ -407,7 +408,7 @@ public class MCPTaskFactory {
         if (output.exists())
             output.delete();
 
-        Util.ensureParent(output);
+        FileUtils.ensureParent(output);
 
         var templateF = new File(input, "package-info-template.java");
         String template = null;
@@ -438,15 +439,15 @@ public class MCPTaskFactory {
 
                 try (var zip = new ZipOutputStream(new FileOutputStream(packages))) {
                     for (var pkg : pkgs) {
-                        zip.putNextEntry(Util.getStableEntry(pkg + "/package-info.java", modified));
+                        zip.putNextEntry(FileUtils.getStableEntry(pkg + "/package-info.java", modified));
                         zip.write(template.replace("{PACKAGE}", pkg.replace('/', '.')).getBytes(StandardCharsets.UTF_8));
                         zip.closeEntry();
                     }
                 }
 
-                Util.mergeJars(output, false, input, inject, packages);
+                FileUtils.mergeJars(output, false, input, inject, packages);
             } else {
-                Util.mergeJars(output, false, input, inject);
+                FileUtils.mergeJars(output, false, input, inject);
             }
 
             cache.save();
@@ -490,8 +491,8 @@ public class MCPTaskFactory {
         ;
 
         try {
-            Util.ensureParent(output);
-            Util.ensureParent(rejects);
+            FileUtils.ensureParent(output);
+            FileUtils.ensureParent(rejects);
 
             var result = builder.build().operate();
 
@@ -543,7 +544,7 @@ public class MCPTaskFactory {
 
         this.libraries = downloadedLibs;
 
-        Util.ensureParent(output);
+        FileUtils.ensureParent(output);
         try (var os = new FileOutputStream(output)) {
             os.write(buf.toString().getBytes(StandardCharsets.UTF_8));
             return output;
@@ -607,7 +608,7 @@ public class MCPTaskFactory {
                 if (entry == null)
                     throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries/" + lib);
 
-                Util.ensureParent(target);
+                FileUtils.ensureParent(target);
 
                 try (var os = new FileOutputStream(target);
                      var is = jar.getInputStream(entry)) {
@@ -615,7 +616,7 @@ public class MCPTaskFactory {
                 }
             }
 
-            Util.ensureParent(output);
+            FileUtils.ensureParent(output);
             try (var os = new FileOutputStream(output)) {
                 os.write(buf.toString().getBytes(StandardCharsets.UTF_8));
             }
@@ -704,7 +705,7 @@ public class MCPTaskFactory {
             return output;
 
         try {
-            Util.splitJar(client, mappings, output, false, false);
+            FileUtils.splitJar(client, mappings, output, false, false);
         } catch (IOException e) {
             Util.sneak(e);
         }

@@ -7,8 +7,9 @@ package net.minecraftforge.mcmaven.impl.forge;
 import net.minecraftforge.mcmaven.impl.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.mcpconfig.MCPNames;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
-import net.minecraftforge.mcmaven.impl.util.HashFunction;
-import net.minecraftforge.mcmaven.impl.util.HashStore;
+import net.minecraftforge.util.file.FileUtils;
+import net.minecraftforge.util.hash.HashFunction;
+import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.Log;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
@@ -109,7 +110,7 @@ class Renamer {
             try (ZipInputStream zin = new ZipInputStream(new FileInputStream(input));
                  ZipOutputStream zout = new ZipOutputStream(new FileOutputStream(output))) {
                 for (ZipEntry entry = zin.getNextEntry(); entry != null; entry = zin.getNextEntry()) {
-                    zout.putNextEntry(Util.getStableEntry(entry.getName()));
+                    zout.putNextEntry(FileUtils.getStableEntry(entry.getName()));
 
                     if (entry.getName().endsWith(".java")) {
                         String mapped = names.rename(zin, false);

@@ -6,7 +6,7 @@ package net.minecraftforge.mcmaven.impl.mcpconfig;
 
 import de.siegmar.fastcsv.reader.CsvReader;
 import de.siegmar.fastcsv.reader.NamedCsvRecord;
-import net.minecraftforge.mcmaven.impl.util.HashFunction;
+import net.minecraftforge.util.hash.HashFunction;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.tuple.Pair;
 

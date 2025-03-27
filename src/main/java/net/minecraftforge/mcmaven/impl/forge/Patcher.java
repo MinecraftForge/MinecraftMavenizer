@@ -31,8 +31,9 @@ import net.minecraftforge.mcmaven.impl.data.PatcherConfig.V2.DataFunction;
 import net.minecraftforge.mcmaven.impl.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.mcmaven.impl.util.HashFunction;
-import net.minecraftforge.mcmaven.impl.util.HashStore;
+import net.minecraftforge.util.file.FileUtils;
+import net.minecraftforge.util.hash.HashFunction;
+import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.Log;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
@@ -303,7 +304,7 @@ class Patcher {
         if (output.exists())
             output.delete();
 
-        Util.ensureParent(output);
+        FileUtils.ensureParent(output);
         boolean first = true;
         try (var zip = new ZipFile(this.data);
              var out = new FileOutputStream(output)) {
@@ -350,7 +351,7 @@ class Patcher {
             if (entry == null)
                 throw except("Missing data: `" + key + "`: `" + value + "`");
 
-            Util.ensureParent(target);
+            FileUtils.ensureParent(target);
 
             try (var os = new FileOutputStream(target)) {
                 zip.getInputStream(entry).transferTo(os);
@@ -582,7 +583,7 @@ class Patcher {
             return output;
 
         try {
-            Util.mergeJars(output, false,
+            FileUtils.mergeJars(output, false,
                 (file, path) -> file != sources || !path.startsWith("patches/"),
                 sources, input
             );

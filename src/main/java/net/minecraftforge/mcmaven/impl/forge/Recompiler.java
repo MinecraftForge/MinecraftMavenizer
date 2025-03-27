@@ -6,7 +6,8 @@ package net.minecraftforge.mcmaven.impl.forge;
 
 import net.minecraftforge.mcmaven.impl.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
-import net.minecraftforge.mcmaven.impl.util.HashStore;
+import net.minecraftforge.util.file.FileUtils;
+import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.Log;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
@@ -105,7 +106,7 @@ class Recompiler {
             jars.addAll(universals);
             jars.add(recompiledJar);
 
-            Util.mergeJars(outputJar, true, (file, name) -> file == recompiledJar || !name.endsWith(".class"), jars.toArray(File[]::new));
+            FileUtils.mergeJars(outputJar, true, (file, name) -> file == recompiledJar || !name.endsWith(".class"), jars.toArray(File[]::new));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

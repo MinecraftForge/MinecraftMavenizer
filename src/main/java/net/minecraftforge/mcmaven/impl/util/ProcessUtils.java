@@ -5,6 +5,7 @@
 package net.minecraftforge.mcmaven.impl.util;
 
 import net.minecraftforge.java_version.util.OS;
+import net.minecraftforge.util.file.FileUtils;
 import org.apache.commons.io.IOUtils;
 
 import java.io.BufferedReader;
@@ -178,7 +179,7 @@ public final class ProcessUtils {
      * @return The exit code of the process
      */
     public static Result runJar(File javaHome, File workDir, File logFile, File tool, List<String> jvm, List<String> run) {
-        Util.ensureParent(logFile);
+        FileUtils.ensureParent(logFile);
         try (var log = new PrintWriter(new FileWriter(logFile), true)) {
             String classpath = tool.getAbsolutePath();
             // Some old jvms require manually adding the classes zip, so lets add it if it exists
@@ -232,13 +233,13 @@ public final class ProcessUtils {
         var sourcesOutput = new File(workDir, "recompileSources");
         try {
             // Ensure the output directory exists
-            Util.ensureParent(sourcesOutput);
+            FileUtils.ensureParent(sourcesOutput);
 
             try (ZipInputStream zin = new ZipInputStream(new FileInputStream(sourcesJar))) {
                 ZipEntry entry;
                 while ((entry = zin.getNextEntry()) != null) {
                     File entryFile = new File(sourcesOutput, entry.getName());
-                    Util.ensureParent(entryFile);
+                    FileUtils.ensureParent(entryFile);
 
                     if (entry.isDirectory()) {
                         entryFile.mkdirs();
@@ -257,7 +258,7 @@ public final class ProcessUtils {
         var sourcePath = new StringBuilder();
         var nonSourceFiles = new ArrayList<File>();
 
-        var sourceFiles = Util.listFiles(sourcesOutput).iterator();
+        var sourceFiles = FileUtils.listFiles(sourcesOutput).iterator();
         while (sourceFiles.hasNext()) {
             var sourceFile = sourceFiles.next();
             var absolutePath = sourceFile.getAbsolutePath();
@@ -272,7 +273,7 @@ public final class ProcessUtils {
         }
 
         var outputClasses = new File(workDir, "classes");
-        Util.ensure(outputClasses);
+        FileUtils.ensure(outputClasses);
         var args = List.of(
             "-nowarn",
             "-d " + wrap(outputClasses.getAbsolutePath().replace('\\', '/')),
@@ -290,7 +291,7 @@ public final class ProcessUtils {
         }
 
         try {
-            return Util.makeJar(outputClasses, sourcesOutput, nonSourceFiles, outputJar);
+            return FileUtils.makeJar(outputClasses, sourcesOutput, nonSourceFiles, outputJar);
         } finally {
             Util.sneakyDeleteOnExit(sourcesOutput);
             Util.sneakyDeleteOnExit(outputClasses);
@@ -312,7 +313,7 @@ public final class ProcessUtils {
     }
 
     private static Result runJavac(File javaHome, File workDir, File logFile, List<String> args) {
-        Util.ensureParent(logFile);
+        FileUtils.ensureParent(logFile);
         try (var log = new PrintWriter(new FileWriter(logFile), true)) {
             var argsAll = Util.make(new StringBuilder(), s -> {
                 var it = args.iterator();
@@ -324,7 +325,7 @@ public final class ProcessUtils {
             }).toString();
 
             var argsFile = new File(workDir, "recompile_args.txt");
-            Util.ensureParent(argsFile);
+            FileUtils.ensureParent(argsFile);
             try (var os = new FileOutputStream(argsFile)) {
                 os.write(argsAll.getBytes(StandardCharsets.UTF_8));
             } catch (IOException e) {

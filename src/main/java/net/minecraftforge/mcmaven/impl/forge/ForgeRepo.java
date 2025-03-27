@@ -19,13 +19,13 @@ import net.minecraftforge.mcmaven.impl.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.mcmaven.impl.util.HashFunction;
+import net.minecraftforge.util.file.FileUtils;
+import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Log;
 import net.minecraftforge.mcmaven.impl.util.OS;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
-import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.Nullable;
 
 import javax.xml.parsers.ParserConfigurationException;
@@ -144,7 +144,7 @@ public class ForgeRepo {
     }
 
     private List<Artifact> generateOutput(String forge, String minecraft) {
-        Util.ensureParent(this.output);
+        FileUtils.ensureParent(this.output);
 
         var artifacts = new ArrayList<Artifact>();
         this.outputArtifact(artifacts, this.sources, Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge, "sources"));
@@ -164,7 +164,7 @@ public class ForgeRepo {
 
         try {
             var output = new File(this.output, artifact.getLocalPath());
-            FileUtils.copyFile(file, output);
+            org.apache.commons.io.FileUtils.copyFile(file, output);
             Util.updateHash(output);
         } catch (IOException e) {
             Util.sneak(e);
@@ -180,7 +180,7 @@ public class ForgeRepo {
             builder.dependencies().add(a, "compile");
         }
 
-        Util.ensureParent(output);
+        FileUtils.ensureParent(output);
         try (var os = new FileOutputStream(output)) {
             os.write(builder.build(true).getBytes(StandardCharsets.UTF_8));
         } catch (IOException | ParserConfigurationException | TransformerException e) {
@@ -263,7 +263,7 @@ public class ForgeRepo {
         // TODO [MCMaven][ForgeRepo] This is a mess. Clean it up.
         // ALSO TODO add parchment mappings and other mappings support
 
-        Util.ensureParent(output);
+        FileUtils.ensureParent(output);
         try {
             JsonData.toJson(module, output);
         } catch (IOException e) {
@@ -286,7 +286,7 @@ public class ForgeRepo {
             builder.dependencies().add(a, "compile");
         });
 
-        Util.ensureParent(output);
+        FileUtils.ensureParent(output);
         try (var os = new FileOutputStream(output)) {
             os.write(builder.build(true).getBytes(StandardCharsets.UTF_8));
         } catch (IOException | ParserConfigurationException | TransformerException e) {
@@ -337,7 +337,7 @@ public class ForgeRepo {
             }
         });
 
-        Util.ensureParent(output);
+        FileUtils.ensureParent(output);
         try {
             JsonData.toJson(module, output);
         } catch (IOException e) {

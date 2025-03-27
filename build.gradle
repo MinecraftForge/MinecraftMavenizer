@@ -16,7 +16,7 @@ version = gitversion.version.tagOffset
 println('Version: ' + version)
 
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(17)
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
     withSourcesJar()
 }
 
@@ -42,6 +42,11 @@ dependencies {
 
     implementation libs.fastcsv
     implementation libs.commonsio
+
+    implementation libs.utils.files
+    implementation libs.utils.hash
+    implementation libs.utils.data
+    implementation libs.utils.logging
 
     // Static Analysis
     compileOnly libs.nulls

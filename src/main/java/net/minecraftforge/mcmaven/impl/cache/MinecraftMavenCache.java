@@ -10,12 +10,14 @@ import java.nio.file.Files;
 
 import net.minecraftforge.mcmaven.impl.data.MinecraftVersion.LibraryDownload;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.mcmaven.impl.util.HashFunction;
+import net.minecraftforge.util.data.MCJsonUtils;
+import net.minecraftforge.util.file.FileUtils;
+import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Util;
 
 /** Represents the Minecraft maven cache for this tool. */
 public class MinecraftMavenCache extends MavenCache {
-    private final File mcDir = new File(Util.getMCDir(), "libraries");
+    private final File mcDir = new File(MCJsonUtils.getMCDir(), "libraries");
 
     /**
      * Initializes a new maven cache with the given cache directory.
@@ -53,7 +55,7 @@ public class MinecraftMavenCache extends MavenCache {
 
         var local = new File(mcDir, path.replace('/', File.separatorChar));
         if (local.exists()) {
-            Util.ensureParent(target);
+            FileUtils.ensureParent(target);
             // TODO: [MCMaven] Check hashes for local minecraft archive
             try {
                 Files.copy(local.toPath(), target.toPath());

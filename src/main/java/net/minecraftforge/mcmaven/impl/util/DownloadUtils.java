@@ -10,6 +10,7 @@ import com.google.gson.TypeAdapter;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
+import net.minecraftforge.util.file.FileUtils;
 import org.jetbrains.annotations.Nullable;
 
 import javax.net.ssl.SSLHandshakeException;
@@ -167,7 +168,7 @@ public final class DownloadUtils {
      */
     public static boolean downloadFile(File target, String url) {
         try {
-            Util.ensureParent(target);
+            FileUtils.ensureParent(target);
             Log.log("Downloading " + url);
 
             URLConnection connection = getConnection(url);

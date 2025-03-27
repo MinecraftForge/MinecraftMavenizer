@@ -15,5 +15,8 @@ module net.minecraftforge.mcmaven {
     requires java.xml;
     requires org.apache.commons.io;
     requires org.apache.commons.lang3;
+    requires net.minecraftforge.utils.hash;
+    requires net.minecraftforge.utils.file;
     requires net.minecraftforge.srgutils;
+    requires net.minecraftforge.utils.json_data;
 }
