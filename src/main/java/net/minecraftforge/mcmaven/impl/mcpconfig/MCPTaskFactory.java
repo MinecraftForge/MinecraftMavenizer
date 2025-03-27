@@ -45,13 +45,14 @@ import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
-import net.minecraftforge.mcmaven.impl.util.Log;
 import net.minecraftforge.mcmaven.impl.util.OS;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
 import org.jetbrains.annotations.Nullable;
+
+import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
 
 // TODO [MCMaven][Documentation] Document
 public class MCPTaskFactory {
@@ -165,14 +166,6 @@ public class MCPTaskFactory {
 
     public Task getLastTask() {
         return this.last;
-    }
-
-    private void log(String message) {
-        Log.log(message);
-    }
-
-    private void debug(String message) {
-        Log.debug(message);
     }
 
     private RuntimeException except(String message) {
@@ -479,7 +472,7 @@ public class MCPTaskFactory {
             return output;
 
         var builder = PatchOperation.builder()
-            .logTo(Log::log)
+            .logTo(LOGGER::error)
             .baseInput(MultiInput.archive(ArchiveFormat.ZIP, input.toPath()))
             .patchesInput(MultiInput.folder(patches.toPath()))
             .patchedOutput(MultiOutput.archive(ArchiveFormat.ZIP, output.toPath()))
@@ -498,8 +491,11 @@ public class MCPTaskFactory {
 
             boolean success = result.exit == 0;
             if (!success) {
-                log("Rejects saved to: " + rejects.getAbsolutePath());
-                result.summary.print(System.out, true);
+                if (result.summary != null)
+                    result.summary.print(System.out, true);
+                else
+                    LOGGER.error("Failed to apply patches, no summary available");
+
                 throw except("Failed to apply patches, Rejects saved to: " + rejects.getAbsolutePath());
             }
 

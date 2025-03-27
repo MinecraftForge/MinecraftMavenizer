@@ -9,15 +9,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import net.minecraftforge.java_version.api.IJavaInstall;
 import net.minecraftforge.java_version.api.IJavaLocator;
-import net.minecraftforge.mcmaven.impl.util.Log;
 import org.jetbrains.annotations.Nullable;
+
+import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
 
 /** Represents the JDK cache for this tool. */
 public class JDKCache {
@@ -56,8 +56,8 @@ public class JDKCache {
         // not sure how this would ever hit. but just in case...
         var old = jdks.putIfAbsent(version, ret);
         if (old != null) {
-            Log.error("JDKCache: Downloaded JDK " + version + " is replacing an existing download! It was probably downloaded by another thread.");
-            Log.error("JDKCache: Old JDK: " + old);
+            LOGGER.error("JDKCache: Downloaded JDK " + version + " is replacing an existing download! It was probably downloaded by another thread.");
+            LOGGER.error("JDKCache: Old JDK: " + old);
             // TODO Throw exception here
         }
 
@@ -83,11 +83,7 @@ public class JDKCache {
 
         // Remove duplicates
         Set<File> seen = new HashSet<File>();
-        for (Iterator<IJavaInstall> itr = installs.iterator(); itr.hasNext(); ) {
-            IJavaInstall install = itr.next();
-            if (!seen.add(install.home()))
-                itr.remove();
-        }
+        installs.removeIf(install -> !seen.add(install.home()));
 
         Collections.sort(installs);
         for (IJavaInstall install : installs) {

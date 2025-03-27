@@ -15,8 +15,8 @@ import net.minecraftforge.mcmaven.impl.forge.ForgeRepo;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.DownloadUtils;
-import net.minecraftforge.mcmaven.impl.util.JarVersionLookupHandler;
-import net.minecraftforge.mcmaven.impl.util.Log;
+
+import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
 
 // TODO [MCMaven] Make an actual API with an api package.
 /**
@@ -78,13 +78,11 @@ public class Main {
             return;
         }
 
-        File output = options.valueOf(outputO);
-        File cache = options.valueOf(cacheO);
-        File jdkCache = null;
-        if (!options.has(cacheO) || options.has(jdkCacheO))
-            jdkCache = options.valueOf(jdkCacheO);
-        else
-            jdkCache = new File(cache, "jdks");
+        var output = options.valueOf(outputO);
+        var cache = options.valueOf(cacheO);
+        var jdkCache = !options.has(cacheO) || options.has(jdkCacheO)
+            ? options.valueOf(jdkCacheO)
+            : new File(cache, "jdks");
 
         String artifact = options.valueOf(artifactO);
         for (var key : artifacts.keySet()) {
@@ -95,12 +93,12 @@ public class Main {
         var version = options.valueOf(versionO);
         var caches = new Cache(cache, jdkCache);
 
-        JarVersionInfo.of(Main.class).hello(Main::log, true, true);
-        log("  Output:    " + output.getAbsolutePath());
-        log("  Cache:     " + cache.getAbsolutePath());
-        log("  JDK Cache: " + jdkCache.getAbsolutePath());
-        log("  Artifact:  " + artifact);
-        log("  Version:   " + version);
+        JarVersionInfo.of(Main.class).hello(LOGGER::info, true, true);
+        LOGGER.info("  Output:    " + output.getAbsolutePath());
+        LOGGER.info("  Cache:     " + cache.getAbsolutePath());
+        LOGGER.info("  JDK Cache: " + jdkCache.getAbsolutePath());
+        LOGGER.info("  Artifact:  " + artifact);
+        LOGGER.info("  Version:   " + version);
 
         if (Constants.FORGE_ARTIFACT.equals(artifact)) {
             var proc = new ForgeRepo(caches, output);
@@ -117,11 +115,7 @@ public class Main {
                 proc.process(version);
             }
         } else {
-            log("Currently Unsupported, Will add later");
+            LOGGER.error("Artifact '%s' is currently Unsupported. Will add later".formatted(artifact));
         }
-    }
-
-    private static void log(String message) {
-        Log.log(message);
     }
 }

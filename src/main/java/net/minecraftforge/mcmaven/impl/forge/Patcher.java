@@ -34,10 +34,13 @@ import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashStore;
-import net.minecraftforge.mcmaven.impl.util.Log;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
+
+import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
+
+import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
 
 // TODO: [MCMaven] This class needs to be split off into some sort of abstract class so that other patching processes can be implemented.
 // The current way this is implemented by trying to parse a specific config is not that great. And if we want to support other versions, this HAS to be abstracted.
@@ -144,14 +147,6 @@ class Patcher {
         }
 
         this.last = last;
-    }
-
-    private static void log(String message) {
-        Log.log(message);
-    }
-
-    private static void debug(String message) {
-        Log.debug(message);
     }
 
     private RuntimeException except(String message) {
@@ -525,7 +520,7 @@ class Patcher {
             return output;
 
         var builder = PatchOperation.builder()
-            .logTo(Log::log)
+            .logTo(LOGGER::error)
             .baseInput(MultiInput.archive(ArchiveFormat.ZIP, input.toPath()))
             .patchesInput(MultiInput.archive(ArchiveFormat.ZIP, this.data.toPath()))
             .patchedOutput(MultiOutput.archive(ArchiveFormat.ZIP, output.toPath()))
@@ -548,9 +543,12 @@ class Patcher {
 
             boolean success = result.exit == 0;
             if (!success) {
-                log("Rejects saved to: " + rejects.getAbsolutePath());
-                result.summary.print(System.out, true);
-                throw except("Failed to apply patches, Rejects saved to: " + rejects.getAbsolutePath());
+                if (result.summary != null)
+                    result.summary.print(System.out, true);
+                else
+                    LOGGER.error("Failed to apply patches, no summary available");
+
+                throw except("Failed to apply patches, rejects saved to: " + rejects.getAbsolutePath());
             }
 
             cache.save();

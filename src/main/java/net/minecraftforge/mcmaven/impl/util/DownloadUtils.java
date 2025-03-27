@@ -28,6 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
+import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
+
 public final class DownloadUtils {
     private static final TypeAdapter<String> STRING = new TypeAdapter<String>() {
         @Override
@@ -102,7 +104,7 @@ public final class DownloadUtils {
                         String location = hcon.getHeaderField("Location");
                         hcon.disconnect();
                         if (x == max_redirects - 1) {
-                            Log.error("Invalid number of redirects: " + location);
+                            LOGGER.error("Invalid number of redirects: " + location);
                             return null;
                         } else {
                             //System.out.println("Following redirect: " + location);
@@ -120,12 +122,8 @@ public final class DownloadUtils {
                 }
             }
             return con;
-        } catch (SSLHandshakeException e) {
-            Log.error("Failed to establish connection to " + address);
-            e.printStackTrace();
-            return null;
         } catch (IOException e) {
-            Log.error("Failed to establish connection to " + address);
+            LOGGER.error("Failed to establish connection to " + address);
             e.printStackTrace();
             return null;
         }
@@ -169,7 +167,7 @@ public final class DownloadUtils {
     public static boolean downloadFile(File target, String url) {
         try {
             FileUtils.ensureParent(target);
-            Log.log("Downloading " + url);
+            LOGGER.info("Downloading " + url);
 
             URLConnection connection = getConnection(url);
             if (connection != null) {

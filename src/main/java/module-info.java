@@ -19,4 +19,5 @@ module net.minecraftforge.mcmaven {
     requires net.minecraftforge.utils.file;
     requires net.minecraftforge.srgutils;
     requires net.minecraftforge.utils.json_data;
+    requires net.minecraftforge.utils.logging;
 }

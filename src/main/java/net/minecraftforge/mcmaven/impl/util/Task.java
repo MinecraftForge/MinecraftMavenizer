@@ -5,17 +5,18 @@
 package net.minecraftforge.mcmaven.impl.util;
 
 import java.io.File;
-import java.util.Collections;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
+
 /** Represents a task that can be executed. Tasks in this tool <strong>will always</strong> provide a file. */
-public interface Task extends Supplier<File> {
-    public static Task named(String name, Supplier<File> supplier) {
-        return named(name, Collections.emptySet(), supplier);
+public sealed interface Task extends Supplier<File> permits Task.Simple {
+    static Task named(String name, Supplier<File> supplier) {
+        return named(name, Set.of(), supplier);
     }
 
-    public static Task named(String name, Set<Task> deps, Supplier<File> supplier) {
+    static Task named(String name, Set<? extends Task> deps, Supplier<File> supplier) {
         return new Simple(name, deps, supplier);
     }
 
@@ -30,18 +31,19 @@ public interface Task extends Supplier<File> {
     /** @return The name of this task */
     String name();
 
+    /** @see #execute() */
     @Override
     default File get() {
         return this.execute();
     }
 
-    public static class Simple implements Task {
+    final class Simple implements Task {
         private final String name;
-        private final Set<Task> deps;
+        private final Set<? extends Task> deps;
         private final Supplier<File> supplier;
         private File file;
 
-        private Simple(String name, Set<Task> deps, Supplier<File> supplier) {
+        private Simple(String name, Set<? extends Task> deps, Supplier<File> supplier) {
             this.name = name;
             this.deps = deps;
             this.supplier = supplier;
@@ -52,23 +54,24 @@ public interface Task extends Supplier<File> {
             if (this.file == null) {
                 for (var dep : deps)
                     dep.execute();
-                Log.log(name);
-                Log.push();
+                LOGGER.info(name);
+                LOGGER.push();
                 this.file = supplier.get();
-                Log.debug("-> " + this.file.toString());
-                Log.pop();
+                LOGGER.debug("-> " + this.file.getAbsolutePath());
+                LOGGER.pop();
             }
+
             return this.file;
         }
 
         @Override
         public String name() {
-            return name;
+            return this.name;
         }
 
         @Override
         public String toString() {
-            return "Task[" + name + ']';
+            return "Task[" + this.name + ']';
         }
     }
 }

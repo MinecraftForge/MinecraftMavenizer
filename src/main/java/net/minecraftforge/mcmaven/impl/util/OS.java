@@ -12,6 +12,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Locale;
 
+import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
+
 // TODO Move to Java Version?
 // TODO Always warn on unknown OS
 /**
@@ -89,7 +91,7 @@ public enum OS {
                                 }
                             }
                         } catch (IOException e) {
-                            Log.log("Failed to read /etc/os-release: " + e.getMessage());
+                            LOGGER.error("Failed to read /etc/os-release: " + e.getMessage());
                         }
                     }
                     return os;

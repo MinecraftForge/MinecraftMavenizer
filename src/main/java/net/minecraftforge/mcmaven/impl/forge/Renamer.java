@@ -10,9 +10,8 @@ import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashStore;
-import net.minecraftforge.mcmaven.impl.util.Log;
 import net.minecraftforge.mcmaven.impl.util.Task;
-import net.minecraftforge.mcmaven.impl.util.Util;
+import net.minecraftforge.util.hash.HashUtils;
 import org.apache.commons.io.IOUtils;
 
 import java.io.File;
@@ -58,14 +57,6 @@ class Renamer {
             throw new IllegalStateException("Failed to download " + name);
 
         this.last = this.remapSources(patcher.getUnnamedSources(), this.forge.build);
-    }
-
-    private static void log(String message) {
-        Log.log(message);
-    }
-
-    private static void debug(String message) {
-        Log.debug(message);
     }
 
     private RuntimeException except(String message) {
@@ -121,7 +112,7 @@ class Renamer {
                 }
             }
 
-            Util.updateHash(output, HashFunction.SHA1);
+            HashUtils.updateHash(output, HashFunction.SHA1);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

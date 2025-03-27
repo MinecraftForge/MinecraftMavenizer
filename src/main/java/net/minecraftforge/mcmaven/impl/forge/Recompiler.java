@@ -8,10 +8,8 @@ import net.minecraftforge.mcmaven.impl.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
-import net.minecraftforge.mcmaven.impl.util.Log;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
-import net.minecraftforge.mcmaven.impl.util.Util;
 
 import java.io.File;
 import java.io.IOException;
@@ -54,14 +52,6 @@ class Recompiler {
 
         var recompile = this.recompileSources(renamer.getNamedSources(), this.forge.build);
         this.last = this.injectData(recompile, this.forge.build);
-    }
-
-    private static void log(String message) {
-        Log.log(message);
-    }
-
-    private static void debug(String message) {
-        Log.debug(message);
     }
 
     private RuntimeException except(String message) {

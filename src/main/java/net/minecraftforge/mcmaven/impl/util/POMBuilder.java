@@ -11,28 +11,22 @@ import java.io.ByteArrayOutputStream;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 
 import org.jetbrains.annotations.Nullable;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
-public class POMBuilder {
-
-    private static final Pattern PATTERN_ARTIFACT = Pattern.compile(
-        "^(?<group>[^:]+):(?<name>[^:]+)(?::(?<version>[^:@]+))(?::(?<classifier>[^:@]+))?(?:@(?<extension>[^:]+))?$");
-
+public final class POMBuilder {
     private final String group, name, version;
     private final Dependencies dependencies = new Dependencies();
-    @Nullable
-    private String description;
+    private @Nullable String description;
+    private boolean gradleMetadata;
 
     public POMBuilder(String group, String name, String version) {
         this.group = group;
@@ -45,8 +39,13 @@ public class POMBuilder {
         return this;
     }
 
-    public POMBuilder dependencies(Consumer<Dependencies> configurator) {
+    public POMBuilder dependencies(Consumer<? super Dependencies> configurator) {
         configurator.accept(dependencies);
+        return this;
+    }
+
+    public POMBuilder withGradleMetadata() {
+        this.gradleMetadata = true;
         return this;
     }
 
@@ -55,28 +54,14 @@ public class POMBuilder {
     }
 
     /**
-     * Builds the POM file. Will not include the gradle metadata comment.
-     *
-     * @return The POM file as a string
-     *
-     * @throws ParserConfigurationException If something goes horribly wrong
-     * @throws TransformerException         If the POM file cannot be transformed
-     * @see #build(boolean)
-     */
-    public String build() throws ParserConfigurationException, TransformerException {
-        return this.build(false);
-    }
-
-    /**
      * Builds the POM file.
      *
-     * @param gradleMetadata Whether to include the gradle metadata comment
      * @return The POM file as a string
      *
      * @throws ParserConfigurationException If something goes horribly wrong
      * @throws TransformerException         If the POM file cannot be transformed
      */
-    public String build(boolean gradleMetadata) throws ParserConfigurationException, TransformerException {
+    public String build() throws ParserConfigurationException, TransformerException {
         DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
         DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
         Document doc = docBuilder.newDocument();
@@ -87,21 +72,21 @@ public class POMBuilder {
         project.setAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
         doc.appendChild(project);
 
-        if (gradleMetadata)
+        if (this.gradleMetadata)
             project.appendChild(doc.createComment(" do_not_remove: published-with-gradle-metadata "));
 
         set(doc, project, "modelVersion", "4.0.0");
-        set(doc, project, "groupId", group);
-        set(doc, project, "artifactId", name);
-        set(doc, project, "version", version);
-        set(doc, project, "name", name);
-        if (description != null) {
-            set(doc, project, "description", description);
+        set(doc, project, "groupId", this.group);
+        set(doc, project, "artifactId", this.name);
+        set(doc, project, "version", this.version);
+        set(doc, project, "name", this.name);
+        if (this.description != null) {
+            set(doc, project, "description", this.description);
         }
 
-        if (!dependencies.dependencies.isEmpty()) {
+        if (!this.dependencies.dependencies.isEmpty()) {
             Element dependencies = doc.createElement("dependencies");
-            for (Dependencies.Dependency dependency : this.dependencies.dependencies) {
+            for (var dependency : this.dependencies.dependencies) {
                 Element dep = doc.createElement("dependency");
                 set(doc, dep, "groupId", dependency.group);
                 set(doc, dep, "artifactId", dependency.name);
@@ -122,17 +107,15 @@ public class POMBuilder {
 
         doc.normalizeDocument();
 
-        TransformerFactory transformerFactory = TransformerFactory.newInstance();
-        Transformer transformer = transformerFactory.newTransformer();
+        var transformerFactory = TransformerFactory.newInstance();
+        var transformer = transformerFactory.newTransformer();
         transformer.setOutputProperty(OutputKeys.INDENT, "yes"); //Make it pretty
         transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
-        DOMSource source = new DOMSource(doc);
 
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        StreamResult result = new StreamResult(baos);
-        transformer.transform(source, result);
+        var output = new ByteArrayOutputStream();
+        transformer.transform(new DOMSource(doc), new StreamResult(output));
 
-        return baos.toString();
+        return output.toString();
     }
 
     private static void set(Document doc, Element parent, String name, String value) {
@@ -141,12 +124,10 @@ public class POMBuilder {
         parent.appendChild(description);
     }
 
-    public class Dependencies {
-
+    public static final class Dependencies {
         private final Set<Dependency> dependencies = new LinkedHashSet<>();
 
-        private Dependencies() {
-        }
+        private Dependencies() { }
 
         public Dependency add(Artifact artifact, @Nullable String scope) {
             return add(artifact.getGroup(), artifact.getName(), artifact.getVersion(),
@@ -158,33 +139,17 @@ public class POMBuilder {
                 artifact.getClassifier(), artifact.getExtension(), scope);
         }
 
-        public Dependency add(String group, String name, String version,
-                              @Nullable String classifier, @Nullable String extension, @Nullable String scope) {
-            Dependency dep = new Dependency(group, name, version, classifier, extension, scope);
-            dependencies.add(dep);
-            return dep;
+        public Dependency add(
+            String group, String name, String version,
+            @Nullable String classifier, @Nullable String extension, @Nullable String scope
+        ) {
+            return Util.make(new Dependency(group, name, version, classifier, extension, scope), this.dependencies::add);
         }
 
-        public class Dependency {
-            private final String group, name, version;
-            @Nullable
-            private String classifier, extension, scope;
-
-            private Dependency(String group, String name, String version,
-                               @Nullable String classifier, @Nullable String extension, @Nullable String scope) {
-                this.group = group;
-                this.name = name;
-                this.version = version;
-                this.classifier = classifier;
-                this.extension = extension;
-                this.scope = scope;
-            }
-
-            public void withClassifier(@Nullable String classifier) {
-                this.classifier = classifier;
-            }
-        }
-
+        public record Dependency(
+            String group, String name, String version,
+            @Nullable String classifier, @Nullable String extension, @Nullable String scope
+        ) { }
     }
 
 }

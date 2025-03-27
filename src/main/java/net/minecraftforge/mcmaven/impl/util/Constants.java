@@ -4,7 +4,11 @@
  */
 package net.minecraftforge.mcmaven.impl.util;
 
+import net.minecraftforge.util.logging.SimpleLogger;
+
 public final class Constants {
+    public static final SimpleLogger LOGGER = SimpleLogger.getGlobal();
+
     public static final String FORGE_FILES = "https://files.minecraftforge.net/";
     public static final String FORGE_PROMOS = FORGE_FILES + "net/minecraftforge/forge/promotions_slim.json";
     public static final String FORGE_GROUP = "net.minecraftforge";

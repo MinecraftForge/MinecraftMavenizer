@@ -21,15 +21,17 @@ import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
-import net.minecraftforge.mcmaven.impl.util.Log;
 import net.minecraftforge.mcmaven.impl.util.OS;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
+import net.minecraftforge.util.hash.HashUtils;
 import org.jetbrains.annotations.Nullable;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
+
+import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
 
 // TODO: [MCMaven][ForgeRepo] For now, the ForgeRepo needs to be fully complete with everything it has to do.
 // later, we can worry about refactoring it so that other repositories such as MCP (clean) and FMLOnly can function.
@@ -75,30 +77,26 @@ public class ForgeRepo {
         this.mcpconfig = new MCPConfigRepo(cache, output);
     }
 
-    private static void log(String msg) {
-        Log.log(msg);
-    }
-
     // TODO: [MCMaven][ForgeRepo] Please clean this up
     public void process(String version) {
         var fg = FGVersion.fromForge(version);
-        log("Processing Forge:");
+        LOGGER.info("Processing Forge:");
         try {
-            Log.push();
-            log("Version: " + version);
+            LOGGER.push();
+            LOGGER.info("Version: " + version);
 
             if (fg == null) {
-                log("Python version unsupported!");
+                LOGGER.error("Python version unsupported!");
                 return;
             }
 
             if (fg.ordinal() < FGVersion.v3.ordinal()) {
-                log("Only FG 3+ supported");
+                LOGGER.error("Only FG 3+ supported");
             } else {
                 processV3(version, "official", null);
             }
         } finally {
-            Log.pop();
+            LOGGER.pop();
         }
     }
 
@@ -165,14 +163,14 @@ public class ForgeRepo {
         try {
             var output = new File(this.output, artifact.getLocalPath());
             org.apache.commons.io.FileUtils.copyFile(file, output);
-            Util.updateHash(output);
+            HashUtils.updateHash(output);
         } catch (IOException e) {
             Util.sneak(e);
         }
     }
 
     private void forgePom(String forge, String minecraft, Patcher patcher, File output) {
-        var builder = new POMBuilder("net.minecraftforge", "forge", forge);
+        var builder = new POMBuilder("net.minecraftforge", "forge", forge).withGradleMetadata();
 
         builder.dependencies().add("net.minecraft", "client", minecraft, "extra", null, "compile");
 
@@ -182,7 +180,7 @@ public class ForgeRepo {
 
         FileUtils.ensureParent(output);
         try (var os = new FileOutputStream(output)) {
-            os.write(builder.build(true).getBytes(StandardCharsets.UTF_8));
+            os.write(builder.build().getBytes(StandardCharsets.UTF_8));
         } catch (IOException | ParserConfigurationException | TransformerException e) {
             Util.sneak(e);
         }
@@ -196,7 +194,7 @@ public class ForgeRepo {
 
         // set the mappings version. unused for now.
         // if the current mappings = the official mappings, set to null so we don't duplicate the variants
-        final var mappingsVersion = Util.make("official-" + mcVersionWithoutMCP, s -> {
+        final var mappingsVersion = Util.replace("official-" + mcVersionWithoutMCP, s -> {
             if (officialVersion.equals(s)) {
                 return null;
             }
@@ -272,7 +270,7 @@ public class ForgeRepo {
     }
 
     private void clientExtraPom(String minecraft, Patcher patcher, File output) {
-        var builder = new POMBuilder("net.minecraft", "client", minecraft);
+        var builder = new POMBuilder("net.minecraft", "client", minecraft).withGradleMetadata();
 
         var side = patcher.getMCP().getSide("joined");
 
@@ -288,7 +286,7 @@ public class ForgeRepo {
 
         FileUtils.ensureParent(output);
         try (var os = new FileOutputStream(output)) {
-            os.write(builder.build(true).getBytes(StandardCharsets.UTF_8));
+            os.write(builder.build().getBytes(StandardCharsets.UTF_8));
         } catch (IOException | ParserConfigurationException | TransformerException e) {
             Util.sneak(e);
         }
@@ -359,11 +357,11 @@ public class ForgeRepo {
 
     private File execute(String message, Task task) {
         try {
-            Log.log(message);
-            Log.push();
+            LOGGER.info(message);
+            LOGGER.push();
             return task.execute();
         } finally {
-            Log.pop();
+            LOGGER.pop();
         }
     }
 }
