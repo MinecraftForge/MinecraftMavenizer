@@ -74,15 +74,13 @@ jar {
     exclude 'net/minecraftforge/mcmaven/cli/**'
 }
 
-tasks.named('shadowJar', com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar).configure {
+tasks.named('shadowJar', com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
     manifest {
         attributes([
             'Main-Class': 'net.minecraftforge.mcmaven.cli.Main'
         ] as LinkedHashMap)
     }
 
-    enableRelocation = true
-    relocationPrefix = 'net.minecraftforge.mcmaven.shadow'
     archiveClassifier = ''
     minimize()
 }
