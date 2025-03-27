@@ -15,7 +15,7 @@ dependencyResolutionManagement {
         libs {
             library('gson', 'com.google.code.gson', 'gson') version '2.10.1'
             library('jopt', 'net.sf.jopt-simple', 'jopt-simple') version '6.0-alpha-3'
-            library('jver', 'net.minecraftforge', 'java-version') version '1.0.2'
+            library('jver', 'net.minecraftforge', 'java-version') version '1.0.3'
             library('srgutils', 'net.minecraftforge', 'srgutils') version '0.5.11'
             library('diff', 'io.codechicken', 'DiffPatch') version '2.0.0.36' // Fuzzy patching
 

@@ -82,7 +82,9 @@ tasks.named('shadowJar', com.github.jengelman.gradle.plugins.shadow.tasks.Shadow
     }
 
     archiveClassifier = ''
-    minimize()
+    minimize {
+        exclude(dependency(libs.jver.get()))
+    }
 }
 
 artifacts {
