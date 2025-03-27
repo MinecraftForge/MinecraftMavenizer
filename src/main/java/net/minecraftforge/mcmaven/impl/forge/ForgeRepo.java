@@ -53,6 +53,7 @@ public class ForgeRepo {
     private File recompiled;
     private File pom;
     private File gradleModule;
+    private File runs;
 
     // TODO TEMP ARTIFACTS
     private File clientExtra;
@@ -127,6 +128,8 @@ public class ForgeRepo {
         forgePom(forge, minecraft, patcher, this.pom);
         this.gradleModule = new File(this.build, "forge.module");
         forgeGradleModule(forge, minecraft, patcher, this.gradleModule);
+        this.runs = new File(this.build, "runs.json");
+        runsJson(patcher, this.runs);
 
         // TODO [MCMaven][ForgeRepo] I don't know where to put these, so the will stay here for now
         // I'm sure in the future we can find a decent way to clean this up.
@@ -149,6 +152,7 @@ public class ForgeRepo {
         this.outputArtifact(artifacts, this.recompiled, Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge));
         this.outputArtifact(artifacts, this.pom, Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge, null, "pom"));
         this.outputArtifact(artifacts, this.gradleModule, Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge, null, "module"));
+        this.outputArtifact(artifacts, this.runs, Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge, "runs", "json"));
 
         this.outputArtifact(artifacts, this.clientExtra, Artifact.from("net.minecraft", "client", minecraft, "extra"));
         this.outputArtifact(artifacts, this.clientExtraPom, Artifact.from("net.minecraft", "client", minecraft, null, "pom"));
@@ -169,7 +173,16 @@ public class ForgeRepo {
         }
     }
 
-    private void forgePom(String forge, String minecraft, Patcher patcher, File output) {
+    private static void runsJson(Patcher patcher, File output) {
+        FileUtils.ensureParent(output);
+        try {
+            JsonData.toJson(patcher.config.runs, output);
+        } catch (IOException e) {
+            Util.sneak(e);
+        }
+    }
+
+    private static void forgePom(String forge, String minecraft, Patcher patcher, File output) {
         var builder = new POMBuilder("net.minecraftforge", "forge", forge).withGradleMetadata();
 
         builder.dependencies().add("net.minecraft", "client", minecraft, "extra", null, "compile");

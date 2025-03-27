@@ -25,7 +25,7 @@ public class PatcherConfig extends Config {
     public String universal; //Injected into the final jar, TODO: [MCMaven][PatcherConfig] Make Universal Jar separate from main jar
     public List<String> libraries; //Additional libraries.
     public String inject;
-    public Map<String, Object/*RunConfig*/> runs;
+    public Map<String, RunConfig> runs;
     public String sourceCompatibility; // Default to 1.8
     public String targetCompatibility; // Default to 1.8
 
