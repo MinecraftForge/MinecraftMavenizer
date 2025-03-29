@@ -6,6 +6,7 @@ package net.minecraftforge.mcmaven.impl.forge;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -52,7 +53,7 @@ public class ForgeRepo {
     private File recompiled;
     private File pom;
     private File gradleModule;
-    private File runs;
+    private File metadataZip;
 
     // TODO TEMP ARTIFACTS
     private File clientExtra;
@@ -127,8 +128,8 @@ public class ForgeRepo {
         forgePom(forge, minecraft, patcher, this.pom);
         this.gradleModule = new File(this.build, "forge.module");
         forgeGradleModule(forge, minecraft, patcher, this.gradleModule);
-        this.runs = new File(this.build, "runs.json");
-        runsJson(patcher, this.runs);
+        this.metadataZip = new File(this.build, "metadata.jar");
+        metadataJar(patcher, this.metadataZip);
 
         // TODO [MCMaven][ForgeRepo] I don't know where to put these, so the will stay here for now
         // I'm sure in the future we can find a decent way to clean this up.
@@ -151,7 +152,7 @@ public class ForgeRepo {
         this.outputArtifact(artifacts, this.recompiled, Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge));
         this.outputArtifact(artifacts, this.pom, Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge, null, "pom"));
         this.outputArtifact(artifacts, this.gradleModule, Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge, null, "module"));
-        this.outputArtifact(artifacts, this.runs, Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge, "runs", "json"));
+        this.outputArtifact(artifacts, this.metadataZip, Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge, "metadata", "zip"));
 
         this.outputArtifact(artifacts, this.clientExtra, Artifact.from("net.minecraft", "client", minecraft, "extra"));
         this.outputArtifact(artifacts, this.clientExtraPom, Artifact.from("net.minecraft", "client", minecraft, null, "pom"));
@@ -172,10 +173,35 @@ public class ForgeRepo {
         }
     }
 
-    private static void runsJson(Patcher patcher, File output) {
+    private static void metadataJar(Patcher patcher, File output) {
         FileUtils.ensureParent(output);
         try {
-            JsonData.toJson(patcher.config.runs, output);
+            var metadataDir = new File(output.getParentFile(), "metadata");
+            metadataDir.mkdir();
+
+            var launcherDir = new File(metadataDir, "launcher");
+            launcherDir.mkdir();
+
+            var minecraftDir = new File(metadataDir, "minecraft");
+            minecraftDir.mkdir();
+
+            // runs.json
+            var runsJson = new File(launcherDir, "runs.json");
+            JsonData.toJson(patcher.config.runs, runsJson);
+
+            // version.json
+            var versionJson = new File(minecraftDir, "version.json");
+            org.apache.commons.io.FileUtils.copyFile(patcher.getMCP().getMinecraftTasks().versionJson.get(), versionJson);
+
+            // version.properties
+            var versionProperties = new File(metadataDir, "version.properties");
+            try (FileWriter writer = new FileWriter(versionProperties)) {
+                // TODO [MCMaven][ForgeRepo] make this configurable later
+                writer.append("version=1").append('\n').flush();
+            }
+
+            // metadata.jar
+            FileUtils.makeZip(metadataDir, output);
         } catch (IOException e) {
             Util.sneak(e);
         }
