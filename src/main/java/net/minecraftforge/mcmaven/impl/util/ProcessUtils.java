@@ -6,6 +6,7 @@ package net.minecraftforge.mcmaven.impl.util;
 
 import net.minecraftforge.java_version.util.OS;
 import net.minecraftforge.util.file.FileUtils;
+import net.minecraftforge.util.logging.Log;
 import org.apache.commons.io.IOUtils;
 
 import java.io.BufferedReader;
@@ -31,8 +32,6 @@ import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-
-import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
 
 // TODO [MCMaven][JavaVersion] Move to Java Version? It would be useful for ForgeGradle 7.
 /** Utility class for running processes. */
@@ -115,7 +114,7 @@ public final class ProcessUtils {
      * @return The exit code of the process
      */
     public static int runCommand(File workDir, Consumer<String> lines, String... args) {
-        LOGGER.debug("Running Command: " + String.join(" ", args));
+        Log.debug("Running Command: " + String.join(" ", args));
 
         Process process;
         try {
@@ -192,7 +191,7 @@ public final class ProcessUtils {
             var main = getMainClass(tool);
             var launcher = new File(javaHome, "bin/java" + OS.CURRENT.exe());
             Consumer<String> lines = line -> {
-                LOGGER.info(line);
+                Log.info(line);
                 log.println(line);
             };
             lines.accept("Java:      " + launcher.getAbsolutePath());
@@ -285,10 +284,10 @@ public final class ProcessUtils {
 
         var process = ProcessUtils.runJavac(javaHome, workDir, new File(outputJar.getAbsolutePath() + ".log"), args);
         if (process.exitCode != 0) {
-            LOGGER.error("Javac failed to execute! Exit code " + process.exitCode);
-            LOGGER.error("--- BEGIN JAVAC LOG ---");
-            process.lines.forEach(LOGGER::error);
-            LOGGER.error("--- END JAVAC LOG ---");
+            Log.error("Javac failed to execute! Exit code " + process.exitCode);
+            Log.error("--- BEGIN JAVAC LOG ---");
+            process.lines.forEach(Log::error);
+            Log.error("--- END JAVAC LOG ---");
             throw new RuntimeException("Javac failed to execute! Exit code " + process.exitCode);
         }
 
@@ -338,7 +337,7 @@ public final class ProcessUtils {
 
             var launcher = new File(javaHome, "bin/javac" + OS.CURRENT.exe());
             Consumer<String> lines = line -> {
-                LOGGER.info(line);
+                Log.info(line);
                 log.println(line);
             };
             lines.accept("Javac:         " + launcher.getAbsolutePath());

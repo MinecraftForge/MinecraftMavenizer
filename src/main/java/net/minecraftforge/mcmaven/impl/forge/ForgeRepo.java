@@ -14,24 +14,23 @@ import java.util.Map;
 
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
-import net.minecraftforge.mcmaven.impl.data.JsonData;
 import net.minecraftforge.mcmaven.impl.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
+import net.minecraftforge.util.data.OS;
+import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
-import net.minecraftforge.mcmaven.impl.util.OS;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.hash.HashUtils;
+import net.minecraftforge.util.logging.Log;
 import org.jetbrains.annotations.Nullable;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
-
-import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
 
 // TODO: [MCMaven][ForgeRepo] For now, the ForgeRepo needs to be fully complete with everything it has to do.
 // later, we can worry about refactoring it so that other repositories such as MCP (clean) and FMLOnly can function.
@@ -81,23 +80,23 @@ public class ForgeRepo {
     // TODO: [MCMaven][ForgeRepo] Please clean this up
     public void process(String version) {
         var fg = FGVersion.fromForge(version);
-        LOGGER.info("Processing Forge:");
+        Log.info("Processing Forge:");
         try {
-            LOGGER.push();
-            LOGGER.info("Version: " + version);
+            Log.push();
+            Log.info("Version: " + version);
 
             if (fg == null) {
-                LOGGER.error("Python version unsupported!");
+                Log.error("Python version unsupported!");
                 return;
             }
 
             if (fg.ordinal() < FGVersion.v3.ordinal()) {
-                LOGGER.error("Only FG 3+ supported");
+                Log.error("Only FG 3+ supported");
             } else {
                 processV3(version, "official", null);
             }
         } finally {
-            LOGGER.pop();
+            Log.pop();
         }
     }
 
@@ -370,11 +369,11 @@ public class ForgeRepo {
 
     private File execute(String message, Task task) {
         try {
-            LOGGER.info(message);
-            LOGGER.push();
+            Log.info(message);
+            Log.push();
             return task.execute();
         } finally {
-            LOGGER.pop();
+            Log.pop();
         }
     }
 }

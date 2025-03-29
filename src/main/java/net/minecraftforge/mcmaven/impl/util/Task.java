@@ -4,11 +4,11 @@
  */
 package net.minecraftforge.mcmaven.impl.util;
 
+import net.minecraftforge.util.logging.Log;
+
 import java.io.File;
 import java.util.Set;
 import java.util.function.Supplier;
-
-import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
 
 /** Represents a task that can be executed. Tasks in this tool <strong>will always</strong> provide a file. */
 public sealed interface Task extends Supplier<File> permits Task.Simple {
@@ -54,11 +54,11 @@ public sealed interface Task extends Supplier<File> permits Task.Simple {
             if (this.file == null) {
                 for (var dep : deps)
                     dep.execute();
-                LOGGER.info(name);
-                LOGGER.push();
+                Log.info(name);
+                Log.push();
                 this.file = supplier.get();
-                LOGGER.debug("-> " + this.file.getAbsolutePath());
-                LOGGER.pop();
+                Log.debug("-> " + this.file.getAbsolutePath());
+                Log.pop();
             }
 
             return this.file;

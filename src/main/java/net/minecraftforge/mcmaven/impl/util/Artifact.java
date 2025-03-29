@@ -4,6 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.util;
 
+import net.minecraftforge.util.data.OS;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;

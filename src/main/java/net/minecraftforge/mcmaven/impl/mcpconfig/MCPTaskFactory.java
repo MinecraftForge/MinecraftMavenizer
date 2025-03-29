@@ -39,20 +39,19 @@ import io.codechicken.diffpatch.util.Input.MultiInput;
 import io.codechicken.diffpatch.util.Output.MultiOutput;
 import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
-import net.minecraftforge.mcmaven.impl.data.JsonData;
-import net.minecraftforge.mcmaven.impl.data.MCPConfig;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
+import net.minecraftforge.util.data.OS;
+import net.minecraftforge.util.data.json.JsonData;
+import net.minecraftforge.util.data.json.MCPConfig;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
-import net.minecraftforge.mcmaven.impl.util.OS;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
+import net.minecraftforge.util.logging.Log;
 import org.jetbrains.annotations.Nullable;
-
-import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
 
 // TODO [MCMaven][Documentation] Document
 public class MCPTaskFactory {
@@ -472,7 +471,7 @@ public class MCPTaskFactory {
             return output;
 
         var builder = PatchOperation.builder()
-            .logTo(LOGGER::error)
+            .logTo(Log::error)
             .baseInput(MultiInput.archive(ArchiveFormat.ZIP, input.toPath()))
             .patchesInput(MultiInput.folder(patches.toPath()))
             .patchedOutput(MultiOutput.archive(ArchiveFormat.ZIP, output.toPath()))
@@ -494,7 +493,7 @@ public class MCPTaskFactory {
                 if (result.summary != null)
                     result.summary.print(System.out, true);
                 else
-                    LOGGER.error("Failed to apply patches, no summary available");
+                    Log.error("Failed to apply patches, no summary available");
 
                 throw except("Failed to apply patches, Rejects saved to: " + rejects.getAbsolutePath());
             }
@@ -528,14 +527,14 @@ public class MCPTaskFactory {
         var downloadedLibs = new ArrayList<Lib>();
 
         for (var lib : libs) {
-            if (!lib.dl().url.toString().startsWith(Constants.MOJANG_MAVEN))
-                throw new IllegalStateException("Unable to download library " + lib.dl().path + " as it is not on Mojang's repo and I was lazy. " + lib.dl().url);
+            if (!lib.dl.url.toString().startsWith(Constants.MOJANG_MAVEN))
+                throw new IllegalStateException("Unable to download library " + lib.dl.path + " as it is not on Mojang's repo and I was lazy. " + lib.dl.url);
 
-            var target = cache.mojang.download(lib.dl());
+            var target = cache.mojang.download(lib.dl);
 
             buf.append("-e=").append(target.getAbsolutePath()).append('\n');
 
-            downloadedLibs.add(new Lib(lib.coord(), target, lib.os()));
+            downloadedLibs.add(new Lib(lib.coord, target, lib.os));
         }
 
         this.libraries = downloadedLibs;
@@ -734,8 +733,8 @@ public class MCPTaskFactory {
         args.put("log", new TaskOrArg("log", null, log.getAbsolutePath()));
 
         // Fill substitutions in arguments, also builds dependencies on extract tasks
-        var jvmArgs = fillArgs(func.jvmargs(), args, deps);
-        var runArgs = fillArgs(func.args(), args, deps);
+        var jvmArgs = fillArgs(func.jvmargs, args, deps);
+        var runArgs = fillArgs(func.args, args, deps);
 
         return Task.named(name, deps,
             () -> execute(jvmArgs, runArgs, func, log, output)
@@ -744,8 +743,8 @@ public class MCPTaskFactory {
 
     private File execute(List<TaskOrArg> jvmArgs, List<TaskOrArg> runArgs, MCPConfig.Function func, File log, File output) {
         // First download the tool
-        var maven = new MavenCache("mcp-tools", func.repo(), this.side.getMCP().getCache().root);
-        var toolA = Artifact.from(func.version());
+        var maven = new MavenCache("mcp-tools", func.repo, this.side.getMCP().getCache().root);
+        var toolA = Artifact.from(func.version);
         var tool = maven.download(toolA);
 
         var cache = HashStore.fromFile(output);

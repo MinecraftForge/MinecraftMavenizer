@@ -5,10 +5,11 @@
 package net.minecraftforge.mcmaven.impl.cache;
 
 import net.minecraftforge.mcmaven.impl.util.Artifact;
-import net.minecraftforge.mcmaven.impl.util.DownloadUtils;
+import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.hash.HashUtils;
+import net.minecraftforge.util.logging.Log;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
@@ -21,8 +22,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-
-import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
 
 // TODO: [MCMaven][MavenCache] Handle download failures properly
 /** Represents the maven cache for this tool. */
@@ -151,9 +150,9 @@ public class MavenCache {
                     try {
                         String chash = func.hash(target);
                         if (!chash.equals(rhash)) {
-                            LOGGER.error("Outdated cached file: " + target.getAbsolutePath());
-                            LOGGER.error("Expected: " + rhash);
-                            LOGGER.error("Actual:   " + chash);
+                            Log.error("Outdated cached file: " + target.getAbsolutePath());
+                            Log.error("Expected: " + rhash);
+                            Log.error("Actual:   " + chash);
                             invalidHash = true;
                         }
                     } catch (IOException e) {

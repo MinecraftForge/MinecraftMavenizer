@@ -25,22 +25,18 @@ import io.codechicken.diffpatch.util.Input.MultiInput;
 import io.codechicken.diffpatch.util.Output.MultiOutput;
 import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
-import net.minecraftforge.mcmaven.impl.data.JsonData;
-import net.minecraftforge.mcmaven.impl.data.PatcherConfig;
-import net.minecraftforge.mcmaven.impl.data.PatcherConfig.V2.DataFunction;
 import net.minecraftforge.mcmaven.impl.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
+import net.minecraftforge.util.data.json.JsonData;
+import net.minecraftforge.util.data.json.PatcherConfig;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
-
-import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
-
-import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
+import net.minecraftforge.util.logging.Log;
 
 // TODO: [MCMaven] This class needs to be split off into some sort of abstract class so that other patching processes can be implemented.
 // The current way this is implemented by trying to parse a specific config is not that great. And if we want to support other versions, this HAS to be abstracted.
@@ -92,13 +88,13 @@ class Patcher {
 
         Task predecomp, last = null;
         if (this.config.hasParent()) {
-            this.parent = new Patcher(this.forge, this.config.getParent());
+            this.parent = new Patcher(this.forge, Artifact.from(this.config.getParent()));
             this.mcp = null;
             predecomp = parent.predecomp;
             last = parent.last;
         } else {
             this.parent = null;
-            this.mcp = this.forge.mcpconfig.get(this.config.getParent());
+            this.mcp = this.forge.mcpconfig.get(Artifact.from(this.config.getParent()));
             var side = this.mcp.getSide("joined");
             predecomp = side.getTasks().getPreDecompile();
             last = side.getTasks().getLastTask();
@@ -452,7 +448,7 @@ class Patcher {
         );
     }
 
-    private File postProcess(Task inputTask, DataFunction data, File output, File log) {
+    private File postProcess(Task inputTask, PatcherConfig.V2.DataFunction data, File output, File log) {
         var input = inputTask.execute();
 
         // First download the tool
@@ -520,7 +516,7 @@ class Patcher {
             return output;
 
         var builder = PatchOperation.builder()
-            .logTo(LOGGER::error)
+            .logTo(Log::error)
             .baseInput(MultiInput.archive(ArchiveFormat.ZIP, input.toPath()))
             .patchesInput(MultiInput.archive(ArchiveFormat.ZIP, this.data.toPath()))
             .patchedOutput(MultiOutput.archive(ArchiveFormat.ZIP, output.toPath()))
@@ -546,7 +542,7 @@ class Patcher {
                 if (result.summary != null)
                     result.summary.print(System.out, true);
                 else
-                    LOGGER.error("Failed to apply patches, no summary available");
+                    Log.error("Failed to apply patches, no summary available");
 
                 throw except("Failed to apply patches, rejects saved to: " + rejects.getAbsolutePath());
             }

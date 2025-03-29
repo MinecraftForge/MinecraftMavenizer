@@ -5,9 +5,12 @@
 package net.minecraftforge.mcmaven.impl.data;
 
 import net.minecraftforge.mcmaven.impl.util.Artifact;
-import net.minecraftforge.mcmaven.impl.util.OS;
 import net.minecraftforge.mcmaven.impl.util.Util;
+import net.minecraftforge.util.data.OS;
+import net.minecraftforge.util.data.json.JsonData;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +37,10 @@ public class GradleModule {
         module.component.module = name;
         module.component.version = version;
         return module;
+    }
+
+    public void toJson(File output) throws IOException {
+        JsonData.toJson(this, output);
     }
 
     public Variant variant() {

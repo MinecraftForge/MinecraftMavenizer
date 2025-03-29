@@ -44,6 +44,7 @@ dependencies {
     implementation libs.commonsio
 
     implementation libs.utils.files
+    implementation libs.utils.download
     implementation libs.utils.hash
     implementation libs.utils.data
     implementation libs.utils.logging

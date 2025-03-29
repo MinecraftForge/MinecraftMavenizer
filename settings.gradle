@@ -23,10 +23,11 @@ dependencyResolutionManagement {
             library('commonsio', 'commons-io', 'commons-io') version '2.18.0'
 
             // Utilities
+            library('utils-download', 'net.minecraftforge', 'download-utils') version '0.1.3'
             library('utils-files', 'net.minecraftforge', 'file-utils') version '0.1.6'
             library('utils-hash', 'net.minecraftforge', 'hash-utils') version '0.1.4'
-            library('utils-data', 'net.minecraftforge', 'json-data-utils') version '0.1.5'
-            library('utils-logging', 'net.minecraftforge', 'log-utils') version '0.1.5'
+            library('utils-data', 'net.minecraftforge', 'json-data-utils') version '0.1.8'
+            library('utils-logging', 'net.minecraftforge', 'log-utils') version '0.2.3'
 
             // Static Analysis
             library('nulls', 'org.jetbrains', 'annotations') version '26.0.1'

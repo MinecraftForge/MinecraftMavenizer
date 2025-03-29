@@ -15,9 +15,8 @@ import java.util.Set;
 
 import net.minecraftforge.java_version.api.IJavaInstall;
 import net.minecraftforge.java_version.api.IJavaLocator;
+import net.minecraftforge.util.logging.Log;
 import org.jetbrains.annotations.Nullable;
-
-import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
 
 /** Represents the JDK cache for this tool. */
 public class JDKCache {
@@ -56,8 +55,8 @@ public class JDKCache {
         // not sure how this would ever hit. but just in case...
         var old = jdks.putIfAbsent(version, ret);
         if (old != null) {
-            LOGGER.error("JDKCache: Downloaded JDK " + version + " is replacing an existing download! It was probably downloaded by another thread.");
-            LOGGER.error("JDKCache: Old JDK: " + old);
+            Log.error("JDKCache: Downloaded JDK " + version + " is replacing an existing download! It was probably downloaded by another thread.");
+            Log.error("JDKCache: Old JDK: " + old);
             // TODO Throw exception here
         }
 

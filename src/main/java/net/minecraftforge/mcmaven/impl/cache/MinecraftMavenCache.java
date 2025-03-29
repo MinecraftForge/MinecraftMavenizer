@@ -8,9 +8,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 
-import net.minecraftforge.mcmaven.impl.data.MinecraftVersion.LibraryDownload;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.data.MCJsonUtils;
+import net.minecraftforge.util.data.json.MinecraftVersion;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Util;
@@ -42,7 +42,7 @@ public class MinecraftMavenCache extends MavenCache {
      * @throws IOException If an error occurs while downloading the file
      */
     @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
-    public File download(LibraryDownload lib) {
+    public File download(MinecraftVersion.LibraryDownload lib) {
         return this.download(false, lib.path);
     }
 

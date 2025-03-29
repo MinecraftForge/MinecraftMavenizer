@@ -11,9 +11,9 @@ import java.util.Map;
 import java.util.zip.ZipFile;
 
 import net.minecraftforge.mcmaven.impl.cache.Cache;
-import net.minecraftforge.mcmaven.impl.data.JsonData;
-import net.minecraftforge.mcmaven.impl.data.MCPConfig;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
+import net.minecraftforge.util.data.json.JsonData;
+import net.minecraftforge.util.data.json.MCPConfig;
 
 // TODO [MCMaven][Documentation] Document
 /**
@@ -98,7 +98,7 @@ public class MCP {
         // java_version
         if (config.spec < 4 && config.functions != null) {
             for (var func : config.functions.values()) {
-                if (func.java_version() != null)
+                if (func.java_version != null)
                     throw new IllegalStateException("Invalid MCP Config: " + name + " - Function `java_version` property is only supported on spec 4 or higher, found spec: " + config.spec);
             }
         }

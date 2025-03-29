@@ -8,9 +8,9 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
-import net.minecraftforge.mcmaven.impl.data.JsonData;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.mcmaven.impl.util.DownloadUtils;
+import net.minecraftforge.util.data.json.JsonData;
+import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.Task;
 

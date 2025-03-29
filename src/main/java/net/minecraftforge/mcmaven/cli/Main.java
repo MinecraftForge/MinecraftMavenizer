@@ -10,13 +10,12 @@ import java.util.TreeMap;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
-import net.minecraftforge.mcmaven.impl.data.JsonData;
 import net.minecraftforge.mcmaven.impl.forge.ForgeRepo;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.mcmaven.impl.util.DownloadUtils;
-
-import static net.minecraftforge.mcmaven.impl.util.Constants.LOGGER;
+import net.minecraftforge.util.data.json.JsonData;
+import net.minecraftforge.util.download.DownloadUtils;
+import net.minecraftforge.util.logging.Log;
 
 // TODO [MCMaven] Make an actual API with an api package.
 /**
@@ -93,12 +92,12 @@ public class Main {
         var version = options.valueOf(versionO);
         var caches = new Cache(cache, jdkCache);
 
-        JarVersionInfo.of(Main.class).hello(LOGGER::info, true, true);
-        LOGGER.info("  Output:    " + output.getAbsolutePath());
-        LOGGER.info("  Cache:     " + cache.getAbsolutePath());
-        LOGGER.info("  JDK Cache: " + jdkCache.getAbsolutePath());
-        LOGGER.info("  Artifact:  " + artifact);
-        LOGGER.info("  Version:   " + version);
+        JarVersionInfo.of(Main.class).hello(Log::info, true, true);
+        Log.info("  Output:    " + output.getAbsolutePath());
+        Log.info("  Cache:     " + cache.getAbsolutePath());
+        Log.info("  JDK Cache: " + jdkCache.getAbsolutePath());
+        Log.info("  Artifact:  " + artifact);
+        Log.info("  Version:   " + version);
 
         if (Constants.FORGE_ARTIFACT.equals(artifact)) {
             var proc = new ForgeRepo(caches, output);
@@ -115,7 +114,7 @@ public class Main {
                 proc.process(version);
             }
         } else {
-            LOGGER.error("Artifact '%s' is currently Unsupported. Will add later".formatted(artifact));
+            Log.error("Artifact '%s' is currently Unsupported. Will add later".formatted(artifact));
         }
     }
 }
