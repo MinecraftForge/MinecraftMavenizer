@@ -55,17 +55,6 @@ license {
 }
 
 tasks.named('jar', Jar) {
-    manifest {
-        attributes([
-            'Specification-Title'   : projectDisplayName,
-            'Specification-Vendor'  : projectVendor,
-            'Specification-Version' : gitversion.info.tag,
-            'Implementation-Title'  : projectDisplayName,
-            'Implementation-Vendor' : projectVendor,
-            'Implementation-Version': project.version
-        ], 'net/minecraftforge/mcmaven')
-    }
-
     archiveClassifier = 'slim'
     exclude 'net/minecraftforge/mcmaven/cli/**'
 }
@@ -75,6 +64,14 @@ tasks.named('shadowJar', ShadowJar) {
         attributes([
             'Main-Class': 'net.minecraftforge.mcmaven.cli.Main'
         ])
+        attributes([
+            'Specification-Title'   : projectDisplayName,
+            'Specification-Vendor'  : projectVendor,
+            'Specification-Version' : gitversion.info.tag,
+            'Implementation-Title'  : projectDisplayName,
+            'Implementation-Vendor' : projectVendor,
+            'Implementation-Version': project.version
+        ], 'net/minecraftforge/mcmaven/cli')
     }
 
     archiveClassifier = ''

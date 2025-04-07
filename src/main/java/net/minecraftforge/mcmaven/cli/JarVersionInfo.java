@@ -4,10 +4,13 @@
  */
 package net.minecraftforge.mcmaven.cli;
 
+import org.jetbrains.annotations.UnknownNullability;
+
 import java.util.Objects;
 import java.util.function.Consumer;
 
 record JarVersionInfo(
+    String fallbackTitle,
     String specificationTitle,
     String specificationVendor,
     String specificationVersion,
@@ -20,27 +23,28 @@ record JarVersionInfo(
     }
 
     String getHello(boolean vendor) {
-        var ret = "%s %s".formatted(this.implementationTitle, this.implementationVersion);
-        return vendor ? ret + " by %s".formatted(this.implementationVendor) : ret;
+        var ret = "%s %s".formatted(!this.implementationTitle.isEmpty() ? this.implementationTitle : this.fallbackTitle, this.implementationVersion);
+        return vendor && !this.implementationVendor.isEmpty() ? ret + " by %s".formatted(this.implementationVendor) : ret;
     }
 
     @SuppressWarnings("deprecation")
-    static JarVersionInfo of(String packageName) {
-        return of(Package.getPackage(packageName));
+    static JarVersionInfo of(String fallbackTitle, String packageName) {
+        return of(fallbackTitle, Package.getPackage(packageName));
     }
 
-    static JarVersionInfo of(Class<?> clazz) {
-        return of(clazz.getPackage());
+    static JarVersionInfo of(String fallbackTitle, Class<?> clazz) {
+        return of(fallbackTitle, clazz.getPackage());
     }
 
-    static JarVersionInfo of(Package pkg) {
+    static JarVersionInfo of(String fallbackTitle, @UnknownNullability Package pkg) {
         return new JarVersionInfo(
-            Objects.requireNonNullElse(pkg.getSpecificationTitle(), ""),
-            Objects.requireNonNullElse(pkg.getSpecificationVendor(), ""),
-            Objects.requireNonNullElse(pkg.getSpecificationVersion(), ""),
-            Objects.requireNonNullElse(pkg.getImplementationTitle(), ""),
-            Objects.requireNonNullElse(pkg.getImplementationVendor(), ""),
-            Objects.requireNonNullElse(pkg.getImplementationVersion(), "")
+            fallbackTitle,
+            pkg != null ? Objects.requireNonNullElse(pkg.getSpecificationTitle(), "") : "",
+            pkg != null ? Objects.requireNonNullElse(pkg.getSpecificationVendor(), "") : "",
+            pkg != null ? Objects.requireNonNullElse(pkg.getSpecificationVersion(), "") : "",
+            pkg != null ? Objects.requireNonNullElse(pkg.getImplementationTitle(), "") : "",
+            pkg != null ? Objects.requireNonNullElse(pkg.getImplementationVendor(), "") : "",
+            pkg != null ? Objects.requireNonNullElse(pkg.getImplementationVersion(), "") : ""
         );
     }
 }

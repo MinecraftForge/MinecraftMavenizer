@@ -97,7 +97,7 @@ public class Main {
         var version = options.valueOf(versionO);
         var caches = new Cache(cache, jdkCache);
 
-        JarVersionInfo.of("net.minecraftforge.mcmaven").hello(Log::info, true, false);
+        JarVersionInfo.of("Minecraft Mavenizer", Main.class).hello(Log::info, true, false);
         Log.info("  Output:    " + output.getAbsolutePath());
         Log.info("  Cache:     " + cache.getAbsolutePath());
         Log.info("  JDK Cache: " + jdkCache.getAbsolutePath());
