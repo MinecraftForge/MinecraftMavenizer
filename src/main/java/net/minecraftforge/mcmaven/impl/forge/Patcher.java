@@ -24,6 +24,7 @@ import io.codechicken.diffpatch.util.PatchMode;
 import io.codechicken.diffpatch.util.Input.MultiInput;
 import io.codechicken.diffpatch.util.Output.MultiOutput;
 import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
+import net.minecraftforge.mcmaven.impl.HasUnnamedSources;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
@@ -44,7 +45,7 @@ import net.minecraftforge.util.logging.Log;
  * This class is responsible for the <strong>entire</strong> patching process. It continues work after MCP has
  * decompiled the game.
  */
-class Patcher {
+class Patcher implements HasUnnamedSources {
     private final ForgeRepo forge;
     private final Artifact name;
     private final File data;

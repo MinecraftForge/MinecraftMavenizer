@@ -16,6 +16,7 @@ import java.util.Map;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mcpconfig.MCPConfigRepo;
+import net.minecraftforge.mcmaven.impl.mcpconfig.Renamer;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
@@ -82,8 +83,8 @@ public class ForgeRepo {
     public void process(String version) {
         var fg = FGVersion.fromForge(version);
         Log.info("Processing Forge:");
+        Log.push();
         try {
-            Log.push();
             Log.info("Version: " + version);
 
             if (fg == null) {
@@ -116,7 +117,7 @@ public class ForgeRepo {
         this.setBuildFolders(userdev.getFolder());
 
         var patcher = new Patcher(this, userdev);
-        var renamer = new Renamer(this, userdev, patcher);
+        var renamer = new Renamer(this.build, userdev, patcher.getMCP().getSide("joined"), patcher);
         var recompiler = new Recompiler(this, userdev, patcher, renamer);
 
         this.sources = this.execute("Generating Sources", renamer.getNamedSources());
@@ -312,13 +313,10 @@ public class ForgeRepo {
 
         var side = patcher.getMCP().getSide("joined");
 
-        side.getMCLibraries().forEach(a -> {
-            // we handle these exclusively in the module metadata instead
-            if (a instanceof Artifact.WithOS) return;
-
+        Util.make(side.getMCLibraries(), l -> l.removeIf(a -> a.getOs() != OS.UNKNOWN)).forEach(a -> {
             builder.dependencies().add(a, "compile");
         });
-        side.getMCPConfigLibraries().forEach(a -> {
+        Util.make(side.getMCPConfigLibraries(), l -> l.removeIf(a -> a.getOs() != OS.UNKNOWN)).forEach(a -> {
             builder.dependencies().add(a, "compile");
         });
 
@@ -356,12 +354,13 @@ public class ForgeRepo {
 
         var side = patcher.getMCP().getSide("joined");
         side.getMCLibraries().forEach(artifact -> {
-            var selected = artifact instanceof Artifact.WithOS withOS ? switch (withOS.os) {
+            var selected = switch (artifact.getOs()) {
                 case WINDOWS -> windows;
                 case MACOS -> macOS;
                 case LINUX -> linux;
+                case UNKNOWN -> null;
                 default -> throw new IllegalStateException();
-            } : null;
+            };
             var dependency = GradleModule.Variant.Dependency.of(artifact);
 
             if (selected != null) {

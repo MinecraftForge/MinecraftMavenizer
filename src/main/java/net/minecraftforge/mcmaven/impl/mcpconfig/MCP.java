@@ -27,7 +27,7 @@ public class MCP {
     private final File build;
     private final MinecraftTasks mcTasks;
 
-    private Map<String, MCPSide> sides = new HashMap<>();
+    private final Map<String, MCPSide> sides = new HashMap<>();
 
     public MCP(MCPConfigRepo repo, Artifact name) {
         this.repo = repo;
@@ -124,6 +124,10 @@ public class MCP {
         return this.mcTasks;
     }
 
+    public MCPConfigRepo getRepo() {
+        return this.repo;
+    }
+
     public Cache getCache() {
         return this.repo.getCache();
     }
@@ -132,4 +136,11 @@ public class MCP {
         return this.build;
     }
 
+    public void process(String side) {
+        var mcSide = this.sides.get(side);
+        if (mcSide == null)
+            throw new IllegalArgumentException("Invalid MCP Side: " + side);
+
+        mcSide.process();
+    }
 }

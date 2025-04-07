@@ -1,36 +1,31 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
 plugins {
     id 'java-library'
     id 'idea'
     id 'maven-publish'
-    id 'net.minecraftforge.licenser' version '1.1.1'
-    id 'net.minecraftforge.gradleutils' version '2.4.9'
-    id 'com.gradleup.shadow' version '8.3.6'
+    alias libs.plugins.licenser
+    alias libs.plugins.gradleutils
+    alias libs.plugins.shadow
 
-    id 'org.gradlex.extra-java-module-info' version '1.8'
+    alias libs.plugins.extraJavaModuleInfo
 }
 
-final displayName = 'Minecraft Mavenizer'
+final projectDisplayName = 'Minecraft Mavenizer'
+final projectVendor = 'Forge Development LLC'
 description = 'A pure-blooded Java tool to generate a maven repository for Minecraft artifacts.'
 group = 'net.minecraftforge'
-version = gitversion.version.tagOffset
-println('Version: ' + version)
+version = gitversion.tagOffset
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(21)
-    withSourcesJar()
-}
+println "Version: $version"
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 extraJavaModuleInfo {
     failOnMissingModuleInfo = false
 
-    automaticModule(libs.diff, 'io.codechicken.diffpatch')
-    automaticModule(libs.srgutils, 'net.minecraftforge.srgutils')
-}
-
-repositories {
-    maven gradleutils.forgeMaven
-    mavenCentral()
-    mavenLocal()
+    automaticModule libs.diff, 'io.codechicken.diffpatch'
+    automaticModule libs.srgutils, 'net.minecraftforge.srgutils'
 }
 
 dependencies {
@@ -54,32 +49,32 @@ dependencies {
 }
 
 license {
-    header project.file('LICENSE-header.txt')
+    header = project.file('LICENSE-header.txt')
     newLine false
     exclude '**/ComparableVersion.java' // Apache class used as source-level dep as to not need the hundred+ other classes the library pulls in
 }
 
-jar {
+tasks.named('jar', Jar) {
     manifest {
         attributes([
-            'Specification-Title':   displayName,
-            'Specification-Vendor':  'Forge Development LLC',
-            'Specification-Version':  gitversion.version.info.tag,
-            'Implementation-Title':  displayName,
-            'Implementation-Vendor': 'Forge Development LLC',
+            'Specification-Title'   : projectDisplayName,
+            'Specification-Vendor'  : projectVendor,
+            'Specification-Version' : gitversion.info.tag,
+            'Implementation-Title'  : projectDisplayName,
+            'Implementation-Vendor' : projectVendor,
             'Implementation-Version': project.version
-        ] as LinkedHashMap, 'net/minecraftforge/mcmaven/cli')
+        ], 'net/minecraftforge/mcmaven')
     }
 
     archiveClassifier = 'slim'
     exclude 'net/minecraftforge/mcmaven/cli/**'
 }
 
-tasks.named('shadowJar', com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+tasks.named('shadowJar', ShadowJar) {
     manifest {
         attributes([
             'Main-Class': 'net.minecraftforge.mcmaven.cli.Main'
-        ] as LinkedHashMap)
+        ])
     }
 
     archiveClassifier = ''
@@ -92,7 +87,7 @@ artifacts {
     archives shadowJar
 }
 
-compileJava {
+tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
@@ -102,7 +97,7 @@ changelog {
 }
 
 publishing {
-    publications.register('mavenJava', MavenPublication).configure {
+    publications.register('mavenJava', MavenPublication) {
         from components.shadow
         artifact jar
 
@@ -110,7 +105,7 @@ publishing {
         changelog.publish it
 
         pom { pom ->
-            name = displayName
+            name = projectDisplayName
             description = project.description
 
             gradleutils.pom.setGitHubDetails pom
@@ -118,11 +113,12 @@ publishing {
             license gradleutils.pom.licenses.LGPLv2_1
 
             developers {
-                developer gradleutils.pom.Developers.LexManos
-                developer gradleutils.pom.Developers.Jonathing
+                developer gradleutils.pom.developers.LexManos
+                developer gradleutils.pom.developers.Jonathing
             }
         }
     }
+
     repositories {
         maven gradleutils.publishingForgeMaven
     }

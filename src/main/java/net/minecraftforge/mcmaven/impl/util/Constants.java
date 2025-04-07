@@ -16,7 +16,7 @@ public interface Constants {
     String FMLONLY_NAME = "fmlonly";
     String FMLONLY_ARTIFACT = FORGE_GROUP + ':' + FMLONLY_NAME;
 
-    // TODO [Options] Change cache timeout timer
+    // TODO [MCMaven][Options] Change cache timeout timer
     int CACHE_TIMEOUT = 1000 * 60 * 60 * 1; // 1 hour
     String LAUNCHER_MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest.json";
     String MOJANG_MAVEN = "https://libraries.minecraft.net/";

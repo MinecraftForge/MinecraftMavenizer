@@ -2,10 +2,10 @@
  * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.mcmaven.impl.forge;
+package net.minecraftforge.mcmaven.impl.mcpconfig;
 
-import net.minecraftforge.mcmaven.impl.mcpconfig.MCP;
-import net.minecraftforge.mcmaven.impl.mcpconfig.MCPNames;
+import net.minecraftforge.mcmaven.impl.HasNamedSources;
+import net.minecraftforge.mcmaven.impl.HasUnnamedSources;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
@@ -19,44 +19,30 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
-// TODO: [MCMaven] Move this Renamer to MCP, since renaming is not forge-specific.
-/**
- * This class is responsible for naming the unnamed sources provided by the {@link Patcher}.
- */
-class Renamer {
-    private final ForgeRepo forge;
+public class Renamer implements HasNamedSources {
     private final Artifact name;
-    private final File data;
-    public final MCP mcp;
+    public final MCPSide side;
 
-    private final Map<String, Task> extracts = new HashMap<>();
     private final Task last;
 
     // TODO: [MCMaven][Renamer] Custom mappings. For now: official.
     /**
      * Creates a new renamer for the given patcher.
      *
-     * @param forge   The Forge repo
+     * @param build   The Forge repo
      * @param name    The developement artifact (usually userdev)
      * @param patcher The patcher to get the unnamed sources from
      */
-    Renamer(ForgeRepo forge, Artifact name, Patcher patcher) {
-        this.forge = forge;
+    public Renamer(File build, Artifact name, MCPSide side, HasUnnamedSources patcher) {
         this.name = name;
-        this.mcp = patcher.getMCP();
+        this.side = side;
 
-        this.data = this.forge.cache.forge.download(name);
-        if (!this.data.exists())
-            throw new IllegalStateException("Failed to download " + name);
-
-        this.last = this.remapSources(patcher.getUnnamedSources(), this.forge.build);
+        this.last = this.remapSources(patcher.getUnnamedSources(), build);
     }
 
     private RuntimeException except(String message) {
@@ -74,7 +60,7 @@ class Renamer {
 
     private Task remapSources(Task input, File outputDir) {
         var output = new File(outputDir, "remapped.jar");
-        var mappings = this.mcp.getSide("joined").getTasks().getMappings("official");
+        var mappings = this.side.getTasks().getMappings("official");
         return Task.named("remap[" + this.name.getName() + ']',
             Set.of(input, mappings),
             () -> remapSourcesImpl(input, mappings, output)

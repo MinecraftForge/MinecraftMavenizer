@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.BiFunction;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
@@ -62,27 +63,28 @@ public class MCPTaskFactory {
     private final List<Map<String, String>> steps;
     private final Map<String, Task> data = new HashMap<>();
     private final Map<String, Task> tasks = new LinkedHashMap<>();
-    private Task predecomp = null;
-    private Task mappings = null;
-    private Task last = null;
+    private final Task predecomp;
+    private final Task mappings;
+    private final Task last;
 
     private @Nullable List<Lib> libraries = null;
 
     private MCPTaskFactory(MCPTaskFactory parent, File build, Task predecomp) {
         this.parent = parent;
         this.build = build;
-        this.side = this.parent.side;
-        this.cfg = this.parent.cfg;
-        this.steps = this.parent.steps;
-        this.mappings = this.parent.mappings;
+        this.side = parent.side;
+        this.cfg = parent.cfg;
+        this.steps = parent.steps;
+        this.mappings = parent.mappings;
         this.predecomp = predecomp;
 
         var foundDecomp = false;
+        Task last = null;
         for (var step : this.steps) {
             var type = step.get("type");
             var name = step.getOrDefault("name", type);
 
-            Task task = this.parent.findStep(name);
+            Task task;
             if ("decompile".equals(name)) {
                 foundDecomp = true;
 
@@ -103,6 +105,7 @@ public class MCPTaskFactory {
 
             last = task;
         }
+        this.last = last;
     }
 
     public MCPTaskFactory(MCPSide side, File build) {
@@ -121,13 +124,14 @@ public class MCPTaskFactory {
         if (this.steps.isEmpty())
             throw except("Does not contain requested side `" + side + "`");
 
+        Task predecomp = null, mappings = null, last = null;
         for (var step : this.steps) {
             var type = step.get("type");
             var name = step.getOrDefault("name", type);
 
             var task = createTask(step);
             tasks.put(name, task);
-            this.last = task;
+            last = task;
 
             if ("decompile".equals(name))
                 predecomp = this.findStep(step.get("input"));
@@ -152,6 +156,9 @@ public class MCPTaskFactory {
         if (last == null)
             throw except("No steps defined");
 
+        this.predecomp = predecomp;
+        this.mappings = mappings;
+        this.last = last;
         //this.mappingHelper = new MappingTasks(mappings);
     }
 
@@ -437,9 +444,9 @@ public class MCPTaskFactory {
                     }
                 }
 
-                FileUtils.mergeJars(output, false, input, inject, packages);
+                FileUtils.mergeJars(output, false, this.getFileFilter(), input, inject, packages);
             } else {
-                FileUtils.mergeJars(output, false, input, inject);
+                FileUtils.mergeJars(output, false, this.getFileFilter(), input, inject);
             }
 
             cache.save();
@@ -447,6 +454,10 @@ public class MCPTaskFactory {
         } catch (IOException e) {
             return Util.sneak(e);
         }
+    }
+
+    private BiFunction<File, String, Boolean> getFileFilter() {
+        return this.side.getName().equals("server") ? (f, s) -> !"/mcp/client/Start.java".equals(s) : (f, s) -> true;
     }
 
     private Task patch(String name, Map<String, String> step) {
@@ -534,7 +545,11 @@ public class MCPTaskFactory {
 
             buf.append("-e=").append(target.getAbsolutePath()).append('\n');
 
-            downloadedLibs.add(new Lib(lib.coord, target, lib.os));
+            var artifact = Artifact.from(lib.coord);
+            if (lib.os != null && lib.os != OS.UNKNOWN)
+                artifact = artifact.withOS(lib.os);
+
+            downloadedLibs.add(new Lib(artifact, target));
         }
 
         this.libraries = downloadedLibs;
@@ -548,7 +563,7 @@ public class MCPTaskFactory {
         }
     }
 
-    public record Lib(String name, File file, @Nullable OS os) {}
+    public record Lib(Artifact name, File file) {}
 
     public List<Lib> getLibraries() {
         return Objects.requireNonNull(this.libraries, "Libraries have not been downloaded yet");
@@ -592,10 +607,14 @@ public class MCPTaskFactory {
 
             var buf = new StringBuilder();
 
+            var downloadedLibs = new ArrayList<Lib>();
+
             for (var lib : libs) {
                 var target = new File(libraries, lib);
+                var artifact = Artifact.from(libraries, target);
                 buf.append("-e=").append(target.getAbsolutePath()).append('\n');
 
+                downloadedLibs.add(new Lib(artifact, target));
                 if (target.exists())
                     continue; // TODO: [MCMaven][MCP][ListBundledLibraries] Add hash checking?
 
@@ -610,6 +629,8 @@ public class MCPTaskFactory {
                     is.transferTo(os);
                 }
             }
+
+            this.libraries = downloadedLibs;
 
             FileUtils.ensureParent(output);
             try (var os = new FileOutputStream(output)) {
@@ -701,6 +722,37 @@ public class MCPTaskFactory {
 
         try {
             FileUtils.splitJar(client, mappings, output, false, false);
+        } catch (IOException e) {
+            Util.sneak(e);
+        }
+
+        cache.save();
+        return output;
+    }
+
+    public Task getServerExtra() {
+        var server = this.side.getMCP().getMinecraftTasks().versionFile("server", "jar");
+        return Task.named("serverExtra",
+            Set.of(server, this.mappings),
+            () -> getServerExtra(server, mappings)
+        );
+    }
+
+    private File getServerExtra(Task serverTask, Task mappingsTask) {
+        var server = serverTask.execute();
+        var mappings = mappingsTask.execute();
+
+        var output = new File(this.build, "serverExtra.jar");
+
+        var cache = HashStore.fromFile(output);
+        cache.add("server", server);
+        cache.add("mappings", mappings);
+
+        if (output.exists() && cache.isSame())
+            return output;
+
+        try {
+            FileUtils.splitJar(server, mappings, output, false, false);
         } catch (IOException e) {
             Util.sneak(e);
         }

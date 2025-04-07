@@ -10,6 +10,7 @@ import java.util.Map;
 
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
+import org.jetbrains.annotations.Nullable;
 
 /*
  * Provides the following artifacts:
@@ -43,6 +44,8 @@ import net.minecraftforge.mcmaven.impl.util.Artifact;
 public class MCPConfigRepo {
     private final Map<Artifact, MCP> versions = new HashMap<>();
     private final Map<String, MinecraftTasks> mcTasks = new HashMap<>();
+
+    // CACHE
     final Cache cache;
     final File output;
 

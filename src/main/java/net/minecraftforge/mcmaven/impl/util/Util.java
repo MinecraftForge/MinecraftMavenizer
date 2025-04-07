@@ -9,6 +9,14 @@ import java.util.function.UnaryOperator;
 
 // TODO [MCMaven][Documentation] Document
 public class Util {
+    public static <S extends Comparable<S>> int compare(S a, S b) {
+        if (a == null)
+            return b == null ? 0 : -1;
+        else if (b == null)
+            return 1;
+        return a.compareTo(b);
+    }
+
     /**
      * Allows the given {@link Throwable} to be thrown without needing to declare it in the method signature or
      * arbitrarily checked at compile time.

@@ -14,7 +14,7 @@ import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.Task;
 
-// TODO [MCMaven][Documentation] Document
+/** Handles Minecraft-specific tasks, unrelated to the MCPConfig toolchain. */
 public class MinecraftTasks {
     private final File cache;
     private final String version;
@@ -22,6 +22,12 @@ public class MinecraftTasks {
     public final Task versionJson;
     private final Map<String, Task> versionFiles = new HashMap<>();
 
+    /**
+     * Creates a new Minecraft task handler for the given version.
+     *
+     * @param cache   The caches folder
+     * @param version The version to handle tasks for
+     */
     public MinecraftTasks(File cache, String version) {
         this.cache = new File(cache, "minecraft_tasks");
         this.version = version;

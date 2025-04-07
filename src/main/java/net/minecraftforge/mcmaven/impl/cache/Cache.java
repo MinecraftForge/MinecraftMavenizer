@@ -24,7 +24,7 @@ public class Cache {
     public Cache(File root, File jdkCache) {
         this.root = root;
         this.jdks = new JDKCache(jdkCache);
-        this.forge = new MavenCache("forge", Constants.FORGE_MAVEN, root);
+        this.forge = new MavenCache(Constants.FORGE_NAME, Constants.FORGE_MAVEN, root);
         this.mojang = new MinecraftMavenCache(root);
     }
 

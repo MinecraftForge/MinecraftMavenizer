@@ -11,6 +11,7 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.forge.ForgeRepo;
+import net.minecraftforge.mcmaven.impl.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.data.json.JsonData;
@@ -32,7 +33,10 @@ public class Main {
      * @throws Exception If any kind of error occurs
      */
     public static void main(String[] args) throws Exception {
-        OptionParser parser = new OptionParser();
+        // TODO [MCMaven] Make this into a --debug flag
+        Log.enabled = Log.Level.DEBUG;
+
+        var parser = new OptionParser();
         parser.allowsUnrecognizedOptions();
 
         // help message
@@ -65,6 +69,7 @@ public class Main {
 
         var artifacts = new TreeMap<String, String>();
         artifacts.put("forge",  Constants.FORGE_ARTIFACT);
+        artifacts.put("fml",    Constants.FMLONLY_ARTIFACT);
         artifacts.put("mc",     "net.minecraft:joined");
         artifacts.put("client", "net.minecraft:client");
         artifacts.put("server", "net.minecraft:server");
@@ -83,7 +88,7 @@ public class Main {
             ? options.valueOf(jdkCacheO)
             : new File(cache, "jdks");
 
-        String artifact = options.valueOf(artifactO);
+        var artifact = options.valueOf(artifactO);
         for (var key : artifacts.keySet()) {
             if (options.has(key))
                 artifact = artifacts.get(key);
@@ -92,7 +97,7 @@ public class Main {
         var version = options.valueOf(versionO);
         var caches = new Cache(cache, jdkCache);
 
-        JarVersionInfo.of(Main.class).hello(Log::info, true, true);
+        JarVersionInfo.of("net.minecraftforge.mcmaven").hello(Log::info, true, false);
         Log.info("  Output:    " + output.getAbsolutePath());
         Log.info("  Cache:     " + cache.getAbsolutePath());
         Log.info("  JDK Cache: " + jdkCache.getAbsolutePath());
@@ -113,8 +118,15 @@ public class Main {
             } else {
                 proc.process(version);
             }
+        } else if (artifact.startsWith("net.minecraft:") && !"net.minecraft:server".equals(artifact)) {
+            var proc = new MCPConfigRepo(caches, output);
+            if (version == null)
+                throw new IllegalArgumentException("No version specified for MCPConfig");
+
+            var mcp =  proc.get(Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip"));
+            mcp.process(artifact.substring("net.minecraft:".length()));
         } else {
-            Log.error("Artifact '%s' is currently Unsupported. Will add later".formatted(artifact));
+            throw new IllegalArgumentException("Artifact '%s' is currently Unsupported. Will add later".formatted(artifact));
         }
     }
 }

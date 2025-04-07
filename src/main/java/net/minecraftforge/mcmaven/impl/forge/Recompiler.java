@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.forge;
 
-import net.minecraftforge.mcmaven.impl.mcpconfig.MCP;
+import net.minecraftforge.mcmaven.impl.mcpconfig.Renamer;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
@@ -14,8 +14,6 @@ import net.minecraftforge.mcmaven.impl.util.Task;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 
 // TODO: [MCMaven] Move this Renamer to MCP, since renaming is not forge-specific.
@@ -25,11 +23,8 @@ import java.util.Set;
 class Recompiler {
     private final ForgeRepo forge;
     private final Artifact name;
-    private final File data;
     private final Patcher patcher;
-    private final MCP mcp;
 
-    private final Map<String, Task> extracts = new HashMap<>();
     private final Task last;
 
     // TODO: [MCMaven][Renamer] Custom mappings. For now: official.
@@ -44,11 +39,6 @@ class Recompiler {
         this.forge = forge;
         this.name = name;
         this.patcher = patcher;
-        this.mcp = renamer.mcp;
-
-        this.data = this.forge.cache.forge.download(name);
-        if (!this.data.exists())
-            throw new IllegalStateException("Failed to download " + name);
 
         var recompile = this.recompileSources(renamer.getNamedSources(), this.forge.build);
         this.last = this.injectData(recompile, this.forge.build);
