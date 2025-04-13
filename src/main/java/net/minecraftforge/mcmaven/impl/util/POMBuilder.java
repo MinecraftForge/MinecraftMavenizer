@@ -4,16 +4,10 @@
  */
 package net.minecraftforge.mcmaven.impl.util;
 
+import org.jetbrains.annotations.Nullable;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
-import java.io.ByteArrayOutputStream;
-import java.util.LinkedHashSet;
-import java.util.Set;
-import java.util.function.Consumer;
-
-import org.jetbrains.annotations.Nullable;
-import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
@@ -21,6 +15,10 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
+import java.io.ByteArrayOutputStream;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.function.Consumer;
 
 public final class POMBuilder {
     private final String group, name, version;
@@ -57,16 +55,15 @@ public final class POMBuilder {
      * Builds the POM file.
      *
      * @return The POM file as a string
-     *
      * @throws ParserConfigurationException If something goes horribly wrong
      * @throws TransformerException         If the POM file cannot be transformed
      */
     public String build() throws ParserConfigurationException, TransformerException {
-        DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
-        Document doc = docBuilder.newDocument();
+        var docFactory = DocumentBuilderFactory.newInstance();
+        var docBuilder = docFactory.newDocumentBuilder();
+        var doc = docBuilder.newDocument();
 
-        Element project = doc.createElement("project");
+        var project = doc.createElement("project");
         project.setAttribute("xsi:schemaLocation", "http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd");
         project.setAttribute("xmlns", "http://maven.apache.org/POM/4.0.0");
         project.setAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
@@ -85,9 +82,9 @@ public final class POMBuilder {
         }
 
         if (!this.dependencies.dependencies.isEmpty()) {
-            Element dependencies = doc.createElement("dependencies");
+            var dependencies = doc.createElement("dependencies");
             for (var dependency : this.dependencies.dependencies) {
-                Element dep = doc.createElement("dependency");
+                var dep = doc.createElement("dependency");
                 set(doc, dep, "groupId", dependency.group);
                 set(doc, dep, "artifactId", dependency.name);
                 set(doc, dep, "version", dependency.version);
@@ -119,7 +116,7 @@ public final class POMBuilder {
     }
 
     private static void set(Document doc, Element parent, String name, String value) {
-        Element description = doc.createElement(name);
+        var description = doc.createElement(name);
         description.appendChild(doc.createTextNode(value));
         parent.appendChild(description);
     }
@@ -130,20 +127,16 @@ public final class POMBuilder {
         private Dependencies() { }
 
         public Dependency add(Artifact artifact, @Nullable String scope) {
-            return add(artifact.getGroup(), artifact.getName(), artifact.getVersion(),
-                artifact.getClassifier(), artifact.getExtension(), scope);
-        }
-
-        public Dependency addHard(Artifact artifact, @Nullable String scope) {
-            return add(artifact.getGroup(), artifact.getName(), '[' + artifact.getVersion() + ']',
-                artifact.getClassifier(), artifact.getExtension(), scope);
-        }
-
-        public Dependency add(
-            String group, String name, String version,
-            @Nullable String classifier, @Nullable String extension, @Nullable String scope
-        ) {
-            return Util.make(new Dependency(group, name, version, classifier, extension, scope), this.dependencies::add);
+            var dep = new Dependency(
+                artifact.getGroup(),
+                artifact.getName(),
+                artifact.getVersion(),
+                artifact.getClassifier(),
+                artifact.getExtension(),
+                scope
+            );
+            this.dependencies.add(dep);
+            return dep;
         }
 
         public record Dependency(

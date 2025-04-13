@@ -2,7 +2,7 @@
  * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.mcmaven.impl.forge;
+package net.minecraftforge.mcmaven.impl.repo.forge;
 
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import org.jetbrains.annotations.Nullable;
@@ -16,7 +16,7 @@ import java.util.TreeMap;
  * @see <a href="https://github.com/MinecraftForge/ForgeGradle"><code>MinecraftForge/ForgeGradle</code> on
  * GitHub.com</a>
  */
-public enum FGVersion {
+enum FGVersion {
     v1_1("1.1"),
     v1_2("1.2"),
     v2  ("2.0"),

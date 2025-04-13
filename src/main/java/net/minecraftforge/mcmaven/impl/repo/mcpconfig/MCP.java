@@ -2,18 +2,26 @@
  * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.mcmaven.impl.mcpconfig;
+package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipFile;
 
+import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
+import net.minecraftforge.mcmaven.impl.util.Constants;
+import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
+import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.data.json.MCPConfig;
+import net.minecraftforge.util.hash.HashStore;
 
 // TODO [MCMaven][Documentation] Document
 /**
@@ -33,7 +41,7 @@ public class MCP {
         this.repo = repo;
         this.name = name;
 
-        this.data = this.repo.cache.forge.download(name);
+        this.data = this.getCache().maven().download(name);
         if (!this.data.exists())
             throw new IllegalStateException("Failed to download " + name);
 
@@ -41,7 +49,7 @@ public class MCP {
 
         validateConfig();
 
-        this.build = new File(this.repo.getCache().root, "mcp/" + this.name.getFolder());
+        this.build = new File(this.repo.getCache().root(), "mcp/" + this.name.getFolder());
         this.mcTasks = this.repo.getMCTasks(this.config.version);
 
         for (var side : this.config.steps.keySet())
@@ -113,7 +121,10 @@ public class MCP {
     }
 
     public MCPSide getSide(String side) {
-        return this.sides.get(side);
+        var ret = this.sides.get(side);
+        if (ret == null)
+            throw new IllegalArgumentException("Invalid MCP Side: " + side);
+        return ret;
     }
 
     public Artifact getName() {
@@ -124,10 +135,6 @@ public class MCP {
         return this.mcTasks;
     }
 
-    public MCPConfigRepo getRepo() {
-        return this.repo;
-    }
-
     public Cache getCache() {
         return this.repo.getCache();
     }
@@ -136,11 +143,60 @@ public class MCP {
         return this.build;
     }
 
-    public void process(String side) {
-        var mcSide = this.sides.get(side);
-        if (mcSide == null)
-            throw new IllegalArgumentException("Invalid MCP Side: " + side);
+    // TODO [MCMaven] Support Parchment
+    public Task getMappings(String mappings) {
+        var side = this.getSide(MCPSide.JOINED);
+        var client = this.mcTasks.versionFile("client_mappings", "txt");
+        var server = this.mcTasks.versionFile("server_mappings", "txt");
+        return Task.named("srg2names[" + "official" + ']',
+            Set.of(client, server),
+            () -> getMappings(side.getTasks().getMappings(), client, server)
+        );
+    }
 
-        mcSide.process();
+    private File getMappings(Task srgMappings, Task clientTask, Task serverTask) {
+        var tool = this.getCache().maven().download(Constants.INSTALLER_TOOLS);
+
+        var output = new File(this.build, "data/mappings/official.zip");
+        var log = new File(this.build, "data/mappings/official.txt");
+
+        var mappings = srgMappings.execute();
+        var client = clientTask.execute();
+        var server = serverTask.execute();
+
+        var cache = HashStore.fromFile(output);
+        cache.add("tool", tool);
+        cache.add("mappings", mappings);
+        cache.add("client", client);
+        cache.add("server", server);
+
+        if (output.exists() && cache.exists())
+            return output;
+
+        GlobalOptions.assertNotCacheOnly();
+
+        var args = List.of(
+            "--task",
+            "MAPPINGS_CSV",
+            "--srg",
+            mappings.getAbsolutePath(),
+            "--client",
+            client.getAbsolutePath(),
+            "--server",
+            server.getAbsolutePath(),
+            "--output",
+            output.getAbsolutePath()
+        );
+
+        var jdk = this.getCache().jdks().get(Constants.INSTALLER_TOOLS_JAVA_VERSION);
+        if (jdk == null)
+            throw new IllegalStateException("Failed to find JDK for version " + Constants.INSTALLER_TOOLS_JAVA_VERSION);
+
+        var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, Collections.emptyList(), args);
+        if (ret.exitCode != 0)
+            throw new IllegalStateException("Failed to run MCP Step, See log: " + log.getAbsolutePath());
+
+        cache.save();
+        return output;
     }
 }

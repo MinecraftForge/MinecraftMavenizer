@@ -2,7 +2,7 @@
  * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.mcmaven.impl.forge;
+package net.minecraftforge.mcmaven.impl.repo.forge;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -24,9 +24,11 @@ import io.codechicken.diffpatch.util.PatchMode;
 import io.codechicken.diffpatch.util.Input.MultiInput;
 import io.codechicken.diffpatch.util.Output.MultiOutput;
 import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
-import net.minecraftforge.mcmaven.impl.HasUnnamedSources;
+import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.repo.SourcesProvider;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
-import net.minecraftforge.mcmaven.impl.mcpconfig.MCP;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.data.json.JsonData;
@@ -38,6 +40,7 @@ import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.logging.Log;
+import org.jetbrains.annotations.Nullable;
 
 // TODO: [MCMaven] This class needs to be split off into some sort of abstract class so that other patching processes can be implemented.
 // The current way this is implemented by trying to parse a specific config is not that great. And if we want to support other versions, this HAS to be abstracted.
@@ -45,13 +48,15 @@ import net.minecraftforge.util.logging.Log;
  * This class is responsible for the <strong>entire</strong> patching process. It continues work after MCP has
  * decompiled the game.
  */
-class Patcher implements HasUnnamedSources {
+class Patcher implements SourcesProvider {
+    private final File build;
     private final ForgeRepo forge;
     private final Artifact name;
     private final File data;
     public final PatcherConfig.V2 config;
     private final Patcher parent;
-    private final MCP mcp;
+    private final @Nullable MCP mcp;
+    private final @Nullable MCPSide mcpSide;
 
     private final Map<String, Task> extracts = new HashMap<>();
     private final Task downloadSources;
@@ -64,11 +69,12 @@ class Patcher implements HasUnnamedSources {
      * @param forge The forge repo
      * @param name  The development artifact (usually userdev)
      */
-    Patcher(ForgeRepo forge, Artifact name) {
+    Patcher(File build, ForgeRepo forge, Artifact name) {
+        this.build = build;
         this.forge = forge;
         this.name = name;
 
-        this.data = this.forge.cache.forge.download(name);
+        this.data = this.forge.getCache().maven().download(name);
         if (!this.data.exists())
             throw new IllegalStateException("Failed to download " + name);
 
@@ -80,25 +86,26 @@ class Patcher implements HasUnnamedSources {
         } else {
             this.downloadSources = Task.named("downloadSources", () -> {
                 var art = Artifact.from(this.config.sources);
-                var ret = this.forge.cache.forge.download(art);
+                var ret = this.forge.getCache().maven().download(art);
                 if (ret == null)
                     throw except("Failed to download sources " + art);
                 return ret;
             });
         }
 
-        Task predecomp, last = null;
+        Task predecomp, last;
         if (this.config.hasParent()) {
-            this.parent = new Patcher(this.forge, Artifact.from(this.config.getParent()));
+            this.parent = new Patcher(build, this.forge, Artifact.from(this.config.getParent()));
             this.mcp = null;
+            this.mcpSide = null;
             predecomp = parent.predecomp;
             last = parent.last;
         } else {
             this.parent = null;
             this.mcp = this.forge.mcpconfig.get(Artifact.from(this.config.getParent()));
-            var side = this.mcp.getSide("joined");
-            predecomp = side.getTasks().getPreDecompile();
-            last = side.getTasks().getLastTask();
+            this.mcpSide = this.mcp.getSide(MCPSide.JOINED);
+            predecomp = this.mcpSide.getTasks().getPreDecompile();
+            last = this.mcpSide.getTasks().getLastTask();
         }
 
         var stack = new Stack<Patcher>();
@@ -131,7 +138,7 @@ class Patcher implements HasUnnamedSources {
 
         while (!stack.isEmpty()) {
             var patcher = stack.pop();
-            var root = patcher == this ? this.forge.build : new File(this.forge.build, "parent-" + patcher.name.getName());
+            var root = patcher == this ? this.build : new File(this.build, "parent-" + patcher.name.getName());
 
             if (patcher.config.processor != null)
                 last = patcher.postProcess(last, root);
@@ -185,6 +192,10 @@ class Patcher implements HasUnnamedSources {
         return this.mcp == null ? this.parent.getMCP() : this.mcp;
     }
 
+    public MCPSide getMCPSide() {
+        return this.mcpSide == null ? this.parent.getMCPSide() : this.mcpSide;
+    }
+
     public List<Artifact> getArtifacts() {
         // TODO MOVE ALL THIS LOGIC TO SOME SORT OF "ARTIFACT LIST GENERATOR" IN ARTIFACT.JAVA
         var artifacts = new ArrayList<Artifact>() /*{
@@ -234,23 +245,23 @@ class Patcher implements HasUnnamedSources {
 
         // minecraft version.json libs + mcpconfig libs + userdev libs
         // also for module metadata (same order)
-        for (var lib : this.getMCP().getSide("joined").getTasks().getLibraries()) {
+        for (var lib : this.getMCP().getSide(MCPSide.JOINED).getTasks().getLibraries()) {
             classpath.add(lib.file());
         }
 
-        for (var lib : this.getMCP().getConfig().getLibraries("joined")) {
-            classpath.add(this.forge.cache.forge.download(Artifact.from(lib)));
+        for (var lib : this.getMCP().getConfig().getLibraries(MCPSide.JOINED)) {
+            classpath.add(this.forge.getCache().maven().download(Artifact.from(lib)));
         }
 
         for (var lib : this.config.libraries) {
-            classpath.add(this.forge.cache.forge.download(Artifact.from(lib)));
+            classpath.add(this.forge.getCache().maven().download(Artifact.from(lib)));
         }
 
         return classpath;
     }
 
     /** @return The final unnamed sources */
-    public Task getUnnamedSources() {
+    public Task getSources() {
         return this.last;
     }
 
@@ -266,10 +277,9 @@ class Patcher implements HasUnnamedSources {
         var stack = new Stack<Patcher>();
         if (includeSelf)
             stack.add(this);
-        var parent = this.parent;
-        while (parent != null) {
+
+        for (var parent = this.parent; parent != null; parent = parent.parent) {
             stack.add(parent);
-            parent = parent.parent;
         }
         return stack;
     }
@@ -286,12 +296,14 @@ class Patcher implements HasUnnamedSources {
         if (files.isEmpty())
             return null;
 
-        var output = new File(this.forge.build, filename);
+        var output = new File(this.build, filename);
         var cache = HashStore.fromFile(output);
         cache.add("data", this.data);
 
         if (output.exists() && cache.isSame())
             return output;
+
+        GlobalOptions.assertNotCacheOnly();
 
         if (output.exists())
             output.delete();
@@ -318,6 +330,7 @@ class Patcher implements HasUnnamedSources {
             throw new IllegalStateException("Invalid patcher config, failed to extract data", e);
         }
 
+        cache.save();
         return output;
     }
 
@@ -330,13 +343,15 @@ class Patcher implements HasUnnamedSources {
     private File extractSingleTask(String key, String value) {
         var idx = value.lastIndexOf('/');
         var filename = idx == -1 ? value : value.substring(idx);
-        var target = new File(this.forge.build, "data/" + key + '/' + filename);
+        var target = new File(this.build, "data/" + key + '/' + filename);
 
         var cache = HashStore.fromFile(target);
         cache.add("data", this.data);
 
         if (target.exists() && cache.isSame())
             return target;
+
+        GlobalOptions.assertNotCacheOnly();
 
         try (var zip = new ZipFile(this.data)) {
             var entry = zip.getEntry(value);
@@ -360,7 +375,7 @@ class Patcher implements HasUnnamedSources {
 
     private File modifyAccess(File globalBase, Task inputTask, File cfg) {
         var input = inputTask.execute();
-        var tool = this.forge.cache.forge.download(Constants.ACCESS_TRANSFORMER);
+        var tool = this.forge.getCache().maven().download(Constants.ACCESS_TRANSFORMER);
 
         var output = new File(globalBase, "modifyAccess.jar");
         var log    = new File(globalBase, "modifyAccess.log");
@@ -373,15 +388,15 @@ class Patcher implements HasUnnamedSources {
         if (output.exists() && cache.isSame())
             return output;
 
-        var args = new ArrayList<String>();
-        args.add("--inJar");
-        args.add(input.getAbsolutePath());
-        args.add("--atfile");
-        args.add(cfg.getAbsolutePath());
-        args.add("--outJar");
-        args.add(output.getAbsolutePath());
+        GlobalOptions.assertNotCacheOnly();
 
-        var jdk = this.mcp.getCache().jdks.get(Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
+        var args = List.of(
+            "--inJar", input.getAbsolutePath(),
+            "--atfile", cfg.getAbsolutePath(),
+            "--outJar", output.getAbsolutePath()
+        );
+
+        var jdk = this.getMCP().getCache().jdks().get(Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
         if (jdk == null)
             throw new IllegalStateException("Failed to find JDK for version " + Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
 
@@ -395,7 +410,7 @@ class Patcher implements HasUnnamedSources {
 
     private File stripSides(File globalBase, Task inputTask, File cfg) {
         var input = inputTask.execute();
-        var tool = this.forge.cache.forge.download(Constants.SIDE_STRIPPER);
+        var tool = this.forge.getCache().maven().download(Constants.SIDE_STRIPPER);
         var output = new File(globalBase, "stripSides.jar");
         var log    = new File(globalBase, "stripSides.log");
         var cache = HashStore.fromFile(output);
@@ -406,6 +421,8 @@ class Patcher implements HasUnnamedSources {
         if (output.exists() && cache.isSame())
             return output;
 
+        GlobalOptions.assertNotCacheOnly();
+
         var args = new ArrayList<String>();
         args.add("--strip");
         args.add("--input");
@@ -415,7 +432,7 @@ class Patcher implements HasUnnamedSources {
         args.add("--output");
         args.add(output.getAbsolutePath());
 
-        var jdk = this.mcp.getCache().jdks.get(Constants.SIDE_STRIPPER_JAVA_VERSION);
+        var jdk = this.getMCP().getCache().jdks().get(Constants.SIDE_STRIPPER_JAVA_VERSION);
         if (jdk == null)
             throw new IllegalStateException("Failed to find JDK for version " + Constants.SIDE_STRIPPER_JAVA_VERSION);
 
@@ -428,7 +445,7 @@ class Patcher implements HasUnnamedSources {
     }
 
     private Task completeMcp(File globalBase, Task inputTask) {
-        var mcp = getMCP().getSide("joined");
+        var mcp = getMCP().getSide(MCPSide.JOINED);
         var taskFactory = mcp.getTasks().child(globalBase, inputTask);
         return taskFactory.getLastTask();
     }
@@ -453,7 +470,7 @@ class Patcher implements HasUnnamedSources {
         var input = inputTask.execute();
 
         // First download the tool
-        var maven = new MavenCache("mcp-tools", data.repo, this.forge.cache.root);
+        var maven = new MavenCache("mcp-tools", data.repo, this.forge.getCache().root());
         var toolA = Artifact.from(data.version);
         var tool = maven.download(toolA);
 
@@ -478,12 +495,14 @@ class Patcher implements HasUnnamedSources {
         if (output.exists() && cache.isSame())
             return output;
 
+        GlobalOptions.assertNotCacheOnly();
+
         var args = new ArrayList<String>();
         for (var arg : data.getArgs())
             args.add(files.getOrDefault(arg, arg));
 
         int java_version = data.getJavaVersion(this.getMCP().getConfig());
-        var jdks = this.getMCP().getCache().jdks;
+        var jdks = this.getMCP().getCache().jdks();
         var jdk = jdks.get(java_version);
         if (jdk == null)
             throw new IllegalStateException("Failed to find JDK for version " + java_version);
@@ -516,6 +535,8 @@ class Patcher implements HasUnnamedSources {
         if (output.exists() && cache.isSame())
             return output;
 
+        GlobalOptions.assertNotCacheOnly();
+
         var builder = PatchOperation.builder()
             .logTo(Log::error)
             .baseInput(MultiInput.archive(ArchiveFormat.ZIP, input.toPath()))
@@ -527,13 +548,10 @@ class Patcher implements HasUnnamedSources {
             .patchesPrefix(this.config.patches)
         ;
 
-        var cfg = this.config;
-        if (cfg != null) {
-            if (cfg.patchesOriginalPrefix != null)
-                builder = builder.aPrefix(cfg.patchesOriginalPrefix);
-            if (cfg.patchesModifiedPrefix != null)
-                builder = builder.bPrefix(cfg.patchesModifiedPrefix);
-        }
+        if (this.config.patchesOriginalPrefix != null)
+            builder = builder.aPrefix(this.config.patchesOriginalPrefix);
+        if (this.config.patchesModifiedPrefix != null)
+            builder = builder.bPrefix(this.config.patchesModifiedPrefix);
 
         try {
             var result = builder.build().operate();
@@ -541,7 +559,7 @@ class Patcher implements HasUnnamedSources {
             boolean success = result.exit == 0;
             if (!success) {
                 if (result.summary != null)
-                    result.summary.print(System.out, true);
+                    result.summary.print(Log.ERROR, true);
                 else
                     Log.error("Failed to apply patches, no summary available");
 
@@ -576,6 +594,8 @@ class Patcher implements HasUnnamedSources {
 
         if (output.exists() && cache.exists())
             return output;
+
+        GlobalOptions.assertNotCacheOnly();
 
         try {
             FileUtils.mergeJars(output, false,

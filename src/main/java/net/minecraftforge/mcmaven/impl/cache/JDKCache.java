@@ -11,7 +11,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import net.minecraftforge.java_version.api.IJavaInstall;
 import net.minecraftforge.java_version.api.IJavaLocator;
@@ -19,8 +18,9 @@ import net.minecraftforge.util.logging.Log;
 import org.jetbrains.annotations.Nullable;
 
 /** Represents the JDK cache for this tool. */
-public class JDKCache {
+public final class JDKCache {
     private boolean attemptedLocate = false;
+    private final File root;
     private final Map<Integer, File> jdks = new HashMap<>();
     private final IJavaLocator disco;
 
@@ -30,7 +30,12 @@ public class JDKCache {
      * @param cache The cache directory
      */
     public JDKCache(File cache) {
+        this.root = cache;
         this.disco = IJavaLocator.disco(cache);
+    }
+
+    public File root() {
+        return this.root;
     }
 
     // TODO: [MCMaven][JDKCache] Make this thread safe. If this method is accessed concurrently, the same JDK could be downloaded more than once.
@@ -45,12 +50,16 @@ public class JDKCache {
             attemptLocate();
 
         // check cache. stop immediately if we get a hit.
-        File ret = jdks.get(version);
+        var ret = jdks.get(version);
         if (ret != null) return ret;
 
-        IJavaInstall downloaded = disco.provision(version); // Implementation detail, we only download jdks, so no need to check here
-        if (downloaded == null) return null;
-        ret = downloaded.home();
+        try {
+            var downloaded = disco.provision(version); // Implementation detail, we only download jdks, so no need to check here
+            if (downloaded == null) return null;
+            ret = downloaded.home();
+        } catch (Exception e) {
+            return null;
+        }
 
         // not sure how this would ever hit. but just in case...
         var old = jdks.putIfAbsent(version, ret);
@@ -64,8 +73,7 @@ public class JDKCache {
     }
 
     private void attemptLocate() {
-        if (attemptedLocate)
-            return;
+        if (attemptedLocate) return;
         attemptedLocate = true;
 
         List<IJavaLocator> locators = new ArrayList<>();
@@ -81,7 +89,7 @@ public class JDKCache {
         }
 
         // Remove duplicates
-        Set<File> seen = new HashSet<File>();
+        var seen = new HashSet<File>();
         installs.removeIf(install -> !seen.add(install.home()));
 
         Collections.sort(installs);

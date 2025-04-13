@@ -7,6 +7,8 @@ package net.minecraftforge.mcmaven.impl.util;
 import net.minecraftforge.util.logging.Log;
 
 import java.io.File;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -16,8 +18,33 @@ public sealed interface Task extends Supplier<File> permits Task.Simple {
         return named(name, Set.of(), supplier);
     }
 
-    static Task named(String name, Set<? extends Task> deps, Supplier<File> supplier) {
+    static Task named(String name, Iterable<? extends Task> deps, Supplier<File> supplier) {
         return new Simple(name, deps, supplier);
+    }
+
+    static Iterable<? extends Task> collect(Object... deps) {
+        return () -> new Iterator<>() {
+            private final Iterator<?> itor = Arrays.asList(deps).iterator();
+
+            @Override
+            public boolean hasNext() {
+                return this.itor.hasNext();
+            }
+
+            @Override
+            public Task next() {
+                var obj = this.itor.next();
+                if (!(obj instanceof Task) && obj instanceof Supplier<?> supplier) {
+                    obj = supplier.get();
+                }
+
+                try {
+                    return (Task) obj;
+                } catch (ClassCastException e) {
+                    throw new IllegalArgumentException("Invalid task dependency. Expected Task or Supplier<Task>, Found: %s".formatted(obj), e);
+                }
+            }
+        };
     }
 
     /**
@@ -27,6 +54,8 @@ public sealed interface Task extends Supplier<File> permits Task.Simple {
      * @return The file provided by this task
      */
     File execute();
+
+    boolean resolved();
 
     /** @return The name of this task */
     String name();
@@ -39,11 +68,11 @@ public sealed interface Task extends Supplier<File> permits Task.Simple {
 
     final class Simple implements Task {
         private final String name;
-        private final Set<? extends Task> deps;
+        private final Iterable<? extends Task> deps;
         private final Supplier<File> supplier;
         private File file;
 
-        private Simple(String name, Set<? extends Task> deps, Supplier<File> supplier) {
+        private Simple(String name, Iterable<? extends Task> deps, Supplier<File> supplier) {
             this.name = name;
             this.deps = deps;
             this.supplier = supplier;
@@ -62,6 +91,11 @@ public sealed interface Task extends Supplier<File> permits Task.Simple {
             }
 
             return this.file;
+        }
+
+        @Override
+        public boolean resolved() {
+            return this.file != null;
         }
 
         @Override

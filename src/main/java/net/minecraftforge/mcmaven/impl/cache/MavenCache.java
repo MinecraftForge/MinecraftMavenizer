@@ -4,6 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.cache;
 
+import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.hash.HashFunction;
@@ -25,15 +26,16 @@ import java.util.List;
 
 // TODO: [MCMaven][MavenCache] Handle download failures properly
 /** Represents the maven cache for this tool. */
-public class MavenCache {
-    protected HashFunction[] known_hashes = new HashFunction[] {
+public sealed class MavenCache permits MinecraftMavenCache {
+    private static final HashFunction[] DEFAULT_HASHES = {
         // can't use SHA256/512 as gradle doesn't always update those files. Depending on version used to publish
-        // HashFunction.SHA256,
+        //HashFunction.SHA256,
         HashFunction.SHA1
         //HashFunction.MD5
     };
+
+    private final HashFunction[] knownHashes;
     private final File cache;
-    private final String name;
     private final String repo;
 
     /**
@@ -44,9 +46,17 @@ public class MavenCache {
      * @param root The cache directory
      */
     public MavenCache(String name, String repo, File root) {
-        this.name = name;
-        this.cache = new File(root, "maven");
+        this(name, repo, root, DEFAULT_HASHES);
+    }
+
+    public MavenCache(String name, String repo, File root, HashFunction... knownHashes) {
+        this.cache = new File(root, "maven/" + name);
         this.repo = repo;
+        this.knownHashes = knownHashes;
+    }
+
+    public final File getFolder() {
+        return this.cache;
     }
 
     /**
@@ -72,7 +82,7 @@ public class MavenCache {
      * @see #downloadVersionMeta(Artifact)
      */
     @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
-    public File downloadMeta(Artifact artifact) {
+    public final File downloadMeta(Artifact artifact) {
         return download(true, artifact.getGroup().replace('.', '/') + '/' + artifact.getName() + "/maven-metadata.xml");
     }
 
@@ -85,7 +95,7 @@ public class MavenCache {
      * @throws IOException If an error occurs while downloading the file
      */
     @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
-    public File downloadVersionMeta(Artifact artifact) {
+    public final File downloadVersionMeta(Artifact artifact) {
         return download(true, artifact.getGroup().replace('.', '/') + '/' + artifact.getName() + '/' + artifact.getVersion() + "/maven-metadata.xml");
     }
 
@@ -139,16 +149,18 @@ public class MavenCache {
             } catch (IOException e) {
                 throw new RuntimeException("Failed to read " + target.getAbsolutePath(), e);
             }
-            */
+             */
 
             if (!invalidHash && changing) {
-                for (var func : known_hashes) {
-                    String rhash = DownloadUtils.downloadString(repo + path + '.' + func.extension());
+                for (var func : knownHashes) {
+                    if (GlobalOptions.cacheOnly) continue;
+
+                    var rhash = DownloadUtils.tryDownloadString(true, repo + path + '.' + func.extension());
                     if (rhash == null)
                         continue;
 
                     try {
-                        String chash = func.hash(target);
+                        var chash = func.hash(target);
                         if (!chash.equals(rhash)) {
                             Log.error("Outdated cached file: " + target.getAbsolutePath());
                             Log.error("Expected: " + rhash);
@@ -167,12 +179,14 @@ public class MavenCache {
             if (!invalidHash)
                 return target;
 
+            GlobalOptions.assertNotCacheOnly();
             target.delete();
         }
 
         try {
+            GlobalOptions.assertNotCacheOnly();
             downloadFile(target, path);
-            HashUtils.updateHash(target, known_hashes);
+            HashUtils.updateHash(target, knownHashes);
             return target;
         } catch (IOException e) {
             return Util.sneak(e);
@@ -188,9 +202,7 @@ public class MavenCache {
      */
     protected void downloadFile(File target, String path) throws IOException {
         // TODO Currently there is no handling if the download fails. For now, I'm throwing the exception.
-        var ret = DownloadUtils.downloadFile(target, this.repo + path);
-        if (!ret)
-            throw new IOException("Failed to download " + this.repo + path);
+        DownloadUtils.downloadFile(target, this.repo + path);
     }
 
     /**

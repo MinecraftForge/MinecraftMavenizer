@@ -2,7 +2,7 @@
  * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.mcmaven.impl.mcpconfig;
+package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -22,7 +22,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
+import java.util.function.Supplier;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
@@ -39,7 +40,9 @@ import io.codechicken.diffpatch.util.PatchMode;
 import io.codechicken.diffpatch.util.Input.MultiInput;
 import io.codechicken.diffpatch.util.Output.MultiOutput;
 import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
+import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
+import net.minecraftforge.mcmaven.impl.repo.SourcesProvider;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.data.OS;
@@ -55,18 +58,20 @@ import net.minecraftforge.util.logging.Log;
 import org.jetbrains.annotations.Nullable;
 
 // TODO [MCMaven][Documentation] Document
-public class MCPTaskFactory {
+public class MCPTaskFactory implements SourcesProvider {
     private final MCPConfig.V2 cfg;
     private final MCPSide side;
     private final File build;
-    private final MCPTaskFactory parent;
+    private final @Nullable MCPTaskFactory parent;
     private final List<Map<String, String>> steps;
     private final Map<String, Task> data = new HashMap<>();
     private final Map<String, Task> tasks = new LinkedHashMap<>();
+    private final Task prestrip;
     private final Task predecomp;
     private final Task mappings;
     private final Task last;
 
+    private final BiPredicate<File, String> injectFileFilter;
     private @Nullable List<Lib> libraries = null;
 
     private MCPTaskFactory(MCPTaskFactory parent, File build, Task predecomp) {
@@ -77,6 +82,7 @@ public class MCPTaskFactory {
         this.steps = parent.steps;
         this.mappings = parent.mappings;
         this.predecomp = predecomp;
+        this.prestrip = parent.prestrip;
 
         var foundDecomp = false;
         Task last = null;
@@ -106,6 +112,8 @@ public class MCPTaskFactory {
             last = task;
         }
         this.last = last;
+
+        this.injectFileFilter = this.getFileFilter();
     }
 
     public MCPTaskFactory(MCPSide side, File build) {
@@ -124,7 +132,7 @@ public class MCPTaskFactory {
         if (this.steps.isEmpty())
             throw except("Does not contain requested side `" + side + "`");
 
-        Task predecomp = null, mappings = null, last = null;
+        Task prestrip = null, predecomp = null, mappings = null, last = null;
         for (var step : this.steps) {
             var type = step.get("type");
             var name = step.getOrDefault("name", type);
@@ -133,7 +141,9 @@ public class MCPTaskFactory {
             tasks.put(name, task);
             last = task;
 
-            if ("decompile".equals(name))
+            if ("strip".equals(name) || "stripClient".equals(name))
+                prestrip = this.findStep(step.get("input"));
+            else if ("decompile".equals(name))
                 predecomp = this.findStep(step.get("input"));
             else if ("rename".equals(name)) {
                 var value = step.getOrDefault("mappings", "{mappings}");
@@ -147,6 +157,9 @@ public class MCPTaskFactory {
             }
         }
 
+        if (prestrip == null)
+            throw except("Could not find `strip(Client)` step");
+
         if (predecomp == null)
             throw except("Could not find `decompile` step");
 
@@ -156,10 +169,19 @@ public class MCPTaskFactory {
         if (last == null)
             throw except("No steps defined");
 
+        this.prestrip = prestrip;
         this.predecomp = predecomp;
         this.mappings = mappings;
         this.last = last;
         //this.mappingHelper = new MappingTasks(mappings);
+
+        this.injectFileFilter = this.getFileFilter();
+    }
+
+    private static final BiPredicate<File, String> TRUE = (f, s) -> true;
+    private static final BiPredicate<File, String> NOT_CONTAINS_CLIENT = (f, s) -> !s.contains("client");
+    private BiPredicate<File, String> getFileFilter() {
+        return this.side.containsClient() ? TRUE : NOT_CONTAINS_CLIENT;
     }
 
     public MCPTaskFactory child(File dir, Task predecomp) {
@@ -170,8 +192,17 @@ public class MCPTaskFactory {
         return this.predecomp;
     }
 
+    public Task getMappings() {
+        return this.mappings;
+    }
+
     public Task getLastTask() {
         return this.last;
+    }
+
+    @Override
+    public Task getSources() {
+        return this.getLastTask();
     }
 
     private RuntimeException except(String message) {
@@ -224,6 +255,8 @@ public class MCPTaskFactory {
         if (target.exists() && cache.isSame())
             return target;
 
+        GlobalOptions.assertNotCacheOnly();
+
         try (var zip = new ZipFile(getData())) {
             var entry = zip.getEntry(value);
             if (entry == null)
@@ -247,7 +280,7 @@ public class MCPTaskFactory {
     private File extractFolder(String key, String value) {
         var base = new File(this.build, "data/" + key);
 
-        var cache = HashStore.fromDir(base);
+        var cache = new HashStore(base).load(new File(this.build, "data/" + key + ".cache"));
         cache.add("mcp", getData());
         boolean same = cache.isSame();
 
@@ -269,6 +302,7 @@ public class MCPTaskFactory {
                 FileUtils.ensureParent(target);
 
                 if (!target.exists() || !same) {
+                    GlobalOptions.assertNotCacheOnly();
                     try (var os = new FileOutputStream(target)) {
                         zip.getInputStream(e).transferTo(os);
                     }
@@ -291,6 +325,7 @@ public class MCPTaskFactory {
             if (count == 0)
                 throw except("Missing data: `" + key + "`: `" + value + "`");
 
+            cache.save();
             return base;
         } catch (IOException e) {
             throw except("Failed to extract `" + key + "`: `" + value + "`");
@@ -337,7 +372,7 @@ public class MCPTaskFactory {
         var output = new File(this.build, name + ".jar").getAbsoluteFile();
         var input = findStep(step.get("input"));
         return Task.named(name,
-            Set.of(input/*, this.mappings*/),
+            Task.collect(input, (Supplier<Task>) () -> this.mappings),
             () -> strip(input, whitelist, output)
         );
     }
@@ -352,6 +387,8 @@ public class MCPTaskFactory {
 
         if (output.exists() && cache.isSame())
             return output;
+
+        GlobalOptions.assertNotCacheOnly();
 
         if (output.exists())
             output.delete();
@@ -404,6 +441,8 @@ public class MCPTaskFactory {
         if (output.exists() && cache.isSame())
             return output;
 
+        GlobalOptions.assertNotCacheOnly();
+
         if (output.exists())
             output.delete();
 
@@ -444,9 +483,9 @@ public class MCPTaskFactory {
                     }
                 }
 
-                FileUtils.mergeJars(output, false, this.getFileFilter(), input, inject, packages);
+                FileUtils.mergeJars(output, false, this.injectFileFilter, input, inject, packages);
             } else {
-                FileUtils.mergeJars(output, false, this.getFileFilter(), input, inject);
+                FileUtils.mergeJars(output, false, this.injectFileFilter, input, inject);
             }
 
             cache.save();
@@ -454,10 +493,6 @@ public class MCPTaskFactory {
         } catch (IOException e) {
             return Util.sneak(e);
         }
-    }
-
-    private BiFunction<File, String, Boolean> getFileFilter() {
-        return this.side.getName().equals("server") ? (f, s) -> !"/mcp/client/Start.java".equals(s) : (f, s) -> true;
     }
 
     private Task patch(String name, Map<String, String> step) {
@@ -481,6 +516,8 @@ public class MCPTaskFactory {
         if (output.exists() && cache.isSame())
             return output;
 
+        GlobalOptions.assertNotCacheOnly();
+
         var builder = PatchOperation.builder()
             .logTo(Log::error)
             .baseInput(MultiInput.archive(ArchiveFormat.ZIP, input.toPath()))
@@ -502,7 +539,7 @@ public class MCPTaskFactory {
             boolean success = result.exit == 0;
             if (!success) {
                 if (result.summary != null)
-                    result.summary.print(System.out, true);
+                    result.summary.print(Log.ERROR, true);
                 else
                     Log.error("Failed to apply patches, no summary available");
 
@@ -526,22 +563,30 @@ public class MCPTaskFactory {
     }
 
     private File listLibraries(Task jsonTask, File output) {
-        // TODO: [MCMaven][MCP] Find a way to cache listLibraries
         var jsonF = jsonTask.execute();
         var json = JsonData.minecraftVersion(jsonF);
 
-        var buf = new StringBuilder();
         var libs = json.getLibs();
 
-        var cache = this.side.getMCP().getCache();
+        var cache = HashStore.fromFile(output).add(jsonF);
+        for (var lib : libs) {
+            cache.addKnown(lib.coord, lib.dl.sha1);
+        }
 
+        if (output.exists() && cache.isSame())
+            return output;
+
+        GlobalOptions.assertNotCacheOnly();
+        cache.clear().add(jsonF);
+
+        var buf = new StringBuilder();
+        var minecraft = this.side.getMCP().getCache().minecraft();
         var downloadedLibs = new ArrayList<Lib>();
-
         for (var lib : libs) {
             if (!lib.dl.url.toString().startsWith(Constants.MOJANG_MAVEN))
                 throw new IllegalStateException("Unable to download library " + lib.dl.path + " as it is not on Mojang's repo and I was lazy. " + lib.dl.url);
 
-            var target = cache.mojang.download(lib.dl);
+            var target = minecraft.download(lib.dl);
 
             buf.append("-e=").append(target.getAbsolutePath()).append('\n');
 
@@ -550,6 +595,7 @@ public class MCPTaskFactory {
                 artifact = artifact.withOS(lib.os);
 
             downloadedLibs.add(new Lib(artifact, target));
+            cache.add(lib.coord, target);
         }
 
         this.libraries = downloadedLibs;
@@ -557,6 +603,7 @@ public class MCPTaskFactory {
         FileUtils.ensureParent(output);
         try (var os = new FileOutputStream(output)) {
             os.write(buf.toString().getBytes(StandardCharsets.UTF_8));
+            cache.save();
             return output;
         } catch (IOException e) {
             return Util.sneak(e);
@@ -566,7 +613,7 @@ public class MCPTaskFactory {
     public record Lib(Artifact name, File file) {}
 
     public List<Lib> getLibraries() {
-        return Objects.requireNonNull(this.libraries, "Libraries have not been downloaded yet");
+        return Objects.requireNonNull(this.libraries, "Libraries have not been downloaded yet. Please finalize MCP before using.");
     }
 
     private Task listLibrariesBundle(String name, Map<String, String> step) {
@@ -605,6 +652,16 @@ public class MCPTaskFactory {
                 libs.add(pts[2]);
             }
 
+            var cache = HashStore.fromFile(output).add(bundle);
+            for (var lib : libs)
+                cache.add(new File(libraries, lib));
+
+            if (output.exists() && cache.isSame())
+                return output;
+
+            GlobalOptions.assertNotCacheOnly();
+            cache.clear().add(bundle);
+
             var buf = new StringBuilder();
 
             var downloadedLibs = new ArrayList<Lib>();
@@ -615,144 +672,59 @@ public class MCPTaskFactory {
                 buf.append("-e=").append(target.getAbsolutePath()).append('\n');
 
                 downloadedLibs.add(new Lib(artifact, target));
-                if (target.exists())
-                    continue; // TODO: [MCMaven][MCP][ListBundledLibraries] Add hash checking?
+                if (!target.exists()) {
+                    entry = jar.getEntry("META-INF/libraries/" + lib);
+                    if (entry == null)
+                        throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries/" + lib);
 
-                entry = jar.getEntry("META-INF/libraries/" + lib);
-                if (entry == null)
-                    throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries/" + lib);
+                    FileUtils.ensureParent(target);
 
-                FileUtils.ensureParent(target);
-
-                try (var os = new FileOutputStream(target);
-                     var is = jar.getInputStream(entry)) {
-                    is.transferTo(os);
+                    try (var os = new FileOutputStream(target);
+                         var is = jar.getInputStream(entry)) {
+                        is.transferTo(os);
+                    }
                 }
+
+                cache.add(target);
             }
 
-            this.libraries = downloadedLibs;
+            this.libraries = Collections.unmodifiableList(downloadedLibs);
 
             FileUtils.ensureParent(output);
             try (var os = new FileOutputStream(output)) {
                 os.write(buf.toString().getBytes(StandardCharsets.UTF_8));
             }
+            cache.save();
             return output;
         } catch (IOException e) {
             return Util.sneak(e);
         }
     }
 
-    // TODO change task name??? This should only ever be ran on joined side
-    public Task getMappings(String mappings) {
-        var client = this.side.getMCP().getMinecraftTasks().versionFile("client_mappings", "txt");
-        var server = this.side.getMCP().getMinecraftTasks().versionFile("server_mappings", "txt");
-        return Task.named("officialMappings",
-            Set.of(this.mappings, client, server),
-            () -> getMappings(mappings, client, server)
+    public Task getExtra() {
+        return Task.named("extra[" + this.side.getName() + ']',
+            Set.of(this.prestrip, this.mappings),
+            () -> getExtra(this.prestrip, mappings)
         );
     }
 
-    // TODO: Implement other mappings than official
-    // TODO: cache tool and output
-    private File getMappings(String channel, Task clientTask, Task serverTask) {
-        var mcp = this.side.getMCP();
-        var tool = mcp.getCache().forge.download(Constants.INSTALLER_TOOLS);
-
-        var output = new File(this.build, "data/mappings/official.zip");
-        var log = new File(this.build, "data/mappings/official.txt");
-
-        var mappings = this.mappings.execute();
-        var client = clientTask.execute();
-        var server = serverTask.execute();
-
-        var cache = HashStore.fromFile(output);
-        cache.add("tool", tool);
-        cache.add("mappings", mappings);
-        cache.add("client", client);
-        cache.add("server", server);
-
-        if (output.exists() && cache.exists())
-            return output;
-
-        var args = List.of(
-            "--task",
-            "MAPPINGS_CSV",
-            "--srg",
-            mappings.getAbsolutePath(),
-            "--client",
-            client.getAbsolutePath(),
-            "--server",
-            server.getAbsolutePath(),
-            "--output",
-            output.getAbsolutePath()
-        );
-
-        var jdk = mcp.getCache().jdks.get(Constants.INSTALLER_TOOLS_JAVA_VERSION);
-        if (jdk == null)
-            throw new IllegalStateException("Failed to find JDK for version " + Constants.INSTALLER_TOOLS_JAVA_VERSION);
-
-        var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, Collections.emptyList(), args);
-        if (ret.exitCode != 0)
-            throw new IllegalStateException("Failed to run MCP Step, See log: " + log.getAbsolutePath());
-
-        cache.save();
-        return output;
-    }
-
-    public Task getClientExtra() {
-        var client = this.side.getMCP().getMinecraftTasks().versionFile("client", "jar");
-        return Task.named("clientExtra",
-            Set.of(client, this.mappings),
-            () -> getClientExtra(client, mappings)
-        );
-    }
-
-    private File getClientExtra(Task clientTask, Task mappingsTask) {
-        var client = clientTask.execute();
+    private File getExtra(Task prestripTask, Task mappingsTask) {
+        var prestrip = prestripTask.execute();
         var mappings = mappingsTask.execute();
 
-        var output = new File(this.build, "clientExtra.jar");
+        var output = new File(this.build, "extra.jar");
 
         var cache = HashStore.fromFile(output);
-        cache.add("client", client);
+        cache.add("prestrip", prestrip);
         cache.add("mappings", mappings);
 
         if (output.exists() && cache.isSame())
             return output;
 
-        try {
-            FileUtils.splitJar(client, mappings, output, false, false);
-        } catch (IOException e) {
-            Util.sneak(e);
-        }
-
-        cache.save();
-        return output;
-    }
-
-    public Task getServerExtra() {
-        var server = this.side.getMCP().getMinecraftTasks().versionFile("server", "jar");
-        return Task.named("serverExtra",
-            Set.of(server, this.mappings),
-            () -> getServerExtra(server, mappings)
-        );
-    }
-
-    private File getServerExtra(Task serverTask, Task mappingsTask) {
-        var server = serverTask.execute();
-        var mappings = mappingsTask.execute();
-
-        var output = new File(this.build, "serverExtra.jar");
-
-        var cache = HashStore.fromFile(output);
-        cache.add("server", server);
-        cache.add("mappings", mappings);
-
-        if (output.exists() && cache.isSame())
-            return output;
+        GlobalOptions.assertNotCacheOnly();
 
         try {
-            FileUtils.splitJar(server, mappings, output, false, false);
+            FileUtils.splitJar(prestrip, mappings, output, false, false);
         } catch (IOException e) {
             Util.sneak(e);
         }
@@ -795,7 +767,7 @@ public class MCPTaskFactory {
 
     private File execute(List<TaskOrArg> jvmArgs, List<TaskOrArg> runArgs, MCPConfig.Function func, File log, File output) {
         // First download the tool
-        var maven = new MavenCache("mcp-tools", func.repo, this.side.getMCP().getCache().root);
+        var maven = new MavenCache("mcp-tools", func.repo, this.side.getMCP().getCache().root());
         var toolA = Artifact.from(func.version);
         var tool = maven.download(toolA);
 
@@ -810,8 +782,10 @@ public class MCPTaskFactory {
         if (output.exists() && cache.isSame())
             return output;
 
+        GlobalOptions.assertNotCacheOnly();
+
         int java_version = func.getJavaVersion(this.side.getMCP().getConfig());
-        var jdks = this.side.getMCP().getCache().jdks;
+        var jdks = this.side.getMCP().getCache().jdks();
         var jdk = jdks.get(java_version);
         if (jdk == null)
             throw new IllegalStateException("Failed to find JDK for version " + java_version);

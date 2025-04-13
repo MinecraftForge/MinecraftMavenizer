@@ -2,51 +2,39 @@
  * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.mcmaven.impl.mcpconfig;
+package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
-import net.minecraftforge.mcmaven.impl.HasUnnamedSources;
-import net.minecraftforge.mcmaven.impl.data.GradleModule;
+import net.minecraftforge.mcmaven.impl.repo.SourcesProvider;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
-import net.minecraftforge.mcmaven.impl.util.POMBuilder;
-import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
-import net.minecraftforge.mcmaven.impl.util.Util;
-import net.minecraftforge.util.data.OS;
-import net.minecraftforge.util.data.json.JsonData;
-import net.minecraftforge.util.file.FileUtils;
-import net.minecraftforge.util.hash.HashFunction;
-import net.minecraftforge.util.hash.HashUtils;
-import net.minecraftforge.util.logging.Log;
 
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.TransformerException;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Consumer;
 
-public class MCPSide implements HasUnnamedSources {
+public class MCPSide implements SourcesProvider {
+    public static final String CLIENT = "client";
+    public static final String SERVER = "server";
+    public static final String JOINED = "joined";
+
     private final MCP mcp;
     private final String side;
     private final File build;
     private final MCPTaskFactory factory;
-
-    // ARTIFACTS
-    private File sources;
-    private File recompiled;
-    private File pom;
-    private File gradleModule;
 
     MCPSide(MCP owner, String side) {
         this.mcp = owner;
         this.side = side;
         this.build = new File(this.mcp.getBuildFolder(), this.side);
         this.factory = new MCPTaskFactory(this, this.build);
+    }
+
+    public boolean containsClient() {
+        return this.side.equals(JOINED) || this.side.equals(CLIENT);
+    }
+
+    public boolean containsServer() {
+        return this.side.equals(JOINED) || this.side.equals(SERVER);
     }
 
     public MCPTaskFactory getTasks() {
@@ -59,6 +47,10 @@ public class MCPSide implements HasUnnamedSources {
 
     public MCP getMCP() {
         return this.mcp;
+    }
+
+    public File getBuildFolder() {
+        return this.build;
     }
 
     public List<Artifact> getMCLibraries() {
@@ -85,7 +77,7 @@ public class MCPSide implements HasUnnamedSources {
     }
 
     @Override
-    public Task getUnnamedSources() {
+    public Task getSources() {
         return this.getTasks().getLastTask();
     }
 
@@ -99,183 +91,10 @@ public class MCPSide implements HasUnnamedSources {
         }
 
         for (var lib : this.mcp.getConfig().getLibraries(this.side)) {
-            classpath.add(this.mcp.getCache().forge.download(Artifact.from(lib)));
+            classpath.add(this.mcp.getCache().maven().download(Artifact.from(lib)));
         }
 
         return classpath;
-    }
-
-    public void process() {
-        var version = this.mcp.getName().getVersion();
-        var name = Artifact.from("net.minecraft", this.side, version);
-        var renamer = new Renamer(this.build, name, this, this);
-        var recompiler = new Recompiler(this.build, name, this, renamer);
-
-        this.sources = this.execute("Generating Sources", renamer.getNamedSources());
-        this.recompiled = this.execute("Recompiling Sources", this.mergeExtra(recompiler.getRecompiledJar(), this.getTasks().getClientExtra()));
-
-        this.pom = new File(this.build, this.side + ".pom");
-        forgePom(version, this.pom);
-        this.gradleModule = new File(this.build, this.side + ".module");
-        forgeGradleModule(version, this.gradleModule);
-
-        this.generateOutput(version);
-    }
-
-    // TODO [MCMaven][client-extra] Band-aid fix for merging for clean! Remove later.
-    private Task mergeExtra(Task recompiled, Task extra) {
-        return Task.named("mergeExtra[" + this.side + ']', Set.of(extra, recompiled), () -> {
-            var output = new File(this.build, "recompiled-extra.jar");
-            try {
-                FileUtils.mergeJars(output, true, extra.get(), recompiled.get());
-            } catch (IOException e) {
-                Util.sneak(e);
-            }
-
-            return output;
-        });
-    }
-
-    private List<Artifact> generateOutput(String minecraft) {
-        FileUtils.ensureParent(this.mcp.getRepo().output);
-
-        var artifacts = new ArrayList<Artifact>();
-        this.outputArtifact(artifacts, this.sources, Artifact.from("net.minecraft", this.side, minecraft, "sources"));
-        this.outputArtifact(artifacts, this.recompiled, Artifact.from("net.minecraft", this.side, minecraft));
-        this.outputArtifact(artifacts, this.pom, Artifact.from("net.minecraft", this.side, minecraft, null, "pom"));
-        this.outputArtifact(artifacts, this.gradleModule, Artifact.from("net.minecraft", this.side, minecraft, null, "module"));
-
-        return artifacts;
-    }
-
-    private void outputArtifact(List<Artifact> list, File file, Artifact artifact) {
-        list.add(artifact);
-
-        try {
-            var output = new File(this.mcp.getRepo().output, artifact.getLocalPath());
-            org.apache.commons.io.FileUtils.copyFile(file, output);
-            HashUtils.updateHash(output);
-        } catch (IOException e) {
-            Util.sneak(e);
-        }
-    }
-
-    private void forgePom(String minecraft, File output) {
-        var builder = new POMBuilder("net.minecraft", this.side, minecraft).withGradleMetadata();
-
-        Util.make(this.getMCLibraries(), l -> l.removeIf(a -> a.getOs() != OS.UNKNOWN)).forEach(a -> {
-            builder.dependencies().add(a, "compile");
-        });
-        Util.make(this.getMCPConfigLibraries(), l -> l.removeIf(a -> a.getOs() != OS.UNKNOWN)).forEach(a -> {
-            builder.dependencies().add(a, "compile");
-        });
-
-        FileUtils.ensureParent(output);
-        try (var os = new FileOutputStream(output)) {
-            os.write(builder.build().getBytes(StandardCharsets.UTF_8));
-        } catch (IOException | ParserConfigurationException | TransformerException e) {
-            Util.sneak(e);
-        }
-    }
-
-    // TODO CLEANUP
-    // TODO [MCMaven][ForgeRepo] store partial variants as files in a "variants" folder, then merge them into the module
-    private void forgeGradleModule(String minecraft, File output) {
-        int dashIdx = minecraft.indexOf('-');
-        @Deprecated final var mcVersionWithoutMCP = dashIdx > -1 ? minecraft.substring(0, minecraft.indexOf('-')) : minecraft;
-        @Deprecated final var officialVersion = "official-" + mcVersionWithoutMCP;
-
-        // set the mappings version. unused for now.
-        // if the current mappings = the official mappings, set to null so we don't duplicate the variants
-        final var mappingsVersion = Util.replace("official-" + mcVersionWithoutMCP, s -> {
-            if (officialVersion.equals(s)) {
-                return null;
-            }
-
-            return s;
-        });
-
-        var module = GradleModule.of("net.minecraft", this.side, minecraft);
-
-        // TODO move this variant creation to it's own method. it is easily reproducible
-        // official
-        var officialClasses = Util.make(new GradleModule.Variant(), variant -> {
-            variant.name = "classes-" + officialVersion;
-            variant.attributes = Map.of(
-                "org.gradle.usage", "java-runtime",
-                "org.gradle.category", "library",
-                "org.gradle.dependency.bundling", "external",
-                "org.gradle.libraryelements", "jar",
-                "net.minecraftforge.mappings.channel", "official",
-                "net.minecraftforge.mappings.version", mcVersionWithoutMCP
-            );
-            variant.files = Util.make(new ArrayList<>(), files -> {
-                files.add(Util.make(new GradleModule.Variant.File(), f -> {
-                    f.name = f.url = Artifact.from("net.minecraft", this.side, minecraft).getFilename();
-                    f.size = this.recompiled.length();
-                    f.sha1 = HashFunction.SHA1.sneakyHash(this.recompiled);
-                    f.sha256 = HashFunction.SHA256.sneakyHash(this.recompiled);
-                    f.sha512 = HashFunction.SHA512.sneakyHash(this.recompiled);
-                    f.md5 = HashFunction.MD5.sneakyHash(this.recompiled);
-                }));
-            });
-            variant.dependencies = Util.make(new ArrayList<>(), dependencies -> {
-                Consumer<Artifact> addDependencies = artifact -> {
-                    var os = artifact.getOs();
-                    var dependency = GradleModule.Variant.Dependency.of(artifact);
-                    if (os != OS.UNKNOWN)
-                        dependency.attributes = Map.of(
-                            "net.minecraftforge.native.operatingSystem", os.key().toLowerCase()
-                        );
-                };
-                this.getMCLibraries().forEach(addDependencies);
-                this.getMCPConfigLibraries().forEach(addDependencies);
-            });
-        });
-        var officialSources = Util.make(new GradleModule.Variant(), variant -> {
-            variant.name = "sources-" + officialVersion;
-            variant.attributes = Map.of(
-                "org.gradle.usage", "java-runtime",
-                "org.gradle.category", "documentation",
-                "org.gradle.dependency.bundling", "external",
-                "org.gradle.docstype", "sources",
-                "org.gradle.libraryelements", "jar",
-                "net.minecraftforge.mappings.channel", "official",
-                "net.minecraftforge.mappings.version", mcVersionWithoutMCP
-            );
-            variant.files = Util.make(new ArrayList<>(), files -> {
-                files.add(Util.make(new GradleModule.Variant.File(), f -> {
-                    f.name = f.url = Artifact.from("net.minecraft", this.side, minecraft, "sources").getFilename();
-                    f.size = this.sources.length();
-                    f.sha1 = HashFunction.SHA1.sneakyHash(this.sources);
-                    f.sha256 = HashFunction.SHA256.sneakyHash(this.sources);
-                    f.sha512 = HashFunction.SHA512.sneakyHash(this.sources);
-                    f.md5 = HashFunction.MD5.sneakyHash(this.sources);
-                }));
-            });
-        });
-        module.variant(officialClasses);
-        module.variant(officialSources);
-
-        // TODO [MCMaven][ForgeRepo] This is a mess. Clean it up.
-        // ALSO TODO add parchment mappings and other mappings support
-
-        FileUtils.ensureParent(output);
-        try {
-            JsonData.toJson(module, output);
-        } catch (IOException e) {
-            Util.sneak(e);
-        }
-    }
-
-    private File execute(String message, Task task) {
-        try {
-            Log.info(message);
-            Log.push();
-            return task.execute();
-        } finally {
-            Log.pop();
-        }
     }
 
     // TODO delete this after we've implemented the alternative
@@ -345,7 +164,7 @@ public class MCPSide implements HasUnnamedSources {
     private SingleFileOutput renameSources(SingleFileOutput sources, SingleFileOutput names) {
         var task = task("renameSource", RenameSources.class);
         task.getInput().convention(sources.getOutput());
-        task.getNames().convention(names.getOutput());
+        task.names().convention(names.getOutput());
         task.getJavadocs().convention(true);
         task.getEncoding().convention(mcp.config.encoding);
         task.getOutput().convention(local.file("renamed-sources.jar"));
@@ -466,7 +285,7 @@ public class MCPSide implements HasUnnamedSources {
             return this.srg2names.computeIfAbsent(new Key(channel, version), key -> {
                 var task = task("makeSrg2Names" + key.clean(), RenameMappingFile.class);
                 task.getMappings().convention(srg2srg().getOutput());
-                task.getNames().convention(names(channel, version).getOutput());
+                task.names().convention(names(channel, version).getOutput());
                 task.getOutput().convention(local.file("srg2named" + key.clean() + ".tsrg"));
                 return task;
             });
@@ -494,7 +313,7 @@ public class MCPSide implements HasUnnamedSources {
             return this.obf2names.computeIfAbsent(new Key(channel, version), key -> {
                 var task = task("makeObf2Names" + key.clean(), RenameMappingFile.class);
                 task.getMappings().convention(obf2srg().getOutput());
-                task.getNames().convention(names(channel, version).getOutput());
+                task.names().convention(names(channel, version).getOutput());
                 task.getOutput().convention(local.file("obf2named" + key.clean() + ".tsrg"));
                 return task;
             });

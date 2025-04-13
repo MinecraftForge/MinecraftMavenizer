@@ -7,8 +7,6 @@ plugins {
     alias libs.plugins.licenser
     alias libs.plugins.gradleutils
     alias libs.plugins.shadow
-
-    alias libs.plugins.extraJavaModuleInfo
 }
 
 final projectDisplayName = 'Minecraft Mavenizer'
@@ -21,13 +19,6 @@ println "Version: $version"
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-extraJavaModuleInfo {
-    failOnMissingModuleInfo = false
-
-    automaticModule libs.diff, 'io.codechicken.diffpatch'
-    automaticModule libs.srgutils, 'net.minecraftforge.srgutils'
-}
-
 dependencies {
     implementation libs.jopt
     implementation libs.gson
@@ -38,11 +29,7 @@ dependencies {
     implementation libs.fastcsv
     implementation libs.commonsio
 
-    implementation libs.utils.files
-    implementation libs.utils.download
-    implementation libs.utils.hash
-    implementation libs.utils.data
-    implementation libs.utils.logging
+    implementation libs.bundles.utils
 
     // Static Analysis
     compileOnly libs.nulls
@@ -55,6 +42,17 @@ license {
 }
 
 tasks.named('jar', Jar) {
+    manifest {
+        attributes([
+            'Specification-Title'   : projectDisplayName,
+            'Specification-Vendor'  : projectVendor,
+            'Specification-Version' : gitversion.info.tag,
+            'Implementation-Title'  : projectDisplayName,
+            'Implementation-Vendor' : projectVendor,
+            'Implementation-Version': project.version
+        ], 'net/minecraftforge/mcmaven/impl/')
+    }
+
     archiveClassifier = 'slim'
     exclude 'net/minecraftforge/mcmaven/cli/**'
 }
@@ -64,19 +62,11 @@ tasks.named('shadowJar', ShadowJar) {
         attributes([
             'Main-Class': 'net.minecraftforge.mcmaven.cli.Main'
         ])
-        attributes([
-            'Specification-Title'   : projectDisplayName,
-            'Specification-Vendor'  : projectVendor,
-            'Specification-Version' : gitversion.info.tag,
-            'Implementation-Title'  : projectDisplayName,
-            'Implementation-Vendor' : projectVendor,
-            'Implementation-Version': project.version
-        ], 'net/minecraftforge/mcmaven/cli')
     }
 
     archiveClassifier = ''
     minimize {
-        exclude(dependency(libs.jver.get()))
+        exclude dependency(libs.jver.get())
     }
 }
 
@@ -96,7 +86,6 @@ changelog {
 publishing {
     publications.register('mavenJava', MavenPublication) {
         from components.shadow
-        artifact jar
 
         artifactId = project.name
         changelog.publish it

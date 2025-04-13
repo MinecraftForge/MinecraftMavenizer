@@ -4,14 +4,16 @@
  */
 package net.minecraftforge.mcmaven.impl.data;
 
+import net.minecraftforge.mcmaven.impl.util.Arch;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
+import net.minecraftforge.mcmaven.impl.util.GradleAttributes;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.OS;
-import net.minecraftforge.util.data.json.JsonData;
+import net.minecraftforge.util.hash.HashFunction;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,17 +32,14 @@ public class GradleModule {
     /** optional. */
     public List<Variant> variants;
 
-    public static GradleModule of(String group, String name, String version) {
-        var module = new GradleModule();
-        module.component = new Component();
-        module.component.group = group;
-        module.component.module = name;
-        module.component.version = version;
-        return module;
+    public static GradleModule of(Artifact artifact) {
+        return of(artifact.getGroup(), artifact.getName(), artifact.getVersion());
     }
 
-    public void toJson(File output) throws IOException {
-        JsonData.toJson(this, output);
+    public static GradleModule of(String group, String name, String version) {
+        var module = new GradleModule();
+        module.component = new Component(group, name, version);
+        return module;
     }
 
     public Variant variant() {
@@ -53,6 +52,24 @@ public class GradleModule {
 
         variants.add(variant);
         return variant;
+    }
+
+    public Map<GradleAttributes.NativeDescriptor, Variant> nativeVariants() {
+        if (variants == null)
+            variants = new ArrayList<>();
+
+        var ret = new HashMap<GradleAttributes.NativeDescriptor, Variant>();
+
+        for (var os : GradleAttributes.OperatingSystemFamily.ALL) {
+            for (var arch : GradleAttributes.MachineArchitecture.ALL) {
+                var natives = new GradleAttributes.NativeDescriptor(os, arch);
+                var variant = Variant.ofNative(natives);
+                variants.add(variant);
+                ret.put(natives, variant);
+            }
+        }
+
+        return ret;
     }
 
     /** Describes the identity of the component contained in the module. */
@@ -68,6 +85,12 @@ public class GradleModule {
          * that this metadata file defines the metadata for the whole component.
          */
         public String url;
+
+        private Component(String group, String module, String version) {
+            this.group = group;
+            this.module = module;
+            this.version = version;
+        }
     }
 
     /** Describes the producer of this metadata file and the contents of the module. */
@@ -101,19 +124,20 @@ public class GradleModule {
         /** Information about where the metadata and files of this variant are available. */
         public AvailableAt availableAt;
 
-        public static Variant ofNative(OS os) {
-            return Util.make(new Variant(), variant -> {
-                variant.name = os.key().toLowerCase();
-                variant.attributes = Map.of(
-                    "org.gradle.usage", "java-runtime",
-                    "org.gradle.category", "library",
-                    "org.gradle.dependency.bundling", "external",
-                    "org.gradle.libraryelements", "jar",
-                    "net.minecraftforge.native.operatingSystem", os.key().toLowerCase()
-                );
-                variant.dependencies = new ArrayList<>();
-            });
+        public static Variant ofNative(GradleAttributes.NativeDescriptor natives) {
+            var ret = new Variant();
+            ret.name = natives.variantName();
+            ret.dependencies = new ArrayList<>();
+            ret.attributes = natives.toMap(Map.of(
+                "org.gradle.usage", "java-runtime",
+                "org.gradle.category", "library",
+                "org.gradle.dependency.bundling", "external",
+                "org.gradle.libraryelements", "jar"
+            ));
+            return ret;
         }
+
+        public record NativeDescriptor(OS os, Arch arch) { }
 
         /** Describes a file of a variant. */
         public static class File {
@@ -131,6 +155,15 @@ public class GradleModule {
             public String sha512;
             /** The MD5 checksum of the file. */
             public String md5;
+
+            public File(String name, java.io.File file) {
+                this.name = this.url = name;
+                this.size = file.length();
+                this.sha1 = HashFunction.SHA1.sneakyHash(file);
+                this.sha256 = HashFunction.SHA256.sneakyHash(file);
+                this.sha512 = HashFunction.SHA512.sneakyHash(file);
+                this.md5 = HashFunction.MD5.sneakyHash(file);
+            }
         }
 
         /** Describes a dependency of a variant. */
@@ -145,13 +178,22 @@ public class GradleModule {
             public List<Exclude> excludes;
             /** A explanation why the dependency is used. */
             public String reason;
-            /** Attributes that will override the consumer attributes during dependency resolution for this specific dependency. */
+            /**
+             * Attributes that will override the consumer attributes during dependency resolution for this specific
+             * dependency.
+             */
             public Map<String, Object> attributes;
             /** Declares the capabilities that the dependency must provide in order to be selected. */
             public List<Capability> requestedCapabilities;
-            /** If set to true, all strict versions of the target module will be treated as if they were defined on the variant defining this dependency. */
+            /**
+             * If set to true, all strict versions of the target module will be treated as if they were defined on the
+             * variant defining this dependency.
+             */
             public Boolean endorseStrictVersions;
-            /** Includes additional information to be used if the dependency points at a module that did not publish Gradle module metadata. */
+            /**
+             * Includes additional information to be used if the dependency points at a module that did not publish
+             * Gradle module metadata.
+             */
             public ThirdPartyCompatibility thirdPartyCompatibility;
 
             public void setArtifactSelector(ThirdPartyCompatibility.ArtifactSelector selector) {
@@ -162,25 +204,20 @@ public class GradleModule {
             }
 
             public static Dependency of(Artifact artifact) {
-                return Util.make(new Dependency(), dependency -> {
-                    dependency.group = artifact.getGroup();
-                    dependency.module = artifact.getName();
-                    dependency.version = new Dependency.Version();
-                    dependency.version.requires = artifact.getVersion();
+                var dependency = new Dependency();
+                dependency.group = artifact.getGroup();
+                dependency.module = artifact.getName();
+                dependency.version = new Dependency.Version();
+                dependency.version.requires = artifact.getVersion();
 
-                    if (artifact.getClassifier() != null || !artifact.getExtension().equals("jar")) {
-                        dependency.setArtifactSelector(ThirdPartyCompatibility.ArtifactSelector.of(artifact));
-                    }
+                if (artifact.getClassifier() != null || !artifact.getExtension().equals("jar"))
+                    dependency.setArtifactSelector(ThirdPartyCompatibility.ArtifactSelector.of(artifact));
 
-                    // TODO get per-dependency attributes working sometime in the future
-                    /*
-                    if (artifact instanceof Artifact.WithOS withOS) {
-                        dependency.attributes = Map.of(
-                            "net.minecraftforge.native.operatingSystem", withOS.os.key().toLowerCase()
-                        );
-                    }
-                    */
-                });
+                var attributes = GradleAttributes.NativeDescriptor.from(artifact).toMap();
+                if (!attributes.isEmpty())
+                    dependency.attributes = attributes;
+
+                return dependency;
             }
 
             /** Describes the version of a dependency. */
@@ -203,9 +240,15 @@ public class GradleModule {
                 public String module;
             }
 
-            /** Includes additional information to be used if the dependency points at a module that did not publish Gradle module metadata. */
+            /**
+             * Includes additional information to be used if the dependency points at a module that did not publish
+             * Gradle module metadata.
+             */
             public static class ThirdPartyCompatibility {
-                /** Information to select a specific artifact of the dependency that is not mentioned in the dependency's metadata. */
+                /**
+                 * Information to select a specific artifact of the dependency that is not mentioned in the dependency's
+                 * metadata.
+                 */
                 public ArtifactSelector artifactSelector;
 
                 /** Information to select a specific artifact. */
@@ -241,7 +284,10 @@ public class GradleModule {
             public Version version;
             /** A explanation why the constraint is used. */
             public String reason;
-            /** Attributes that will override the consumer attributes during dependency resolution for this specific dependency. */
+            /**
+             * Attributes that will override the consumer attributes during dependency resolution for this specific
+             * dependency.
+             */
             public Map<String, Object> attributes;
 
             /** Describes the version of a dependency constraint. */

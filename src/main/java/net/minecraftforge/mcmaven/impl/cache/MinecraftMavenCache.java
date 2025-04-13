@@ -16,8 +16,13 @@ import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Util;
 
 /** Represents the Minecraft maven cache for this tool. */
-public class MinecraftMavenCache extends MavenCache {
-    private final File mcDir = new File(MCJsonUtils.getMCDir(), "libraries");
+public final class MinecraftMavenCache extends MavenCache {
+    private static final HashFunction[] KNOWN_HASHES = {
+        // Can't use MD5 or SHA256 as Mojang doesn't seem to provide them.
+        HashFunction.SHA1
+    };
+
+    private static final File LOCAL_MCLIBS = new File(MCJsonUtils.getMCDir(), "libraries");
 
     /**
      * Initializes a new maven cache with the given cache directory.
@@ -25,12 +30,7 @@ public class MinecraftMavenCache extends MavenCache {
      * @param root The cache directory
      */
     public MinecraftMavenCache(File root) {
-        super("mojang", Constants.MOJANG_MAVEN, root);
-
-        // Can't use MD5 or SHA256 as Mojang doesn't seem to provide them.
-        this.known_hashes = new HashFunction[] {
-            HashFunction.SHA1
-        };
+        super("mojang", Constants.MOJANG_MAVEN, root, KNOWN_HASHES);
     }
 
     /**
@@ -48,12 +48,12 @@ public class MinecraftMavenCache extends MavenCache {
 
     @Override
     protected void downloadFile(File target, String path) throws IOException {
-        if (!mcDir.exists()) {
+        if (!LOCAL_MCLIBS.exists()) {
             super.downloadFile(target, path);
             return;
         }
 
-        var local = new File(mcDir, path.replace('/', File.separatorChar));
+        var local = new File(LOCAL_MCLIBS, path.replace('/', File.separatorChar));
         if (local.exists()) {
             FileUtils.ensureParent(target);
             // TODO: [MCMaven] Check hashes for local minecraft archive

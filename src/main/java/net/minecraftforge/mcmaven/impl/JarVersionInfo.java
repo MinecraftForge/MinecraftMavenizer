@@ -2,13 +2,14 @@
  * Copyright (c) Forge Development LLC
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.mcmaven.cli;
+package net.minecraftforge.mcmaven.impl;
 
 import org.jetbrains.annotations.UnknownNullability;
 
 import java.util.Objects;
 import java.util.function.Consumer;
 
+@SuppressWarnings("SameParameterValue")
 record JarVersionInfo(
     String fallbackTitle,
     String specificationTitle,
@@ -30,6 +31,10 @@ record JarVersionInfo(
     @SuppressWarnings("deprecation")
     static JarVersionInfo of(String fallbackTitle, String packageName) {
         return of(fallbackTitle, Package.getPackage(packageName));
+    }
+
+    static JarVersionInfo of(String fallbackTitle, Object object) {
+        return of(fallbackTitle, object.getClass());
     }
 
     static JarVersionInfo of(String fallbackTitle, Class<?> clazz) {

@@ -121,12 +121,12 @@ public class Artifact implements Comparable<Artifact>, Serializable {
         var path = root.toPath().relativize(artifact.toPath());
         var names = IntStream.range(0, path.getNameCount()).mapToObj(i -> path.getName(i).toString()).toArray(String[]::new);
 
-        this.group = Arrays.stream(names, 0, names.length - 4).collect(Collectors.joining(":"));
+        this.group = Arrays.stream(names, 0, names.length - 3).collect(Collectors.joining(":"));
         this.name = names[names.length - 3];
         this.version = names[names.length - 2];
 
-        var fileName = Util.replace(names[names.length - 1], s -> s.substring(0, s.lastIndexOf('.')));
-        var classifierCandidates = new ArrayList<>(Arrays.asList(fileName.substring(fileName.indexOf(version) + version.length()).split("-")));
+        var fileName = names[names.length - 1];
+        var classifierCandidates = new ArrayList<>(Arrays.asList(fileName.substring(fileName.indexOf(version) + version.length(), fileName.lastIndexOf('.')).split("-")));
         classifierCandidates.removeIf(String::isEmpty);
 
         this.classifier = classifierCandidates.isEmpty() ? null : String.join("-", classifierCandidates);
@@ -150,7 +150,7 @@ public class Artifact implements Comparable<Artifact>, Serializable {
             if (s.isBlank()) continue;
 
             var osCandidate = OS.byName(s);
-            if (osCandidate != null && osCandidate != OS.UNKNOWN) {
+            if (osCandidate != OS.UNKNOWN) {
                 return osCandidate;
             }
         }
@@ -278,6 +278,14 @@ public class Artifact implements Comparable<Artifact>, Serializable {
         return new Artifact(group, name, version, classifier, ext, os, arch);
     }
 
+    public Artifact withClassifier(String classifier) {
+        return new Artifact(group, name, version, classifier, ext, os, arch);
+    }
+
+    public Artifact withExtension(String ext) {
+        return new Artifact(group, name, version, classifier, ext, os, arch);
+    }
+
     public Artifact withOS(OS os) {
         return new Artifact(group, name, version, classifier, ext, os, arch);
     }
@@ -310,6 +318,14 @@ public class Artifact implements Comparable<Artifact>, Serializable {
 
     @Override
     public int compareTo(Artifact o) {
-        return Util.compare(this.getDescriptor(), o.getDescriptor());
+        if (o == this) return 0;
+        if (o == null) return 1;
+
+        return Objects.equals(this.group, o.group)
+            && Objects.equals(this.name, o.name)
+            && Objects.equals(this.classifier, o.classifier)
+            && Objects.equals(this.ext, o.ext)
+            ? Util.compare(this.getComparableVersion(), o.getComparableVersion())
+            : Util.compare(this.getDescriptor(), o.getDescriptor());
     }
 }

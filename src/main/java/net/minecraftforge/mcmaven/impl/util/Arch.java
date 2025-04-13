@@ -10,8 +10,8 @@ import java.util.Locale;
 public enum Arch {
     X86    ("x86",    "i386", "i686"),
     X86_64 ("x86_64", "x64", "amd64"),
-    ARM    ("arm",    "aarch32"),
-    ARM64  ("arm64",  "aarch64"),
+    ARM    ("arm",    "aarch32", "aarch_32"),
+    ARM64  ("arm64",  "aarch64", "aarch_64"),
     UNKNOWN("unknown");
 
     private static final Arch[] $values = values();

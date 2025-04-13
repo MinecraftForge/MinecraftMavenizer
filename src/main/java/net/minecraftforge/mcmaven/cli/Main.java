@@ -4,21 +4,20 @@
  */
 package net.minecraftforge.mcmaven.cli;
 
-import java.io.File;
-import java.util.TreeMap;
-
+import joptsimple.AbstractOptionSpec;
 import joptsimple.OptionParser;
-import joptsimple.OptionSet;
-import net.minecraftforge.mcmaven.impl.cache.Cache;
-import net.minecraftforge.mcmaven.impl.forge.ForgeRepo;
-import net.minecraftforge.mcmaven.impl.mcpconfig.MCPConfigRepo;
-import net.minecraftforge.mcmaven.impl.util.Artifact;
+import joptsimple.OptionSpecBuilder;
+import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.util.data.json.JsonData;
-import net.minecraftforge.util.download.DownloadUtils;
+import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
 import net.minecraftforge.util.logging.Log;
 
-// TODO [MCMaven] Make an actual API with an api package.
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 /**
  * Main entry point for the tool.
  *
@@ -39,6 +38,7 @@ public class Main {
         var parser = new OptionParser();
         parser.allowsUnrecognizedOptions();
 
+        //@formatter:off
         // help message
         var helpO = parser.accepts("help", "Displays this help message and exits");
 
@@ -67,66 +67,60 @@ public class Main {
             "Root directory to generate the maven repository")
             .withRequiredArg().ofType(File.class).defaultsTo(new File("output"));
 
-        var artifacts = new TreeMap<String, String>();
-        artifacts.put("forge",  Constants.FORGE_ARTIFACT);
-        artifacts.put("fml",    Constants.FMLONLY_ARTIFACT);
-        artifacts.put("mc",     "net.minecraft:joined");
-        artifacts.put("client", "net.minecraft:client");
-        artifacts.put("server", "net.minecraft:server");
-        for (String key : artifacts.keySet())
-            parser.accepts(key, "Shorthand for --artifact " + artifacts.get(key));
+        // cache only, fail if out-of-date
+        var cacheOnlyO = parser.accepts("cache-only",
+            "Only use caches, fail if any downloads need to occur or if a task needs to do work");
 
-        OptionSet options = parser.parse(args);
+        var shorthandOptions = new HashMap<String, OptionSpecBuilder>();
+        var artifacts = Map.of(
+            "forge",  Constants.FORGE_ARTIFACT,
+            "fml",    Constants.FMLONLY_ARTIFACT,
+            "mc",     "net.minecraft:joined",
+            "client", "net.minecraft:client",
+            "server", "net.minecraft:server"
+        );
+        for (var entry : artifacts.entrySet()) {
+            var key = entry.getKey();
+            var option = parser.accepts(entry.getKey(),
+                "Shorthand for --artifact " + entry.getValue());
+            shorthandOptions.put(key, option);
+
+            // do not allow with --artifact
+            option.availableUnless(artifactO);
+        }
+        shorthandOptions.forEach((key, option) -> {
+            // do not allow with other keys in the artifacts map
+            for (var other : shorthandOptions.keySet()) {
+                if (!other.equals(key))
+                    option.availableUnless(other);
+            }
+        });
+        //@formatter:on
+
+        var options = parser.parse(args);
         if (options.has(helpO)) {
-            parser.printHelpOn(System.out);
+            parser.printHelpOn(Log.INFO);
             return;
         }
+
+        // global options
+        GlobalOptions.cacheOnly = options.has(cacheOnlyO);
 
         var output = options.valueOf(outputO);
         var cache = options.valueOf(cacheO);
         var jdkCache = !options.has(cacheO) || options.has(jdkCacheO)
             ? options.valueOf(jdkCacheO)
             : new File(cache, "jdks");
+        var mcmaven = new MinecraftMaven(output, cache, jdkCache);
 
         var artifact = options.valueOf(artifactO);
-        for (var key : artifacts.keySet()) {
-            if (options.has(key))
-                artifact = artifacts.get(key);
+        for (var entry : artifacts.entrySet()) {
+            if (options.has(entry.getKey()))
+                artifact = entry.getValue();
         }
 
         var version = options.valueOf(versionO);
-        var caches = new Cache(cache, jdkCache);
 
-        JarVersionInfo.of("Minecraft Mavenizer", Main.class).hello(Log::info, true, false);
-        Log.info("  Output:    " + output.getAbsolutePath());
-        Log.info("  Cache:     " + cache.getAbsolutePath());
-        Log.info("  JDK Cache: " + jdkCache.getAbsolutePath());
-        Log.info("  Artifact:  " + artifact);
-        Log.info("  Version:   " + version);
-
-        if (Constants.FORGE_ARTIFACT.equals(artifact)) {
-            var proc = new ForgeRepo(caches, output);
-            if (version == null) {
-                var data = DownloadUtils.downloadString(Constants.FORGE_PROMOS);
-                var promos = JsonData.promosSlim(data);
-                for (var ver : promos.versions().reversed())
-                    proc.process(ver);
-            } else if ("all".equals(version)) {
-                var versions = caches.forge.getVersions(Artifact.from(Constants.FORGE_ARTIFACT));
-                for (var ver : versions.reversed())
-                    proc.process(ver);
-            } else {
-                proc.process(version);
-            }
-        } else if (artifact.startsWith("net.minecraft:") && !"net.minecraft:server".equals(artifact)) {
-            var proc = new MCPConfigRepo(caches, output);
-            if (version == null)
-                throw new IllegalArgumentException("No version specified for MCPConfig");
-
-            var mcp =  proc.get(Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip"));
-            mcp.process(artifact.substring("net.minecraft:".length()));
-        } else {
-            throw new IllegalArgumentException("Artifact '%s' is currently Unsupported. Will add later".formatted(artifact));
-        }
+        mcmaven.minecraft(artifact, version);
     }
 }

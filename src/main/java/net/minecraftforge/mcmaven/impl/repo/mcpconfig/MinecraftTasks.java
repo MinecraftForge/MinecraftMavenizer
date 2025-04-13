@@ -2,13 +2,16 @@
  * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.mcmaven.impl.mcpconfig;
+package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.util.Constants;
+import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.hash.HashStore;
@@ -28,7 +31,7 @@ public class MinecraftTasks {
      * @param cache   The caches folder
      * @param version The version to handle tasks for
      */
-    public MinecraftTasks(File cache, String version) {
+    MinecraftTasks(File cache, String version) {
         this.cache = new File(cache, "minecraft_tasks");
         this.version = version;
         this.launcherManifest = Task.named("downloadLauncherManifest", this::downloadLauncherManifest);
@@ -37,8 +40,15 @@ public class MinecraftTasks {
 
     private File downloadLauncherManifest() {
         var target = new File(this.cache, "launcher_manifest.json");
-        if (!target.exists() || target.lastModified() < System.currentTimeMillis() - Constants.CACHE_TIMEOUT)
-            DownloadUtils.downloadFile(target, Constants.LAUNCHER_MANIFEST);
+        if (!target.exists() || (!GlobalOptions.cacheOnly && target.lastModified() < System.currentTimeMillis() - Constants.CACHE_TIMEOUT)) {
+            try {
+                GlobalOptions.assertNotCacheOnly();
+                DownloadUtils.downloadFile(target, Constants.LAUNCHER_MANIFEST);
+            } catch (IOException e) {
+                Util.sneak(e);
+            }
+        }
+
         return target;
     }
 
@@ -52,19 +62,24 @@ public class MinecraftTasks {
         if (target.exists() && cache.isSame())
             return target;
 
+        GlobalOptions.assertNotCacheOnly();
+
         var manifest = JsonData.launcherManifest(manifestF);
         var url = manifest.getUrl(this.version);
         if (url == null)
             throw new IllegalStateException("Failed to find url for " + this.version + " version.json");
 
-        if (!DownloadUtils.downloadFile(target, url.toExternalForm()))
-            throw new IllegalStateException("Failed to download " + url);
+        try {
+            DownloadUtils.downloadFile(false, target, url.toExternalForm());
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to download " + url, e);
+        }
 
         cache.save();
         return target;
     }
 
-    public Task versionFile(String key, String ext) {
+    Task versionFile(String key, String ext) {
         return this.versionFiles.computeIfAbsent(key, k ->
             Task.named("download[" + this.version + "][" + key + ']',
                 () -> downloadVersionFile(key, ext)
@@ -82,13 +97,18 @@ public class MinecraftTasks {
         if (target.exists() && cache.isSame())
             return target;
 
+        GlobalOptions.assertNotCacheOnly();
+
         var manifest = JsonData.minecraftVersion(manifestF);
         var dl = manifest.getDownload(key);
         if (dl == null || dl.url == null)
             throw new IllegalStateException("Missing '" + key  +"' from " + manifestF.getAbsolutePath());
 
-        if (!DownloadUtils.downloadFile(target, dl.url.toExternalForm()))
-            throw new IllegalStateException("Failed to download " + dl.url);
+        try {
+            DownloadUtils.downloadFile(target, dl.url.toExternalForm());
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to download " + dl.url, e);
+        }
 
         cache.save();
         return target;

@@ -191,7 +191,7 @@ public final class ProcessUtils {
             var main = getMainClass(tool);
             var launcher = new File(javaHome, "bin/java" + OS.CURRENT.exe());
             Consumer<String> lines = line -> {
-                Log.info(line);
+                Log.quiet(line);
                 log.println(line);
             };
             lines.accept("Java:      " + launcher.getAbsolutePath());
@@ -337,10 +337,10 @@ public final class ProcessUtils {
 
             var launcher = new File(javaHome, "bin/javac" + OS.CURRENT.exe());
             Consumer<String> lines = line -> {
-                Log.info(line);
+                Log.quiet(line);
                 log.println(line);
             };
-            lines.accept("Javac:         " + launcher.getAbsolutePath());
+            lines.accept("Java Compiler: " + launcher.getAbsolutePath());
             lines.accept("Argument File: " + argsFile.getAbsolutePath());
             log.println("Arguments:");
             log.println(argsAll);

@@ -2,13 +2,15 @@
  * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.mcmaven.impl.mcpconfig;
+package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
 import de.siegmar.fastcsv.reader.CsvReader;
-import de.siegmar.fastcsv.reader.NamedCsvRecord;
 import net.minecraftforge.util.hash.HashFunction;
+import net.minecraftforge.util.logging.Log;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,6 +21,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,40 +32,40 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 // TODO GARBAGE GARBAGE GARBAGE, CLEAN UP OR RE-IMPLEMENT
-public class MCPNames {
-    private static final String NEWLINE = System.getProperty("line.separator");
-    private static final Pattern SRG_FINDER             = Pattern.compile("[fF]unc_\\d+_[a-zA-Z_]+|m_\\d+_|[fF]ield_\\d+_[a-zA-Z_]+|f_\\d+_|p_\\w+_\\d+_|p_\\d+_");
-    private static final Pattern CONSTRUCTOR_JAVADOC_PATTERN = Pattern.compile("^(?<indent>(?: {3})+|\\t+)(public |private|protected |)(?<generic><[\\w\\W]*>\\s+)?(?<name>[\\w.]+)\\((?<parameters>.*)\\)\\s+(?:throws[\\w.,\\s]+)?\\{");
-    private static final Pattern METHOD_JAVADOC_PATTERN = Pattern.compile("^(?<indent>(?: {3})+|\\t+)(?!return)(?:\\w+\\s+)*(?<generic><[\\w\\W]*>\\s+)?(?<return>\\w+[\\w$.]*(?:<[\\w\\W]*>)?[\\[\\]]*)\\s+(?<name>(?:func_|m_)[0-9]+_[a-zA-Z_]*)\\(");
-    private static final Pattern FIELD_JAVADOC_PATTERN  = Pattern.compile("^(?<indent>(?: {3})+|\\t+)(?!return)(?:\\w+\\s+)*\\w+[\\w$.]*(?:<[\\w\\W]*>)?[\\[\\]]*\\s+(?<name>(?:field_|f_)[0-9]+_[a-zA-Z_]*) *[=;]");
-    private static final Pattern CLASS_JAVADOC_PATTERN  = Pattern.compile("^(?<indent> *|\\t*)([\\w|@]*\\s)*(class|interface|@interface|enum) (?<name>[\\w]+)");
-    private static final Pattern CLOSING_CURLY_BRACE    = Pattern.compile("^(?<indent> *|\\t*)}");
-    private static final Pattern PACKAGE_DECL           = Pattern.compile("^[\\s]*package(\\s)*(?<name>[\\w|.]+);$");
-    private static final Pattern LAMBDA_DECL            = Pattern.compile("\\((?<args>(?:(?:, ){0,1}p_[\\w]+_\\d+_\\b)+)\\) ->");
+final class MCPNames {
+    //@formatter:off
+    private static final Pattern
+        SRG_FINDER                  = Pattern.compile("[fF]unc_\\d+_[a-zA-Z_]+|m_\\d+_|[fF]ield_\\d+_[a-zA-Z_]+|f_\\d+_|p_\\w+_\\d+_|p_\\d+_"),
+        CONSTRUCTOR_JAVADOC_PATTERN = Pattern.compile("^(?<indent>(?: {3})+|\\t+)(public |private|protected |)(?<generic><[\\w\\W]*>\\s+)?(?<name>[\\w.]+)\\((?<parameters>.*)\\)\\s+(?:throws[\\w.,\\s]+)?\\{"),
+        METHOD_JAVADOC_PATTERN      = Pattern.compile("^(?<indent>(?: {3})+|\\t+)(?!return)(?:\\w+\\s+)*(?<generic><[\\w\\W]*>\\s+)?(?<return>\\w+[\\w$.]*(?:<[\\w\\W]*>)?[\\[\\]]*)\\s+(?<name>(?:func_|m_)[0-9]+_[a-zA-Z_]*)\\("),
+        FIELD_JAVADOC_PATTERN       = Pattern.compile("^(?<indent>(?: {3})+|\\t+)(?!return)(?:\\w+\\s+)*\\w+[\\w$.]*(?:<[\\w\\W]*>)?[\\[\\]]*\\s+(?<name>(?:field_|f_)[0-9]+_[a-zA-Z_]*) *[=;]"),
+        CLASS_JAVADOC_PATTERN       = Pattern.compile("^(?<indent> *|\\t*)([\\w|@]*\\s)*(class|interface|@interface|enum) (?<name>[\\w]+)"),
+        CLOSING_CURLY_BRACE         = Pattern.compile("^(?<indent> *|\\t*)}"),
+        PACKAGE_DECL                = Pattern.compile("^[\\s]*package(\\s)*(?<name>[\\w|.]+);$"),
+        LAMBDA_DECL                 = Pattern.compile("\\((?<args>(?:(?:, ){0,1}p_[\\w]+_\\d+_\\b)+)\\) ->");
+    //@formatter:on
 
-    public static MCPNames load(File data) throws IOException {
-        Map<String, String> names = new HashMap<>();
-        Map<String, String> docs = new HashMap<>();
-        try (ZipFile zip = new ZipFile(data)) {
-            List<ZipEntry> entries = zip.stream().filter(e -> e.getName().endsWith(".csv")).collect(Collectors.toList());
-            for (ZipEntry entry : entries) {
-                try (CsvReader<NamedCsvRecord> reader = CsvReader.builder().ofNamedCsvRecord(new InputStreamReader(zip.getInputStream(entry)))) {
-                    reader.forEach(row -> {
-                        String obf = row.getHeader().contains("searge") ? "searge" : "param";
-                        boolean hasDesc = row.getHeader().contains("desc");
-                        String searge = row.getField(obf);
+    static MCPNames load(File data) throws IOException {
+        var names = new HashMap<String, String>();
+        var docs = new HashMap<String, String>();
+        try (var zip = new ZipFile(data)) {
+            var entries = zip.stream().filter(e -> e.getName().endsWith(".csv")).toList();
+            for (var entry : entries) {
+                try (var reader = CsvReader.builder().ofNamedCsvRecord(new InputStreamReader(zip.getInputStream(entry)))) {
+                    for (var row : reader) {
+                        var header = row.getHeader();
+                        var obf = header.contains("searge") ? "searge" : "param";
+                        var searge = row.getField(obf);
                         names.put(searge, row.getField("name"));
-                        if (hasDesc) {
+                        if (header.contains("desc")) {
                             String desc = row.getField("desc");
-                            if (!desc.isEmpty())
+                            if (!desc.isBlank())
                                 docs.put(searge, desc);
                         }
-                    });
+                    }
                 }
             }
         }
@@ -70,27 +73,33 @@ public class MCPNames {
         return new MCPNames(HashFunction.SHA1.hash(data), names, docs);
     }
 
+    // NOTE: this is a micro-optimization to avoid creating a new pattern for every line
+    private static final Pattern ARGS_DELIM = Pattern.compile(", ");
+
+    // TODO [MCMaven][MCPNames] Not used for anything. Remove?
+    private final String hash;
     private final Map<String, String> names;
     private final Map<String, String> docs;
-    public final String hash;
 
-    private MCPNames(String hash, Map<String, String> names, Map<String, String> docs) {
+    MCPNames(String hash, Map<String, String> names, Map<String, String> docs) {
         this.hash = hash;
         this.names = names;
         this.docs = docs;
     }
 
-    public String rename(InputStream stream, boolean javadocs) throws IOException {
-        return rename(stream, javadocs, true, StandardCharsets.UTF_8);
+    String rename(String entry) {
+        return this.names.getOrDefault(entry, entry);
     }
 
-    public String rename(InputStream stream, boolean javadocs, boolean lambdas) throws IOException {
-        return rename(stream, javadocs, lambdas, StandardCharsets.UTF_8);
+    String rename(InputStream stream, boolean javadocs) throws IOException {
+        return this.rename(stream, javadocs, true, StandardCharsets.UTF_8);
     }
 
-    public String rename(InputStream stream, boolean javadocs, boolean lambdas, Charset sourceFileCharset)
-        throws IOException {
+    String rename(InputStream stream, boolean javadocs, boolean lambdas) throws IOException {
+        return this.rename(stream, javadocs, lambdas, StandardCharsets.UTF_8);
+    }
 
+    String rename(InputStream stream, boolean javadocs, boolean lambdas, Charset sourceFileCharset) throws IOException {
         String data = IOUtils.toString(stream, sourceFileCharset);
         List<String> input = IOUtils.readLines(new StringReader(data));
 
@@ -102,24 +111,23 @@ public class MCPNames {
         if (data.charAt(data.length() - 1) == '\r' || data.charAt(data.length() - 1) == '\n')
             input.add("");
 
-        List<String> lines = new ArrayList<>();
-        Deque<Pair<String, Integer>> innerClasses = new LinkedList<>(); //pair of inner class name & indentation
-        String _package = ""; //default package
-        Set<String> blacklist = null;
+        var lines = new ArrayList<String>();
+        var innerClasses = new LinkedList<Pair<String, Integer>>(); //pair of inner class name & indentation
+        var _package = ""; //default package
+        var blacklist = new HashSet<String>();
 
         if (!lambdas) {
-            blacklist = new HashSet<>();
             for (String line : input) {
-                Matcher m = LAMBDA_DECL.matcher(line);
-                if (!m.find())
-                    continue;
-                blacklist.addAll(Arrays.asList(m.group("args").split(", ")));
+                var matcher = LAMBDA_DECL.matcher(line);
+                if (!matcher.find()) continue;
+
+                blacklist.addAll(Arrays.asList(ARGS_DELIM.split(matcher.group("args"))));
             }
         }
 
         for (String line : input) {
             Matcher m = PACKAGE_DECL.matcher(line);
-            if(m.find())
+            if (m.find())
                 _package = m.group("name") + ".";
 
             if (javadocs) {
@@ -128,25 +136,24 @@ public class MCPNames {
             }
             lines.add(replaceInLine(line, blacklist));
         }
-        return String.join(NEWLINE, lines);
-    }
-
-    public String rename(String entry) {
-        return names.getOrDefault(entry, entry);
+        return String.join(System.lineSeparator(), lines);
     }
 
     /**
-     * Injects a javadoc into the given list of lines, if the given line is a
-     * method or field declaration.
-     * @param lines The current file content (to be modified by this method)
-     * @param line The line that was just read (will not be in the list)
-     * @param _package the name of the package this file is declared to be in, in com.example format;
+     * Injects a javadoc into the given list of lines, if the given line is a method or field declaration.
+     *
+     * @param lines        The current file content (to be modified by this method)
+     * @param line         The line that was just read (will not be in the list)
+     * @param _package     the name of the package this file is declared to be in, in com.example format;
      * @param innerClasses current position in inner class
      */
     private boolean injectJavadoc(List<String> lines, String line, String _package, Deque<Pair<String, Integer>> innerClasses) {
+        Matcher matcher;
+
         // constructors
-        Matcher matcher = CONSTRUCTOR_JAVADOC_PATTERN.matcher(line);
+        matcher = CONSTRUCTOR_JAVADOC_PATTERN.matcher(line);
         boolean isConstructor = matcher.find() && !innerClasses.isEmpty() && innerClasses.peek().getLeft().contains(matcher.group("name"));
+
         // methods
         if (!isConstructor)
             matcher = METHOD_JAVADOC_PATTERN.matcher(line);
@@ -182,7 +189,7 @@ public class MCPNames {
 
         //classes
         matcher = CLASS_JAVADOC_PATTERN.matcher(line);
-        if(matcher.find()) {
+        if (matcher.find()) {
             //we maintain a stack of the current (inner) class in com.example.ClassName$Inner format (along with indentation)
             //if the stack is not empty we are entering a new inner class
             String currentClass = (innerClasses.isEmpty() ? _package : innerClasses.peek().getLeft() + "$") + matcher.group("name");
@@ -197,13 +204,13 @@ public class MCPNames {
 
         //detect curly braces for inner class stacking/end identification
         matcher = CLOSING_CURLY_BRACE.matcher(line);
-        if(matcher.find()){
-            if(!innerClasses.isEmpty()) {
+        if (matcher.find()) {
+            if (!innerClasses.isEmpty()) {
                 int len = matcher.group("indent").length();
                 if (len == innerClasses.peek().getRight()) {
                     innerClasses.pop();
                 } else if (len < innerClasses.peek().getRight()) {
-                    System.err.println("Failed to properly track class blocks around class " + innerClasses.peek().getLeft() + ":" + (lines.size() + 1));
+                    Log.error("Failed to properly track class blocks around class " + innerClasses.peek().getLeft() + ":" + (lines.size() + 1));
                     return false;
                 }
             }
@@ -223,7 +230,7 @@ public class MCPNames {
     /*
      * There are certain times, such as Mixin Accessors that we wish to have the name of this method with the first character upper case.
      */
-    private String getMapped(String srg, /*@Nullable*/ Set<String> blacklist) {
+    private String getMapped(String srg, @Nullable Set<String> blacklist) {
         if (blacklist != null && blacklist.contains(srg))
             return srg;
 
@@ -237,9 +244,9 @@ public class MCPNames {
         return ret;
     }
 
-    private String replaceInLine(String line, /*@Nullable*/ Set<String> blacklist) {
-        StringBuffer buf = new StringBuffer();
-        Matcher matcher = SRG_FINDER.matcher(line);
+    private String replaceInLine(String line, @Nullable Set<String> blacklist) {
+        var buf = new StringBuffer();
+        var matcher = SRG_FINDER.matcher(line);
         while (matcher.find()) {
             // Since '$' is a valid character in identifiers, but we need to NOT treat this as a regex group, escape any occurrences
             matcher.appendReplacement(buf, Matcher.quoteReplacement(getMapped(matcher.group(), blacklist)));
@@ -248,106 +255,92 @@ public class MCPNames {
         return buf.toString();
     }
 
-    public static final class JavadocAdder
-    {
-        public static final String NEWLINE = System.getProperty("line.separator");
-        private JavadocAdder() { /* no constructing */ }
-
+    private interface JavadocAdder {
         /**
          * Converts a raw javadoc string into a nicely formatted, indented, and wrapped string.
-         * @param indent the indent to be inserted before every line.
-         * @param javadoc The javadoc string to be processed
-         * @param multiline If this javadoc is mutlilined (for a field, it isn't) even if there is only one line in the doc
+         *
+         * @param indent    the indent to be inserted before every line.
+         * @param javadoc   The javadoc string to be processed
+         * @param multiline If this javadoc is mutlilined (for a field, it isn't) even if there is only one line in the
+         *                  doc
          * @return A fully formatted javadoc comment string complete with comment characters and newlines.
          */
-        public static String buildJavadoc(String indent, String javadoc, boolean multiline)
-        {
-            StringBuilder builder = new StringBuilder();
+        static String buildJavadoc(String indent, String javadoc, boolean multiline) {
+            var builder = new StringBuilder();
 
             // split and wrap.
-            List<String> list = new LinkedList<>();
+            var list = new LinkedList<String>();
 
-            for (String line : javadoc.split("\n"))
-            {
+            for (var line : javadoc.split("\n")) {
                 list.addAll(wrapText(line, 120 - (indent.length() + 3)));
             }
 
-            if (list.size() > 1 || multiline)
-            {
+            if (list.size() > 1 || multiline) {
                 builder.append(indent);
                 builder.append("/**");
-                builder.append(NEWLINE);
+                builder.append(System.lineSeparator());
 
-                for (String line : list)
-                {
+                for (String line : list) {
                     builder.append(indent);
                     builder.append(" * ");
                     builder.append(line);
-                    builder.append(NEWLINE);
+                    builder.append(System.lineSeparator());
                 }
 
                 builder.append(indent);
                 builder.append(" */");
-                //builder.append(Constants.NEWLINE);
+                //builder.append(System.lineSeparator());
 
             }
             // one line
-            else
-            {
+            else {
                 builder.append(indent);
                 builder.append("/** ");
                 builder.append(javadoc);
                 builder.append(" */");
-                //builder.append(Constants.NEWLINE);
+                //builder.append(System.lineSeparator());
             }
 
             return builder.toString().replace(indent, indent);
         }
 
-        private static List<String> wrapText(String text, int len)
-        {
+        private static @Unmodifiable Collection<String> wrapText(String text, int len) {
             // return empty array for null text
             if (text == null)
-                return new ArrayList<>();
+                return List.of();
 
             // return text if len is zero or less OR text length is less than len
             if (len <= 0 || text.length() <= len)
-                return new ArrayList<>(List.of(text));
+                return List.of(text);
 
-            List<String> lines = new LinkedList<>();
-            StringBuilder line = new StringBuilder();
-            StringBuilder word = new StringBuilder();
+            var lines = new LinkedList<String>();
+            var line = new StringBuilder();
+            var word = new StringBuilder();
             int tempNum;
 
             // each char in array
-            for (char c : text.toCharArray())
-            {
-                // its a wordBreaking character.
-                if (c == ' ' || c == ',' || c == '-')
-                {
-                    // add the character to the word
-                    word.append(c);
+            for (char c : text.toCharArray()) {
+                switch (c) {
+                    // it's a wordBreaking character.
+                    case ' ', ',', '-' -> {
+                        // add the character to the word
+                        word.append(c);
 
-                    // its a space. set TempNum to 1, otherwise leave it as a wrappable char
-                    tempNum = Character.isWhitespace(c) ? 1 : 0;
+                        // its a space. set TempNum to 1, otherwise leave it as a wrappable char
+                        tempNum = Character.isWhitespace(c) ? 1 : 0;
 
-                    // subtract tempNum from the length of the word
-                    if ((line.length() + word.length() - tempNum) > len)
-                    {
-                        lines.add(line.toString());
-                        line.delete(0, line.length());
+                        // subtract tempNum from the length of the word
+                        if ((line.length() + word.length() - tempNum) > len) {
+                            lines.add(line.toString());
+                            line.delete(0, line.length());
+                        }
+
+                        // new word, add it to the next line and clear the word
+                        line.append(word);
+                        word.delete(0, word.length());
                     }
-
-                    // new word, add it to the next line and clear the word
-                    line.append(word);
-                    word.delete(0, word.length());
-
-                }
-                // not a linebreak char
-                else
-                {
-                    // add it to the word and move on
-                    word.append(c);
+                    // not a linebreak char, add it to the word and move on
+                    default -> word.append(c);
                 }
             }
 
@@ -364,7 +357,7 @@ public class MCPNames {
             if (!line.isEmpty())
                 lines.add(line.toString());
 
-            return lines.stream().map(String::trim).collect(Collectors.toList());
+            return lines.stream().map(String::trim).toList();
         }
     }
 }
