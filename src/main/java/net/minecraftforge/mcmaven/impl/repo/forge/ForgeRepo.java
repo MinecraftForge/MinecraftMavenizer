@@ -34,6 +34,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -189,7 +190,8 @@ public final class ForgeRepo extends Repo implements ProvidesDeobfuscation {
                 // version.json
                 Files.copy(
                     versionJson.toPath(),
-                    new File(minecraftDir, "version.json").toPath()
+                    new File(minecraftDir, "version.json").toPath(),
+                    StandardCopyOption.REPLACE_EXISTING
                 );
                 cache.add(versionProperties);
 
