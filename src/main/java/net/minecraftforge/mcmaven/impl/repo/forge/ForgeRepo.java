@@ -366,7 +366,7 @@ public final class ForgeRepo extends Repo implements ProvidesDeobfuscation {
             var all = new ArrayList<GradleModule.Variant.Dependency>();
 
             for (var artifact : side.getMCLibraries()) {
-                var selected = variants.get(GradleAttributes.NativeDescriptor.from(artifact.getOs(), artifact.getArch()));
+                var selected = variants.get(GradleAttributes.NativeDescriptor.from(artifact.getOs()));
                 var dependency = GradleModule.Variant.Dependency.of(artifact);
 
                 if (selected != null) {

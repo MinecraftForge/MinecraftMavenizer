@@ -61,12 +61,10 @@ public class GradleModule {
         var ret = new HashMap<GradleAttributes.NativeDescriptor, Variant>();
 
         for (var os : GradleAttributes.OperatingSystemFamily.ALL) {
-            for (var arch : GradleAttributes.MachineArchitecture.ALL) {
-                var natives = new GradleAttributes.NativeDescriptor(os, arch);
-                var variant = Variant.ofNative(natives);
-                variants.add(variant);
-                ret.put(natives, variant);
-            }
+            var natives = new GradleAttributes.NativeDescriptor(os);
+            var variant = Variant.ofNative(natives);
+            variants.add(variant);
+            ret.put(natives, variant);
         }
 
         return ret;
