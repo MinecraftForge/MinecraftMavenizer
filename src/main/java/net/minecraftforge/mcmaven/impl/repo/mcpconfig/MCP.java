@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipFile;
 
-import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;

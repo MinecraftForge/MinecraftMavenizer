@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.cache;
 
-import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.hash.HashFunction;
@@ -153,7 +153,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
 
             if (!invalidHash && changing) {
                 for (var func : knownHashes) {
-                    if (GlobalOptions.cacheOnly) continue;
+                    if (GlobalOptions.isOffline()) continue;
 
                     var rhash = DownloadUtils.tryDownloadString(true, repo + path + '.' + func.extension());
                     if (rhash == null)
@@ -185,6 +185,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
 
         try {
             GlobalOptions.assertNotCacheOnly();
+            GlobalOptions.assertOnline();
             downloadFile(target, path);
             HashUtils.updateHash(target, knownHashes);
             return target;

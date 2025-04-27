@@ -70,10 +70,6 @@ tasks.named('shadowJar', ShadowJar) {
     }
 }
 
-artifacts {
-    archives shadowJar
-}
-
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }

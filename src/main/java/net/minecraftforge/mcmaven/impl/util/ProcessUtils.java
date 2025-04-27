@@ -294,8 +294,8 @@ public final class ProcessUtils {
         try {
             return FileUtils.makeJar(outputClasses, sourcesOutput, nonSourceFiles, outputJar);
         } finally {
-            FileUtils.sneakyDeleteOnExit(sourcesOutput);
-            FileUtils.sneakyDeleteOnExit(outputClasses);
+            FileUtils.deleteOnExit(sourcesOutput);
+            FileUtils.deleteOnExit(outputClasses);
         }
     }
 

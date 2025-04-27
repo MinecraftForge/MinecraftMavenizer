@@ -4,10 +4,9 @@
  */
 package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
-import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.repo.ClassesProvider;
 import net.minecraftforge.mcmaven.impl.repo.SourcesProvider;
-import net.minecraftforge.mcmaven.impl.repo.forge.ForgeRecompiler;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;

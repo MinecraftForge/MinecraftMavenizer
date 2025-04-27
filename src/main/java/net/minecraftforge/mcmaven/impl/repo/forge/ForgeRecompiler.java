@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.repo.forge;
 
-import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.repo.ClassesProvider;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPRecompiler;

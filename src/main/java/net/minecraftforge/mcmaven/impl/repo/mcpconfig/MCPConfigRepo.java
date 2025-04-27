@@ -6,7 +6,7 @@ package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
 import net.minecraftforge.mcmaven.impl.repo.deobf.DeobfuscatingRepo;
 import net.minecraftforge.mcmaven.impl.repo.deobf.ProvidesDeobfuscation;
-import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
@@ -17,21 +17,22 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.OS;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
-import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashStore;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 
 /*
  * Provides the following artifacts:
@@ -110,8 +111,9 @@ public final class MCPConfigRepo extends Repo implements ProvidesDeobfuscation {
         var classes = pending("Recompiling Sources", mergeExtra(build, side, recompiler.getClasses(), mcpSide.getTasks().getExtra()), name);
         var pom = pending("Generating Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"));
         var gradleModule = pending("Generating Gradle Module", gradleModule(build, side, mcpSide, version, classes, sources), name.withExtension("module"));
+        var metadata = pending("Generating Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"));
 
-        this.output(sources, classes, pom, gradleModule);
+        this.output(sources, classes, pom, gradleModule, metadata);
     }
 
     // TODO [MCMaven][client-extra] Band-aid fix for merging for clean! Remove later.
@@ -130,6 +132,58 @@ public final class MCPConfigRepo extends Repo implements ProvidesDeobfuscation {
 
             try {
                 FileUtils.mergeJars(output, true, extraF, recompiledF);
+            } catch (IOException e) {
+                Util.sneak(e);
+            }
+
+            cache.add(output).save();
+            return output;
+        });
+    }
+
+    private static Task metadata(File build, MCPSide side) {
+        var minecraftTasks = side.getMCP().getMinecraftTasks();
+        return Task.named("metadata[forge]", Set.of(minecraftTasks.versionJson), () -> {
+            var output = new File(build, "metadata.zip");
+
+            // metadata
+            var metadataDir = new File(output.getParentFile(), "metadata");
+            var versionProperties = new File(metadataDir, "version.properties");
+
+            // metadata/minecraft
+            var minecraftDir = new File(metadataDir, "minecraft");
+            var versionJson = minecraftTasks.versionJson.get();
+
+            var cache = HashStore
+                .fromFile(output).add(output)
+                .add(versionJson)
+                .add(versionProperties);
+            if (output.exists() && cache.isSame())
+                return output;
+
+            GlobalOptions.assertNotCacheOnly();
+
+            try {
+                FileUtils.ensureParent(output);
+                FileUtils.ensure(metadataDir);
+                FileUtils.ensure(minecraftDir);
+
+                // version.properties
+                try (FileWriter writer = new FileWriter(versionProperties)) {
+                    // TODO [MCMaven][ForgeRepo] make this configurable later
+                    writer.append("version=1").append('\n').flush();
+                }
+
+                // version.json
+                Files.copy(
+                    versionJson.toPath(),
+                    new File(minecraftDir, "version.json").toPath(),
+                    StandardCopyOption.REPLACE_EXISTING
+                );
+                cache.add(versionProperties);
+
+                // metadata.zip
+                FileUtils.makeZip(metadataDir, output);
             } catch (IOException e) {
                 Util.sneak(e);
             }

@@ -4,43 +4,49 @@
  */
 package net.minecraftforge.mcmaven.cli;
 
-import joptsimple.AbstractOptionSpec;
 import joptsimple.OptionParser;
 import joptsimple.OptionSpecBuilder;
+import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
 import net.minecraftforge.util.logging.Log;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-/**
- * Main entry point for the tool.
- *
- * @see #main(String[])
- */
 public class Main {
-    /**
-     * The entry point for the Minecraft Mavenizer. Details on usage can be found by running the program with the
-     * {@code --help} flag.
-     *
-     * @param args The command line arguments
-     * @throws Exception If any kind of error occurs
-     */
     public static void main(String[] args) throws Exception {
-        // TODO [MCMaven] Make this into a --debug flag
-        Log.enabled = Log.Level.DEBUG;
+        var start = System.nanoTime();
+        try {
+            Log.capture();
+            run(args);
+        } catch (Throwable e) {
+            if (Log.isCapturing())
+                Log.release();
+
+            throw e;
+        } finally {
+            var total = (System.nanoTime() - start) / 1_000_000;
+            if (Log.isCapturing()) {
+                Log.drop();
+                Log.info("Minecraft Maven is up-to-date, took " + total + "ms");
+            }
+        }
+    }
+
+    private static void run(String[] args) throws Exception {
+        // TODO [MCMaven] Make this into a --log [level] option
+        Log.enabled = Log.Level.INFO;
 
         var parser = new OptionParser();
         parser.allowsUnrecognizedOptions();
 
         //@formatter:off
         // help message
-        var helpO = parser.accepts("help", "Displays this help message and exits");
+        var helpO = parser.accepts("help",
+            "Displays this help message and exits")
+            .forHelp();
 
         // root cache directory
         var cacheO = parser.accepts("cache",
@@ -66,6 +72,11 @@ public class Main {
         var outputO = parser.accepts("output",
             "Root directory to generate the maven repository")
             .withRequiredArg().ofType(File.class).defaultsTo(new File("output"));
+
+        // offline mode, fail on downloads
+        var offlineO = parser.accepts("offline",
+            "Do not attempt to download anything (allows offline operations, if possible)")
+            .forHelp();
 
         // cache only, fail if out-of-date
         var cacheOnlyO = parser.accepts("cache-only",
@@ -100,10 +111,13 @@ public class Main {
         var options = parser.parse(args);
         if (options.has(helpO)) {
             parser.printHelpOn(Log.INFO);
+            if (Log.isCapturing())
+                Log.release();
             return;
         }
 
         // global options
+        GlobalOptions.setOffline(options.has(offlineO));
         GlobalOptions.cacheOnly = options.has(cacheOnlyO);
 
         var output = options.valueOf(outputO);

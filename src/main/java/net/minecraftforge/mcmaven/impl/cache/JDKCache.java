@@ -14,6 +14,7 @@ import java.util.Map;
 
 import net.minecraftforge.java_version.api.IJavaInstall;
 import net.minecraftforge.java_version.api.IJavaLocator;
+import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.util.logging.Log;
 import org.jetbrains.annotations.Nullable;
 
@@ -31,7 +32,7 @@ public final class JDKCache {
      */
     public JDKCache(File cache) {
         this.root = cache;
-        this.disco = IJavaLocator.disco(cache);
+        this.disco = IJavaLocator.disco(cache, GlobalOptions.isOffline());
     }
 
     public File root() {

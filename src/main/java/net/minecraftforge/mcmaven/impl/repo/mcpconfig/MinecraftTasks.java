@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import net.minecraftforge.mcmaven.impl.util.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
@@ -43,6 +43,7 @@ public class MinecraftTasks {
         if (!target.exists() || (!GlobalOptions.cacheOnly && target.lastModified() < System.currentTimeMillis() - Constants.CACHE_TIMEOUT)) {
             try {
                 GlobalOptions.assertNotCacheOnly();
+                GlobalOptions.assertOnline();
                 DownloadUtils.downloadFile(target, Constants.LAUNCHER_MANIFEST);
             } catch (IOException e) {
                 Util.sneak(e);
@@ -63,6 +64,7 @@ public class MinecraftTasks {
             return target;
 
         GlobalOptions.assertNotCacheOnly();
+        GlobalOptions.assertOnline();
 
         var manifest = JsonData.launcherManifest(manifestF);
         var url = manifest.getUrl(this.version);
@@ -98,6 +100,7 @@ public class MinecraftTasks {
             return target;
 
         GlobalOptions.assertNotCacheOnly();
+        GlobalOptions.assertOnline();
 
         var manifest = JsonData.minecraftVersion(manifestF);
         var dl = manifest.getDownload(key);
