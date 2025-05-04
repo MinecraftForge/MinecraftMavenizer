@@ -26,8 +26,7 @@ public final class GlobalOptions {
             throw new IllegalArgumentException("Cache is out of date! Please run without --cache-only");
         } else if (!cacheMiss) {
             cacheMiss = true;
-            if (Log.isCapturing())
-                Log.release();
+            Log.release();
         }
     }
 

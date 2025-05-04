@@ -22,16 +22,17 @@ public class Main {
             Log.capture();
             run(args);
         } catch (Throwable e) {
-            if (Log.isCapturing())
-                Log.release();
-
+            Log.release();
             throw e;
         } finally {
             var total = (System.nanoTime() - start) / 1_000_000;
             if (Log.isCapturing()) {
                 Log.drop();
-                Log.info("Minecraft Maven is up-to-date, took " + total + "ms");
+                Log.INFO.print("Minecraft Maven is up-to-date");
+            } else {
+                Log.INFO.print("Minecraft Maven has finished");
             }
+            Log.INFO.println(", took " + total + "ms");
         }
     }
 
@@ -111,8 +112,7 @@ public class Main {
         var options = parser.parse(args);
         if (options.has(helpO)) {
             parser.printHelpOn(Log.INFO);
-            if (Log.isCapturing())
-                Log.release();
+            Log.release();
             return;
         }
 
