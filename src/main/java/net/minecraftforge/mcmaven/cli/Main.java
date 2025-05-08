@@ -24,16 +24,16 @@ public class Main {
         } catch (Throwable e) {
             Log.release();
             throw e;
-        } finally {
-            var total = (System.nanoTime() - start) / 1_000_000;
-            if (Log.isCapturing()) {
-                Log.drop();
-                Log.INFO.print("Minecraft Maven is up-to-date");
-            } else {
-                Log.INFO.print("Minecraft Maven has finished");
-            }
-            Log.INFO.println(", took " + total + "ms");
         }
+
+        var total = (System.nanoTime() - start) / 1_000_000;
+        if (Log.isCapturing()) {
+            Log.drop();
+            Log.INFO.print("Minecraft Maven is up-to-date");
+        } else {
+            Log.INFO.print("Minecraft Maven has finished");
+        }
+        Log.INFO.println(", took " + total + "ms");
     }
 
     private static void run(String[] args) throws Exception {
