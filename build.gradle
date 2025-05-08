@@ -1,7 +1,7 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    id 'java-library'
+    id 'java'
     id 'idea'
     id 'maven-publish'
     alias libs.plugins.licenser
@@ -17,7 +17,7 @@ version = gitversion.tagOffset
 
 println "Version: $version"
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of 21
 
 dependencies {
     implementation libs.jopt
@@ -36,13 +36,16 @@ dependencies {
 }
 
 license {
-    header = project.file('LICENSE-header.txt')
+    header = rootProject.file('LICENSE-header.txt')
     newLine false
     exclude '**/ComparableVersion.java' // Apache class used as source-level dep as to not need the hundred+ other classes the library pulls in
 }
 
 tasks.named('jar', Jar) {
     manifest {
+        attributes([
+            'Main-Class': 'net.minecraftforge.mcmaven.cli.Main'
+        ])
         attributes([
             'Specification-Title'   : projectDisplayName,
             'Specification-Vendor'  : projectVendor,
@@ -54,20 +57,14 @@ tasks.named('jar', Jar) {
     }
 
     archiveClassifier = 'slim'
-    exclude 'net/minecraftforge/mcmaven/cli/**'
 }
 
 tasks.named('shadowJar', ShadowJar) {
-    manifest {
-        attributes([
-            'Main-Class': 'net.minecraftforge.mcmaven.cli.Main'
-        ])
-    }
-
-    archiveClassifier = ''
     minimize {
         exclude dependency(libs.jver.get())
     }
+
+    archiveClassifier = ''
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -92,7 +89,9 @@ publishing {
 
             gradleutils.pom.setGitHubDetails pom
 
-            license gradleutils.pom.licenses.LGPLv2_1
+            licenses {
+                license gradleutils.pom.licenses.LGPLv2_1
+            }
 
             developers {
                 developer gradleutils.pom.developers.LexManos
