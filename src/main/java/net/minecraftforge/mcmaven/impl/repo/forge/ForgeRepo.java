@@ -7,8 +7,6 @@ package net.minecraftforge.mcmaven.impl.repo.forge;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
-import net.minecraftforge.mcmaven.impl.repo.deobf.DeobfuscatingRepo;
-import net.minecraftforge.mcmaven.impl.repo.deobf.ProvidesDeobfuscation;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPRenamer;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
@@ -46,7 +44,7 @@ import java.util.Set;
 // - Jonathing
 
 /** Represents the Forge repository. */
-public final class ForgeRepo extends Repo implements ProvidesDeobfuscation {
+public final class ForgeRepo extends Repo {
     // TODO: [MCMaven][FGVersion] Handle this as an edge-case in FGVersion
     private static final ComparableVersion
         USERDEV3_START = new ComparableVersion("1.12.2-14.23.5.2851"),
@@ -65,11 +63,6 @@ public final class ForgeRepo extends Repo implements ProvidesDeobfuscation {
         super(cache, output);
         this.mcpconfig = new MCPConfigRepo(cache, output);
         this.globalBuild = new File(cache.root(), "forge/.global");
-    }
-
-    @Override
-    public DeobfuscatingRepo getDeobfuscatingRepo() throws IllegalStateException {
-        throw new UnsupportedOperationException("DeobfuscatingRepo is not implemented yet");
     }
 
     @Override

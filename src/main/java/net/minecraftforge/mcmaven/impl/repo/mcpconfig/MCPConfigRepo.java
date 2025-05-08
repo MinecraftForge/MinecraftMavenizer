@@ -4,8 +4,6 @@
  */
 package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
-import net.minecraftforge.mcmaven.impl.repo.deobf.DeobfuscatingRepo;
-import net.minecraftforge.mcmaven.impl.repo.deobf.ProvidesDeobfuscation;
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
@@ -63,7 +61,7 @@ import java.util.Set;
  */
 // client extra
 // TODO [MCMaven][Documentation] Document
-public final class MCPConfigRepo extends Repo implements ProvidesDeobfuscation {
+public final class MCPConfigRepo extends Repo {
     private final Map<Artifact, MCP> versions = new HashMap<>();
     private final Map<String, MinecraftTasks> mcTasks = new HashMap<>();
 
@@ -85,11 +83,6 @@ public final class MCPConfigRepo extends Repo implements ProvidesDeobfuscation {
 
     public MinecraftTasks getMCTasks(String version) {
         return this.mcTasks.computeIfAbsent(version, k -> new MinecraftTasks(this.cache.root(), version));
-    }
-
-    @Override
-    public DeobfuscatingRepo getDeobfuscatingRepo() throws IllegalStateException {
-        throw new UnsupportedOperationException("DeobfuscatingRepo is not implemented yet");
     }
 
     @Override
