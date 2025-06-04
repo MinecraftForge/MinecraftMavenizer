@@ -1,32 +1,23 @@
-//import net.ltgt.gradle.errorprone.ErrorProneOptions
-//import net.ltgt.gradle.nullaway.NullAwayOptions
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    id 'java-library'
+    id 'java'
     id 'idea'
     id 'maven-publish'
-    id 'net.minecraftforge.licenser' version '1.0.1'
-    id 'net.minecraftforge.gradleutils' version '2.3.6'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
-
-    // Enforce jSpecify annotations at compile-time
-//    id 'net.ltgt.errorprone' version '4.1.0'
-//    id 'net.ltgt.nullaway' version '2.1.0'
-
-    // modules
-    id 'org.gradlex.extra-java-module-info' version '1.8'
+    alias libs.plugins.licenser
+    alias libs.plugins.gradleutils
+    alias libs.plugins.shadow
 }
 
-repositories {
-    mavenLocal()
-    mavenCentral()
-    maven { url = 'https://maven.minecraftforge.net/' }
-}
-
+final projectDisplayName = 'Minecraft Mavenizer'
+final projectVendor = 'Forge Development LLC'
+description = 'A pure-blooded Java tool to generate a maven repository for Minecraft artifacts.'
 group = 'net.minecraftforge'
+version = gitversion.tagOffset
 
-version = gradleutils.tagOffsetVersion
-println('Version: ' + version)
+println "Version: $version"
+
+java.toolchain.languageVersion = JavaLanguageVersion.of 21
 
 dependencies {
     implementation libs.jopt
@@ -35,107 +26,83 @@ dependencies {
     implementation libs.srgutils
     implementation libs.diff
 
-    // FOR jSpecify
-    api libs.jspecify.annotations
-//    errorprone libs.errorprone.core
-//    errorprone libs.nullaway
-
-    // FOR MCPNames -- TODO CLEAN UP LATER
     implementation libs.fastcsv
     implementation libs.commonsio
-}
 
-// TODO [MCMaven][Nullability] Add this back in sometime in the future, but only after we add actual API
-// and when we do add it back, make it apply ONLY to the API
-/*
-// Nullability garbage!
-tasks.withType(JavaCompile).configureEach {
-    options.errorprone { ErrorProneOptions errorProne ->
-        errorProne.disableAllChecks = true
+    implementation libs.bundles.utils
 
-        errorProne.nullaway { NullAwayOptions nullAway ->
-            nullAway.jspecifyMode = true
-            nullAway.warn()
-            nullaway.excludedClasses.add('net.minecraftforge.mcmaven.util.ComparableVersion')
-        }
-
-//        errorProne.error("FieldCanBeFinal", "MethodCanBeStatic")
-    }
-}
-
-nullaway.annotatedPackages.add("net.minecraftforge.mcmaven")
- */
-
-extraJavaModuleInfo {
-    failOnMissingModuleInfo = false
-
-    automaticModule(libs.diff, 'io.codechicken.diffpatch')
-    automaticModule(libs.srgutils, 'net.minecraftforge.srgutils')
+    // Static Analysis
+    compileOnly libs.nulls
 }
 
 license {
-    header project.file('LICENSE-header.txt')
+    header = rootProject.file('LICENSE-header.txt')
     newLine false
     exclude '**/ComparableVersion.java' // Apache class used as source-level dep as to not need the hundred+ other classes the library pulls in
 }
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(21)
-    withSourcesJar()
-}
-
-jar {
+tasks.named('jar', Jar) {
     manifest {
         attributes([
-            'Main-Class': 'net.minecraftforge.mcmaven.Main'
-        ] as LinkedHashMap)
+            'Main-Class': 'net.minecraftforge.mcmaven.cli.Main'
+        ])
         attributes([
-            'Specification-Title':   'Minecraft Maven',
-            'Specification-Vendor':  'Forge Development LLC',
-            'Specification-Version':  gradleutils.gitInfo.tag,
-            'Implementation-Title':  'Minecraft Maven',
-            'Implementation-Vendor': 'Forge Development LLC',
+            'Specification-Title'   : projectDisplayName,
+            'Specification-Vendor'  : projectVendor,
+            'Specification-Version' : gitversion.info.tag,
+            'Implementation-Title'  : projectDisplayName,
+            'Implementation-Vendor' : projectVendor,
             'Implementation-Version': project.version
-        ] as LinkedHashMap, 'net/minecraftforge/mcmaven/')
+        ], 'net/minecraftforge/mcmaven/impl/')
     }
+
+    archiveClassifier = 'slim'
 }
 
-compileJava {
+tasks.named('shadowJar', ShadowJar) {
+    minimize {
+        exclude dependency(libs.jver.get())
+    }
+
+    archiveClassifier = ''
+}
+
+tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
 changelog {
-    from '0.0'
+    fromBase()
+    publishAll = false
 }
 
 publishing {
-    publications.register('mavenJava', MavenPublication).configure {
+    publications.register('mavenJava', MavenPublication) {
+        from components.shadow
+
         artifactId = project.name
-        from components.java
+        changelog.publish it
 
-        pom {
-            name = project.name
-            description = 'Minecraft Maven Repo Generator'
-            url = 'https://github.com/MinecraftForge/minecraft-maven'
+        pom { pom ->
+            name = projectDisplayName
+            description = project.description
 
-            gradleutils.pom.setGitHubDetails(pom, 'minecraft-maven')
+            gradleutils.pom.setGitHubDetails pom
 
-            license gradleutils.pom.licenses.LGPLv2_1
+            licenses {
+                license gradleutils.pom.licenses.LGPLv2_1
+            }
 
             developers {
-                developer gradleutils.pom.Developers.LexManos
+                developer gradleutils.pom.developers.LexManos
+                developer gradleutils.pom.developers.Jonathing
             }
         }
     }
+
     repositories {
         maven gradleutils.publishingForgeMaven
     }
 }
 
-idea {
-    module {
-        // IntelliJ IDEA does not do this by itself anymore...
-        downloadJavadoc = true
-        downloadSources = true
-    }
-}
+idea.module { downloadSources = downloadJavadoc = true }
