@@ -31,6 +31,7 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -123,16 +124,34 @@ public final class ForgeRepo extends Repo {
         var sources = pending("Generating Sources", renamer.getSources(), name.withClassifier("sources"));
         var classes = pending("Recompiling Sources", recompiler.getClasses(), name);
 
-        var mcName = Artifact.from("net.minecraft", "client", mcVersion);
-        var clientExtra = pending("Getting Client Extra", patcher.getMCPSide().getTasks().getExtra(), mcName.withClassifier("extra"));
-        var clientExtraPom = pending("Generating Client POM", clientExtraPom(build, patcher, mcVersion), mcName.withExtension("pom"));
-        var clientExtraGradleModule = pending("Generating Client Gradle Module", clientExtraGradleModule(build, patcher, clientExtra), mcName.withExtension("module"));
+        var clientExtra = this.mcpconfig.processExtraOnly("net.minecraft:client", mcVersion);
+
+        // TODO remove the scope, put this in a method properly
+        {
+            var extraOutput = new File(this.output, sources.getArtifact().getLocalPath()).getParentFile();
+            var symlink = new File(extraOutput, "client-extra.jar").toPath();
+
+            try {
+                Files.createDirectories(extraOutput.toPath());
+
+                Files.createSymbolicLink(
+                    symlink,
+                    clientExtra.get().toPath()
+                );
+            } catch (FileAlreadyExistsException ignored) {
+                // do nothing. i don't have the time or energy for proper error handling of this right now.
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+            clientExtra = clientExtra.withFile(symlink.toFile());
+        }
 
         var pom = pending("Generating Maven POM", pom(build, patcher, version, clientExtra), name.withExtension("pom"));
         var gradleModule = pending("Generating Gradle Module", gradleModule(build, patcher, version, classes, sources, clientExtra), name.withExtension("module"));
         var metadata = pending("Generating Metadata", metadata(build, patcher), name.withClassifier("metadata").withExtension("zip"));
 
-        this.output(sources, classes, clientExtra, clientExtraPom, clientExtraGradleModule, pom, gradleModule, metadata);
+        this.output(sources, classes, pom, gradleModule, metadata);
     }
 
     private static Task metadata(File build, Patcher patcher) {
@@ -199,7 +218,7 @@ public final class ForgeRepo extends Repo {
         });
     }
 
-    private static Task pom(File build, Patcher patcher, String version, PendingArtifact clientExtra) {
+    private static Task pom(File build, Patcher patcher, String version, OutputArtifact clientExtra) {
         return Task.named("pom[forge]", () -> {
             var output = new File(build, "forge.pom");
             var cache = HashStore.fromFile(output).add(output);
@@ -210,7 +229,7 @@ public final class ForgeRepo extends Repo {
 
             var builder = new POMBuilder("net.minecraftforge", "forge", version).withGradleMetadata();
 
-            builder.dependencies().add(clientExtra.getArtifact(), "compile");
+            builder.dependencies().add(clientExtra.artifact(), "compile");
 
             for (var a : patcher.getArtifacts()) {
                 builder.dependencies().add(a, "compile");
@@ -230,8 +249,8 @@ public final class ForgeRepo extends Repo {
 
     // TODO CLEANUP
     // TODO [MCMaven][ForgeRepo] store partial variants as files in a "variants" folder, then merge them into the module
-    private static Task gradleModule(File build, Patcher patcher, String version, PendingArtifact classes, PendingArtifact sources, PendingArtifact clientExtra) {
-        return Task.named("gradleModule[forge]", Set.of(classes.getAsTask(), sources.getAsTask(), clientExtra.getAsTask()), () -> {
+    private static Task gradleModule(File build, Patcher patcher, String version, PendingArtifact classes, PendingArtifact sources, OutputArtifact clientExtra) {
+        return Task.named("gradleModule[forge]", Set.of(classes.getAsTask(), sources.getAsTask()), () -> {
             var output = new File(build, "forge.module");
             var classesF = classes.get();
             var sourcesF = sources.get();
@@ -258,27 +277,55 @@ public final class ForgeRepo extends Repo {
 
             var module = GradleModule.of("net.minecraftforge", "forge", version);
 
-            // TODO move this variant creation to it's own method. it is easily reproducible
-            // official
-            var officialClasses = Util.make(new GradleModule.Variant(), variant -> {
-                variant.name = "classes-" + officialVersion;
-                variant.attributes = Map.of(
+            var variants = module.nativeVariants("classes-" + officialVersion);
+            var all = new ArrayList<GradleModule.Variant.Dependency>();
+
+            for (var artifact : patcher.getMCPSide().getMCLibraries()) {
+                var selected = variants.get(GradleAttributes.NativeDescriptor.from(artifact.getOs()));
+                var dependency = GradleModule.Variant.Dependency.of(artifact);
+
+                if (selected != null) {
+                    selected.addDependency(dependency);
+                } else {
+                    all.add(dependency);
+                }
+            }
+
+            for (var artifact : patcher.getMCPSide().getMCPConfigLibraries()) {
+                all.add(GradleModule.Variant.Dependency.of(artifact));
+            }
+
+            for (var artifact : patcher.getArtifacts()) {
+                all.add(GradleModule.Variant.Dependency.of(artifact));
+            }
+
+            var java = Util.replace(
+                JsonData.minecraftVersion(patcher.getMCPSide().getMCP().getMinecraftTasks().versionJson.get()),
+                v -> v.javaVersion != null ? v.javaVersion.majorVersion : null
+            );
+            var files = List.of(
+                new GradleModule.Variant.File(classes.getArtifact().getFilename(), classesF),
+                new GradleModule.Variant.File(clientExtra.get())
+            );
+            for (var variant : variants.values()) {
+                variant.attributes.putAll(Map.of(
                     "org.gradle.usage", "java-runtime",
                     "org.gradle.category", "library",
                     "org.gradle.dependency.bundling", "external",
                     "org.gradle.libraryelements", "jar",
+                    "org.gradle.jvm.environment", "standard-jvm",
                     "net.minecraftforge.mappings.channel", "official",
                     "net.minecraftforge.mappings.version", mcVersionWithoutMCP
-                );
-                variant.files = List.of(new GradleModule.Variant.File(classes.getArtifact().getFilename(), classesF));
-                variant.dependencies = Util.make(new ArrayList<>(), dependencies -> {
-                    dependencies.add(GradleModule.Variant.Dependency.of(clientExtra.getArtifact()));
-                    for (var a : patcher.getArtifacts()) {
-                        dependencies.add(GradleModule.Variant.Dependency.of(a));
-                    }
-                });
-            });
-            var officialSources = Util.make(new GradleModule.Variant(), variant -> {
+                ));
+
+                if (java != null)
+                    variant.attributes.put("org.gradle.jvm.version", java);
+
+                variant.files = files;
+                variant.addDependencies(all);
+            }
+
+            module.variant(variant -> {
                 variant.name = "sources-" + officialVersion;
                 variant.attributes = Map.of(
                     "org.gradle.usage", "java-runtime",
@@ -291,90 +338,9 @@ public final class ForgeRepo extends Repo {
                 );
                 variant.files = List.of(new GradleModule.Variant.File(sources.getArtifact().getFilename(), sourcesF));
             });
-            module.variant(officialClasses);
-            module.variant(officialSources);
 
             // TODO [MCMaven][ForgeRepo] This is a mess. Clean it up.
             // ALSO TODO add parchment mappings and other mappings support
-
-            FileUtils.ensureParent(output);
-            try {
-                JsonData.toJson(module, output);
-            } catch (IOException e) {
-                Util.sneak(e);
-            }
-
-            cache.add(output).save();
-            return output;
-        });
-    }
-
-    private static Task clientExtraPom(File build, Patcher patcher, String mcVersion) {
-        return Task.named("clientExtraPom[forge]", () -> {
-            var output = new File(build, "clientExtra.pom");
-            var cache = HashStore.fromFile(output).add(output);
-            if (output.exists() && cache.isSame())
-                return output;
-
-            GlobalOptions.assertNotCacheOnly();
-
-            var builder = new POMBuilder("net.minecraft", "client", mcVersion).withGradleMetadata();
-
-            var side = patcher.getMCP().getSide(MCPSide.JOINED);
-
-            Util.make(side.getMCLibraries(), l -> l.removeIf(a -> a.getOs() != OS.UNKNOWN)).forEach(a -> {
-                builder.dependencies().add(a, "compile");
-            });
-            Util.make(side.getMCPConfigLibraries(), l -> l.removeIf(a -> a.getOs() != OS.UNKNOWN)).forEach(a -> {
-                builder.dependencies().add(a, "compile");
-            });
-
-            FileUtils.ensureParent(output);
-            try (var os = new FileOutputStream(output)) {
-                os.write(builder.build().getBytes(StandardCharsets.UTF_8));
-            } catch (IOException | ParserConfigurationException | TransformerException e) {
-                Util.sneak(e);
-            }
-
-            cache.add(output).save();
-            return output;
-        });
-    }
-
-    private static Task clientExtraGradleModule(File build, Patcher patcher, PendingArtifact clientExtra) {
-        return Task.named("clientExtraModule[forge]", Set.of(clientExtra.getAsTask()), () -> {
-            var output = new File(build, "clientExtra.module");
-            var clientExtraF = clientExtra.get();
-            var cache = HashStore
-                .fromFile(output)
-                .add(output, clientExtraF);
-            if (output.exists() && cache.isSame())
-                return output;
-
-            GlobalOptions.assertNotCacheOnly();
-            var side = patcher.getMCPSide();
-
-            var module = GradleModule.of(clientExtra.getArtifact());
-            var files = List.of(new GradleModule.Variant.File(clientExtra.getArtifact().getFilename(), clientExtraF));
-
-            var variants = module.nativeVariants();
-            var all = new ArrayList<GradleModule.Variant.Dependency>();
-
-            for (var artifact : side.getMCLibraries()) {
-                var selected = variants.get(GradleAttributes.NativeDescriptor.from(artifact.getOs()));
-                var dependency = GradleModule.Variant.Dependency.of(artifact);
-
-                if (selected != null) {
-                    selected.dependencies.add(dependency);
-                } else {
-                    all.add(dependency);
-                }
-            }
-
-            for (var variant : variants.values()) {
-                variant.files = files;
-                variant.dependencies.addAll(all);
-            }
 
             FileUtils.ensureParent(output);
             try {

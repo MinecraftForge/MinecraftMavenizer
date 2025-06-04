@@ -5,6 +5,7 @@
 package net.minecraftforge.mcmaven.impl.util;
 
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 // TODO [MCMaven][Documentation] Document
@@ -40,7 +41,7 @@ public class Util {
      * @param <T>    The type of the object
      * @return The object
      */
-    public static <T> T make(T obj, Consumer<T> action) {
+    public static <T> T make(T obj, Consumer<? super T> action) {
         action.accept(obj);
         return obj;
     }
@@ -56,7 +57,7 @@ public class Util {
      * @param <T>    The type of the object
      * @return The object
      */
-    public static <T> T replace(T obj, UnaryOperator<T> action) {
+    public static <T, R> R replace(T obj, Function<T, R> action) {
         return action.apply(obj);
     }
 }

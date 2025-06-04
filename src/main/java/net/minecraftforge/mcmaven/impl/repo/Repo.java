@@ -34,16 +34,20 @@ public abstract class Repo {
         return new PendingArtifact(message, task, artifact);
     }
 
-    protected final void output(PendingArtifact... pendingArtifacts) {
-        for (var pending : pendingArtifacts) {
+    protected final OutputArtifact[] output(PendingArtifact... pendingArtifacts) {
+        var ret = new OutputArtifact[pendingArtifacts.length];
+        for (var i = 0; i < pendingArtifacts.length; i++) {
+            var pending = pendingArtifacts[i];
             try {
                 var output = new File(this.output, pending.getArtifact().getLocalPath());
                 org.apache.commons.io.FileUtils.copyFile(pending.get(), output);
                 HashUtils.updateHash(output);
+                ret[i] = new OutputArtifact(output, pending.getArtifact());
             } catch (Throwable t) {
                 throw new RuntimeException("Failed to generate artifact: %s".formatted(pending.getArtifact()), t);
             }
         }
+        return ret;
     }
 
     protected static final class PendingArtifact implements Supplier<File> {
@@ -77,6 +81,12 @@ public abstract class Repo {
 
         public Artifact getArtifact() {
             return artifact;
+        }
+    }
+
+    protected record OutputArtifact(File get, Artifact artifact) implements Supplier<File> {
+        public OutputArtifact withFile(File file) {
+            return new OutputArtifact(file, this.artifact);
         }
     }
 }

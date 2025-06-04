@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.util;
 
-import net.minecraftforge.java_version.util.OS;
+import net.minecraftforge.java_provisioner.util.OS;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.logging.Log;
 import org.apache.commons.io.IOUtils;

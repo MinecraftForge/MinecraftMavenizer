@@ -9,6 +9,9 @@ import net.minecraftforge.util.logging.Log;
 
 import java.io.File;
 
+// TODO [MinecraftMaven][Deobf] ADD DEOBF
+//  use single detached configuration to resolve individual configurations
+//  pass in downloaded files to mcmaven (absolute path)
 public record MinecraftMaven(File output, Cache cache) {
     private static final String DISPLAY_NAME = "Minecraft Mavenizer";
 

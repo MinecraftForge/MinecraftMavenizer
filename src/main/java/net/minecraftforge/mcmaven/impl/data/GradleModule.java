@@ -11,11 +11,12 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.OS;
 import net.minecraftforge.util.hash.HashFunction;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * @see <a
@@ -46,6 +47,10 @@ public class GradleModule {
         return this.variant(new Variant());
     }
 
+    public Variant variant(Consumer<? super Variant> action) {
+        return Util.make(this.variant(), action);
+    }
+
     public Variant variant(Variant variant) {
         if (variants == null)
             variants = new ArrayList<>();
@@ -54,7 +59,7 @@ public class GradleModule {
         return variant;
     }
 
-    public Map<GradleAttributes.NativeDescriptor, Variant> nativeVariants() {
+    public Map<GradleAttributes.NativeDescriptor, Variant> nativeVariants(String prefix) {
         if (variants == null)
             variants = new ArrayList<>();
 
@@ -62,7 +67,7 @@ public class GradleModule {
 
         for (var os : GradleAttributes.OperatingSystemFamily.ALL) {
             var natives = new GradleAttributes.NativeDescriptor(os);
-            var variant = Variant.ofNative(natives);
+            var variant = Variant.ofNative(prefix, natives);
             variants.add(variant);
             ret.put(natives, variant);
         }
@@ -122,16 +127,23 @@ public class GradleModule {
         /** Information about where the metadata and files of this variant are available. */
         public AvailableAt availableAt;
 
-        public static Variant ofNative(GradleAttributes.NativeDescriptor natives) {
+        public void addDependency(Dependency dependency) {
+            if (this.dependencies == null)
+                this.dependencies = new ArrayList<>();
+
+            this.dependencies.remove(dependency);
+            this.dependencies.add(dependency);
+        }
+
+        public void addDependencies(Iterable<? extends Dependency> dependencies) {
+            dependencies.forEach(this::addDependency);
+        }
+
+        public static Variant ofNative(String prefix, GradleAttributes.NativeDescriptor natives) {
             var ret = new Variant();
-            ret.name = natives.variantName();
+            ret.name = prefix + "-" + natives.variantName();
             ret.dependencies = new ArrayList<>();
-            ret.attributes = natives.toMap(Map.of(
-                "org.gradle.usage", "java-runtime",
-                "org.gradle.category", "library",
-                "org.gradle.dependency.bundling", "external",
-                "org.gradle.libraryelements", "jar"
-            ));
+            ret.attributes = new HashMap<>(natives.toMap());
             return ret;
         }
 
@@ -153,6 +165,10 @@ public class GradleModule {
             public String sha512;
             /** The MD5 checksum of the file. */
             public String md5;
+
+            public File(java.io.File file) {
+                this(file.getName(), file);
+            }
 
             public File(String name, java.io.File file) {
                 this.name = this.url = name;
@@ -194,6 +210,27 @@ public class GradleModule {
              */
             public ThirdPartyCompatibility thirdPartyCompatibility;
 
+            @Override
+            public String toString() {
+                return "Dependency{" +
+                    "group='" + group + '\'' +
+                    ", module='" + module + '\'' +
+                    ", version=" + version +
+                    ", attributes=" + attributes +
+                    ", requestedCapabilities=" + requestedCapabilities +
+                    ", thirdPartyCompatibility=" + thirdPartyCompatibility +
+                    '}';
+            }
+
+            @Override
+            public boolean equals(Object obj) {
+                return this == obj || obj instanceof Dependency o &&
+                    Objects.equals(this.group, o.group) &&
+                    Objects.equals(this.module, o.module) &&
+                    Objects.equals(this.attributes, o.attributes) &&
+                    Objects.equals(this.thirdPartyCompatibility, o.thirdPartyCompatibility);
+            }
+
             public void setArtifactSelector(ThirdPartyCompatibility.ArtifactSelector selector) {
                 if (this.thirdPartyCompatibility == null)
                     this.thirdPartyCompatibility = new ThirdPartyCompatibility();
@@ -210,10 +247,6 @@ public class GradleModule {
 
                 if (artifact.getClassifier() != null || !artifact.getExtension().equals("jar"))
                     dependency.setArtifactSelector(ThirdPartyCompatibility.ArtifactSelector.of(artifact));
-
-                var attributes = GradleAttributes.NativeDescriptor.from(artifact).toMap();
-                if (!attributes.isEmpty())
-                    dependency.attributes = attributes;
 
                 return dependency;
             }
@@ -249,6 +282,12 @@ public class GradleModule {
                  */
                 public ArtifactSelector artifactSelector;
 
+                @Override
+                public boolean equals(Object obj) {
+                    return this == obj || obj instanceof ThirdPartyCompatibility o &&
+                        Objects.equals(this.artifactSelector, o.artifactSelector);
+                }
+
                 /** Information to select a specific artifact. */
                 public static class ArtifactSelector {
                     /** The name of the artifact. */
@@ -267,6 +306,15 @@ public class GradleModule {
                             selector.extension = artifact.getExtension();
                             selector.classifier = artifact.getClassifier();
                         });
+                    }
+
+                    @Override
+                    public boolean equals(Object obj) {
+                        return this == obj || obj instanceof ArtifactSelector o &&
+                            Objects.equals(this.name, o.name) &&
+                            Objects.equals(this.type, o.type) &&
+                            Objects.equals(this.extension, o.extension) &&
+                            Objects.equals(this.classifier, o.classifier);
                     }
                 }
             }

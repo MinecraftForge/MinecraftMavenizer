@@ -9,6 +9,7 @@ import net.minecraftforge.mcmaven.impl.repo.Repo;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
+import net.minecraftforge.mcmaven.impl.util.GradleAttributes;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
@@ -107,6 +108,22 @@ public final class MCPConfigRepo extends Repo {
         var metadata = pending("Generating Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"));
 
         this.output(sources, classes, pom, gradleModule, metadata);
+    }
+
+    @SuppressWarnings("ClassEscapesDefinedScope") // this method is used in ForgeRepo
+    public OutputArtifact processExtraOnly(String module, String version) {
+        if (!module.startsWith("net.minecraft:"))
+            throw new IllegalArgumentException("MCPConfigRepo cannot process modules that aren't for group net.minecraft");
+
+        var side = module.substring("net.minecraft:".length());
+        var mcp = this.get(Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip"));
+        var mcpSide = mcp.getSide(side);
+
+        var name = Artifact.from("net.minecraft", side, version);
+
+        var extra = pending("Copying Extra Resources", mcpSide.getTasks().getExtra(), name.withClassifier("extra"));
+
+        return this.output(extra)[0];
     }
 
     // TODO [MCMaven][client-extra] Band-aid fix for merging for clean! Remove later.
@@ -247,25 +264,48 @@ public final class MCPConfigRepo extends Repo {
 
             var module = GradleModule.of("net.minecraft", side, version);
 
-            // TODO move this variant creation to it's own method. it is easily reproducible
-            // official
-            var officialClasses = Util.make(new GradleModule.Variant(), variant -> {
-                variant.name = "classes-" + official;
-                variant.attributes = Map.of(
+            var variants = module.nativeVariants("classes-" + official);
+            var all = new ArrayList<GradleModule.Variant.Dependency>();
+
+            for (var artifact : mcpSide.getMCLibraries()) {
+                var selected = variants.get(GradleAttributes.NativeDescriptor.from(artifact.getOs()));
+                var dependency = GradleModule.Variant.Dependency.of(artifact);
+
+                if (selected != null) {
+                    selected.addDependency(dependency);
+                } else {
+                    all.add(dependency);
+                }
+            }
+
+            for (var artifact : mcpSide.getMCPConfigLibraries()) {
+                all.add(GradleModule.Variant.Dependency.of(artifact));
+            }
+
+            var java = Util.replace(
+                JsonData.minecraftVersion(mcpSide.getMCP().getMinecraftTasks().versionJson.get()),
+                v -> v.javaVersion != null ? v.javaVersion.majorVersion : null
+            );
+            var files = List.of(new GradleModule.Variant.File(classes.getArtifact().getFilename(), classesF));
+            for (var variant : variants.values()) {
+                variant.attributes.putAll(Map.of(
                     "org.gradle.usage", "java-runtime",
                     "org.gradle.category", "library",
                     "org.gradle.dependency.bundling", "external",
                     "org.gradle.libraryelements", "jar",
+                    "org.gradle.jvm.environment", "standard-jvm",
                     "net.minecraftforge.mappings.channel", "official",
                     "net.minecraftforge.mappings.version", versionWithoutMCP
-                );
-                variant.files = List.of(new GradleModule.Variant.File(classes.getArtifact().getFilename(), classesF));
-                variant.dependencies = Util.make(new ArrayList<>(), dependencies -> {
-                    mcpSide.getMCLibraries().forEach(a -> dependencies.add(GradleModule.Variant.Dependency.of(a)));
-                    mcpSide.getMCPConfigLibraries().forEach(a -> dependencies.add(GradleModule.Variant.Dependency.of(a)));
-                });
-            });
-            var officialSources = Util.make(new GradleModule.Variant(), variant -> {
+                ));
+
+                if (java != null)
+                    variant.attributes.put("org.gradle.jvm.version", java);
+
+                variant.files = files;
+                variant.addDependencies(all);
+            }
+
+            module.variant(variant -> {
                 variant.name = "sources-" + official;
                 variant.attributes = Map.of(
                     "org.gradle.usage", "java-runtime",
@@ -278,8 +318,6 @@ public final class MCPConfigRepo extends Repo {
                 );
                 variant.files = List.of(new GradleModule.Variant.File(sources.getArtifact().getFilename(), sourcesF));
             });
-            module.variant(officialClasses);
-            module.variant(officialSources);
 
             // ALSO TODO add parchment mappings and other mappings support
 

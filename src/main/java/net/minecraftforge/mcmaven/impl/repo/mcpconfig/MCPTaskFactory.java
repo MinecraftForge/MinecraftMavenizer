@@ -10,6 +10,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -34,6 +35,7 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
+import com.google.gson.reflect.TypeToken;
 import io.codechicken.diffpatch.cli.PatchOperation;
 import io.codechicken.diffpatch.util.LogLevel;
 import io.codechicken.diffpatch.util.PatchMode;
@@ -567,19 +569,21 @@ public class MCPTaskFactory implements SourcesProvider {
         var json = JsonData.minecraftVersion(jsonF);
 
         var libs = json.getLibs();
+        var libsVarCache = new File(output.getAbsoluteFile().getParentFile(), "libraries.txt");
 
-        var cache = HashStore.fromFile(output).add(jsonF);
-        for (var lib : libs) {
+        var cache = HashStore.fromFile(output).add(jsonF).add(libsVarCache);
+        for (var lib : libs)
             cache.addKnown(lib.coord, lib.dl.sha1);
-        }
 
-        if (output.exists() && cache.isSame())
+        if (output.exists() && libsVarCache.exists() && cache.isSame()) {
+            this.libraries = JsonData.<List<Lib.Cached>>fromJson(libsVarCache, new TypeToken<>() { }).stream().map(Lib.Cached::resolve).toList();
             return output;
+        }
 
         GlobalOptions.assertNotCacheOnly();
         cache.clear().add(jsonF);
 
-        var buf = new StringBuilder();
+        var buf = new StringBuilder(20_000);
         var minecraft = this.side.getMCP().getCache().minecraft();
         var downloadedLibs = new ArrayList<Lib>();
         for (var lib : libs) {
@@ -598,6 +602,12 @@ public class MCPTaskFactory implements SourcesProvider {
             cache.add(lib.coord, target);
         }
 
+        try {
+            JsonData.toJson(downloadedLibs.stream().map(Lib::cacheable).toList(), libsVarCache);
+            cache.add(libsVarCache);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         this.libraries = downloadedLibs;
 
         FileUtils.ensureParent(output);
@@ -610,7 +620,17 @@ public class MCPTaskFactory implements SourcesProvider {
         }
     }
 
-    public record Lib(Artifact name, File file) {}
+    public record Lib(Artifact name, File file) {
+        public Cached cacheable() {
+            return new Cached(name, file.getAbsolutePath());
+        }
+
+        public record Cached(Artifact name, String file) implements Serializable {
+            public Lib resolve() {
+                return new Lib(name, new File(file));
+            }
+        }
+    }
 
     public List<Lib> getLibraries() {
         return Objects.requireNonNull(this.libraries, "Libraries have not been downloaded yet. Please finalize MCP before using.");

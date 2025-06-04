@@ -12,8 +12,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
-import net.minecraftforge.java_version.api.IJavaInstall;
-import net.minecraftforge.java_version.api.IJavaLocator;
+import net.minecraftforge.java_provisioner.api.IJavaInstall;
+import net.minecraftforge.java_provisioner.api.IJavaLocator;
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.util.logging.Log;
 import org.jetbrains.annotations.Nullable;
