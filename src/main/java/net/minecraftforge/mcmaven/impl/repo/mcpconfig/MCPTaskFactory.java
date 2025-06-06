@@ -44,7 +44,6 @@ import io.codechicken.diffpatch.util.Output.MultiOutput;
 import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
-import net.minecraftforge.mcmaven.impl.repo.SourcesProvider;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.data.OS;
@@ -60,7 +59,7 @@ import net.minecraftforge.util.logging.Log;
 import org.jetbrains.annotations.Nullable;
 
 // TODO [MCMaven][Documentation] Document
-public class MCPTaskFactory implements SourcesProvider {
+public class MCPTaskFactory {
     private final MCPConfig.V2 cfg;
     private final MCPSide side;
     private final File build;
@@ -200,11 +199,6 @@ public class MCPTaskFactory implements SourcesProvider {
 
     public Task getLastTask() {
         return this.last;
-    }
-
-    @Override
-    public Task getSources() {
-        return this.getLastTask();
     }
 
     private RuntimeException except(String message) {
@@ -402,7 +396,7 @@ public class MCPTaskFactory implements SourcesProvider {
             var classes = new HashSet<>();
             for (var cls : map.getClasses())
                 classes.add(cls.getOriginal() + ".class");
-            Downloading:
+
             try (var is = new JarInputStream(new FileInputStream(input));
                 var os = new JarOutputStream(new FileOutputStream(output))) {
                JarEntry entry;
@@ -661,7 +655,8 @@ public class MCPTaskFactory implements SourcesProvider {
             if (entry == null)
                 throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries.list");
 
-            var libs = new TreeSet<String>();
+            record LibLine(String hash, Artifact artifact, String path) {}
+            var libs = new TreeSet<LibLine>();
 
             var reader = new BufferedReader(new InputStreamReader(jar.getInputStream(entry)));
             String line;
@@ -669,12 +664,12 @@ public class MCPTaskFactory implements SourcesProvider {
                 var pts = line.split("\t");
                 if (pts.length < 3)
                     throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Invalid line: " + line);
-                libs.add(pts[2]);
+                libs.add(new LibLine(pts[0], Artifact.from(pts[1]),  pts[2]));
             }
 
             var cache = HashStore.fromFile(output).add(bundle);
             for (var lib : libs)
-                cache.add(new File(libraries, lib));
+                cache.add(lib.artifact().toString(), new File(libraries, lib.path()));
 
             if (output.exists() && cache.isSame())
                 return output;
@@ -687,8 +682,8 @@ public class MCPTaskFactory implements SourcesProvider {
             var downloadedLibs = new ArrayList<Lib>();
 
             for (var lib : libs) {
-                var target = new File(libraries, lib);
-                var artifact = Artifact.from(libraries, target);
+                var target = new File(libraries, lib.path());
+                var artifact = lib.artifact();
                 buf.append("-e=").append(target.getAbsolutePath()).append('\n');
 
                 downloadedLibs.add(new Lib(artifact, target));

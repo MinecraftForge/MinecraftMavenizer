@@ -17,7 +17,7 @@ version = gitversion.tagOffset
 
 println "Version: $version"
 
-java.toolchain.languageVersion = JavaLanguageVersion.of 21
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 dependencies {
     implementation libs.jopt
@@ -53,7 +53,7 @@ tasks.named('jar', Jar) {
             'Implementation-Title'  : projectDisplayName,
             'Implementation-Vendor' : projectVendor,
             'Implementation-Version': project.version
-        ], 'net/minecraftforge/mcmaven/impl/')
+        ], 'net/minecraftforge/mcmaven/cli/')
     }
 
     archiveClassifier = 'slim'
@@ -69,6 +69,7 @@ tasks.named('shadowJar', ShadowJar) {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    options.compilerArgs.addAll(['--module-version', project.version]);
 }
 
 changelog {

@@ -6,7 +6,6 @@ package net.minecraftforge.mcmaven.impl.util;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.UnaryOperator;
 
 // TODO [MCMaven][Documentation] Document
 public class Util {

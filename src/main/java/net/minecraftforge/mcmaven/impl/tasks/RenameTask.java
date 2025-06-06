@@ -2,10 +2,11 @@
  * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
+package net.minecraftforge.mcmaven.impl.tasks;
 
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
-import net.minecraftforge.mcmaven.impl.repo.SourcesProvider;
+import net.minecraftforge.mcmaven.impl.mappings.Mappings;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
@@ -20,43 +21,42 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
-public final class MCPRenamer implements SourcesProvider {
+
+/**
+ * Takes a input jar file filled with SRG named sources.
+ * Applies mappings provided by a ziped csv file to them and returns the new sources.
+ */
+public final class RenameTask implements Supplier<Task> {
     private final Artifact name;
-    public final MCPSide side;
+    private final MCPSide side;
+    private final Task task;
 
-    private final Task last;
-
-    public MCPRenamer(File build, Artifact name, MCPSide side) {
-        this(build, name, side, side);
-    }
-
-    // TODO: [MCMaven][Renamer] Custom mappings. For now: official.
     /**
      * Creates a new renamer for the given patcher.
      *
-     * @param build   The Forge repo
-     * @param name    The developement artifact (usually userdev)
-     * @param sources The patcher to get the unnamed sources from
+     * @param build   The directory where the output will be stored
+     * @param name    The development artifact, only used for the task name
+     * @param sources The task that creates the unnamed sources
      */
-    public MCPRenamer(File build, Artifact name, MCPSide side, SourcesProvider sources) {
+    public RenameTask(File build, Artifact name, MCPSide side, Task sources, Mappings mappings) {
         this.name = name;
         this.side = side;
-
-        this.last = this.remapSources(sources.getSources(), build);
+        this.task = this.remapSources(sources, build, mappings);
     }
 
     /** @return The final named sources */
-    public Task getSources() {
-        return this.last;
+    public Task get() {
+        return this.task;
     }
 
-    private Task remapSources(Task input, File outputDir) {
+    private Task remapSources(Task input, File outputDir, Mappings provider) {
         var output = new File(outputDir, "remapped.jar");
-        var mappings = this.side.getMCP().getMappings("official");
-        return Task.named("remap[" + this.name.getName() + ']',
+        var mappings = provider.getCsvZip(side);
+        return Task.named("remap[" + this.name.getName() + "][" + provider.getKey(side) + ']',
             Set.of(input, mappings),
             () -> remapSourcesImpl(input, mappings, output)
         );

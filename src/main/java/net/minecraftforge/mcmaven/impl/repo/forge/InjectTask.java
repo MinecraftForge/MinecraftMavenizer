@@ -5,54 +5,46 @@
 package net.minecraftforge.mcmaven.impl.repo.forge;
 
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
-import net.minecraftforge.mcmaven.impl.repo.ClassesProvider;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
-import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPRecompiler;
-import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPRenamer;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.Task;
+import net.minecraftforge.mcmaven.impl.util.Util;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Set;
+import java.util.function.Supplier;
 
-// TODO: [MCMaven] Move this Renamer to MCP, since renaming is not forge-specific.
 /**
- * This class is responsible for naming the unnamed sources provided by the {@link Patcher}.
+ * Takes a jar containing compiled class files, and injects extra data/resources from a patcher into it.
  */
-public final class ForgeRecompiler extends MCPRecompiler implements ClassesProvider {
+public final class InjectTask implements Supplier<Task> {
+    private final File build;
+    private final Artifact name;
     private final Cache cache;
     private final Patcher patcher;
+    private final Task task;
 
-    private final Task last;
-
-    /**
-     * Creates a new renamer for the given patcher.
-     *
-     * @param name    The developement artifact (usually userdev)
-     * @param patcher The patcher to get the unnamed sources from
-     */
-    ForgeRecompiler(File build, Cache cache, Artifact name, Patcher patcher, MCPRenamer renamer) {
-        super(build, name, patcher.getMCP(), patcher::getClasspath, renamer);
+    InjectTask(File build, Cache cache, Artifact name, Patcher patcher, Task input) {
+        this.build = build;
+        this.name = name;
         this.cache = cache;
         this.patcher = patcher;
-
-        this.last = this.injectData(super.getClasses());
+        this.task = this.injectData(input);
     }
 
-    /** @return The final named sources */
     @Override
-    public Task getClasses() {
-        return this.last;
+    public Task get() {
+        return this.task;
     }
 
     private Task injectData(Task input) {
         return Task.named("injectData[" + this.name.getName() + ']',
             Set.of(input),
-            () -> injectDataImpl(input, new File(this.build, "injectedData.jar"))
+            () -> injectDataImpl(input, new File(this.build, "injected.jar"))
         );
     }
 
@@ -64,7 +56,11 @@ public final class ForgeRecompiler extends MCPRecompiler implements ClassesProvi
 
         var universals = new ArrayList<File>();
         for (var p : this.patcher.getStack()) {
-            cache.add(new File(this.cache.maven().getFolder(), Artifact.from(p.config.universal).getPath()));
+            if (p.config.universal != null) {
+                var universal = this.cache.maven().download(Artifact.from(p.config.universal));
+                universals.add(universal);
+                cache.add(universal);
+            }
         }
 
         if (outputJar.exists() && cache.isSame())
@@ -73,12 +69,6 @@ public final class ForgeRecompiler extends MCPRecompiler implements ClassesProvi
         GlobalOptions.assertNotCacheOnly();
         cache.clear().add("recompiled", recompiledJar);
 
-        for (var p : this.patcher.getStack()) {
-            var universal = this.cache.maven().download(Artifact.from(p.config.universal));
-            cache.add(universal);
-            universals.add(universal);
-        }
-
         try {
             var jars = new ArrayList<File>();
             jars.addAll(universals);
@@ -86,7 +76,7 @@ public final class ForgeRecompiler extends MCPRecompiler implements ClassesProvi
 
             FileUtils.mergeJars(outputJar, true, (file, name) -> file == recompiledJar || !name.endsWith(".class"), jars.toArray(File[]::new));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            return Util.sneak(e);
         }
 
         cache.save();

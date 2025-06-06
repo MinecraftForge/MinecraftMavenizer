@@ -10,13 +10,9 @@ import org.jetbrains.annotations.Nullable;
 import java.io.File;
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * Represents a downloadable Maven artifact.
@@ -24,9 +20,11 @@ import java.util.stream.IntStream;
 public class Artifact implements Comparable<Artifact>, Serializable {
     private static final @Serial long serialVersionUID = 1L;
     private static final Pattern SEMI = Pattern.compile(":");
+    private static final ComparableVersion MISSING_VERSION = new ComparableVersion("0");
 
     // group:name:version[:classifier][@extension]
-    private final String group, name, version;
+    private final String group, name;
+    private final @Nullable String version;
     private final @Nullable String classifier;
     private final String ext;
     private final OS os;
@@ -49,10 +47,6 @@ public class Artifact implements Comparable<Artifact>, Serializable {
      */
     public static Artifact from(String descriptor) {
         return new Artifact(descriptor);
-    }
-
-    public static Artifact from(File root, File artifact) {
-        return new Artifact(root, artifact);
     }
 
     /**
@@ -108,29 +102,8 @@ public class Artifact implements Comparable<Artifact>, Serializable {
             ext = "jar";
         }
 
-        // TODO [MCMaven][Artifact] Handle non-version specification?
-        //if (pts.length > 2)
-        this.version = pts[2];
-
+        this.version = pts.length > 2 ? pts[2] : null;
         this.classifier = pts.length > 3 ? pts[3] : null;
-        this.os = this.classifier != null ? findOS(this.classifier) : OS.UNKNOWN;
-        this.arch = this.classifier != null ? findArch(this.classifier) : Arch.UNKNOWN;
-    }
-
-    private Artifact(File root, File artifact) {
-        var path = root.toPath().relativize(artifact.toPath());
-        var names = IntStream.range(0, path.getNameCount()).mapToObj(i -> path.getName(i).toString()).toArray(String[]::new);
-
-        this.group = Arrays.stream(names, 0, names.length - 3).collect(Collectors.joining(":"));
-        this.name = names[names.length - 3];
-        this.version = names[names.length - 2];
-
-        var fileName = names[names.length - 1];
-        var classifierCandidates = new ArrayList<>(Arrays.asList(fileName.substring(fileName.indexOf(version) + version.length(), fileName.lastIndexOf('.')).split("-")));
-        classifierCandidates.removeIf(String::isEmpty);
-
-        this.classifier = classifierCandidates.isEmpty() ? null : String.join("-", classifierCandidates);
-        this.ext = fileName.substring(fileName.lastIndexOf('.') + 1);
         this.os = this.classifier != null ? findOS(this.classifier) : OS.UNKNOWN;
         this.arch = this.classifier != null ? findArch(this.classifier) : Arch.UNKNOWN;
     }
@@ -183,21 +156,18 @@ public class Artifact implements Comparable<Artifact>, Serializable {
     /** @return The descriptor of this artifact */
     public String getDescriptor() {
         if (fullDescriptor == null) {
-            StringBuilder buf = new StringBuilder(this.getDescriptorLength());
-            buf.append(this.group).append(':').append(this.name).append(':').append(this.version);
-            if (this.classifier != null)
-                buf.append(':').append(this.classifier);
+            StringBuilder buf = new StringBuilder();
+            buf.append(this.group).append(':').append(this.name);
+            if (this.version != null) {
+                buf.append(':').append(this.version);
+                if (this.classifier != null)
+                    buf.append(':').append(this.classifier);
+            }
             if (ext != null && !"jar".equals(this.ext))
                 buf.append('@').append(this.ext);
             this.fullDescriptor = buf.toString();
         }
         return fullDescriptor;
-    }
-
-    private int getDescriptorLength() {
-        return this.group.length() + 1 + this.name.length() + 1 + this.version.length() +
-            (this.classifier != null ? 1 + this.classifier.length() : 0) +
-            (ext != null && !"jar".equals(this.ext) ? 1 + this.ext.length() : 0);
     }
 
     /** @return The path of this artifact */
@@ -209,8 +179,12 @@ public class Artifact implements Comparable<Artifact>, Serializable {
 
     /** @return The folder of this artifact */
     public String getFolder() {
-        if (this.folder == null)
-            this.folder = this.group.replace('.', '/') + '/' + this.name + '/' + this.version;
+        if (this.folder == null) {
+            if (this.version == null)
+                this.folder = this.group.replace('.', '/') + '/' + this.name;
+            else
+                this.folder = this.group.replace('.', '/') + '/' + this.name + '/' + this.version;
+        }
         return this.folder;
     }
 
@@ -225,7 +199,7 @@ public class Artifact implements Comparable<Artifact>, Serializable {
     }
 
     /** @return The version of this artifact */
-    public String getVersion() {
+    public @Nullable String getVersion() {
         return version;
     }
 
@@ -252,11 +226,15 @@ public class Artifact implements Comparable<Artifact>, Serializable {
     /** @return The file name of this artifact */
     public String getFilename() {
         if (file == null) {
-            String file;
-            file = this.name + '-' + this.version;
-            if (this.classifier != null) file += '-' + this.classifier;
-            file += '.' + this.ext;
-            this.file = file;
+            var file = new StringBuilder();
+            file.append(this.name);
+            if (this.version != null) {
+                file.append('-').append(this.version);
+                if (this.classifier != null)
+                    file.append('-').append(this.classifier);
+            }
+            file.append('.').append(this.ext);
+            this.file = file.toString();
         }
         return file;
     }
@@ -264,7 +242,7 @@ public class Artifact implements Comparable<Artifact>, Serializable {
     /** @return {@code true} if this artifact is a snapshot version */
     public boolean isSnapshot() {
         if (isSnapshot == null)
-            this.isSnapshot = this.version.toLowerCase(Locale.ROOT).endsWith("-snapshot");
+            this.isSnapshot = this.version != null && this.version.toLowerCase(Locale.ROOT).endsWith("-snapshot");
         return isSnapshot;
     }
 
@@ -312,7 +290,7 @@ public class Artifact implements Comparable<Artifact>, Serializable {
 
     ComparableVersion getComparableVersion() {
         if (comparableVersion == null)
-            this.comparableVersion = new ComparableVersion(this.version);
+            this.comparableVersion = this.version == null ? MISSING_VERSION : new ComparableVersion(this.version);
         return comparableVersion;
     }
 

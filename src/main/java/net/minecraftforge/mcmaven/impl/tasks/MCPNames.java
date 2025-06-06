@@ -2,7 +2,7 @@
  * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
-package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
+package net.minecraftforge.mcmaven.impl.tasks;
 
 import de.siegmar.fastcsv.reader.CsvReader;
 import net.minecraftforge.util.hash.HashFunction;
@@ -77,6 +77,7 @@ final class MCPNames {
     private static final Pattern ARGS_DELIM = Pattern.compile(", ");
 
     // TODO [MCMaven][MCPNames] Not used for anything. Remove?
+    @SuppressWarnings("unused")
     private final String hash;
     private final Map<String, String> names;
     private final Map<String, String> docs;

@@ -96,7 +96,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
      */
     @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
     public final File downloadVersionMeta(Artifact artifact) {
-        return download(true, artifact.getGroup().replace('.', '/') + '/' + artifact.getName() + '/' + artifact.getVersion() + "/maven-metadata.xml");
+        return download(true, artifact.getFolder() + "/maven-metadata.xml");
     }
 
     /**

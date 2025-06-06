@@ -4,18 +4,18 @@
  */
 package net.minecraftforge.mcmaven.impl.data;
 
-import net.minecraftforge.mcmaven.impl.util.Arch;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
-import net.minecraftforge.mcmaven.impl.util.GradleAttributes;
 import net.minecraftforge.mcmaven.impl.util.Util;
-import net.minecraftforge.util.data.OS;
 import net.minecraftforge.util.hash.HashFunction;
+import net.minecraftforge.util.hash.HashUtils;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import java.util.function.Consumer;
 
 /**
@@ -57,22 +57,6 @@ public class GradleModule {
 
         variants.add(variant);
         return variant;
-    }
-
-    public Map<GradleAttributes.NativeDescriptor, Variant> nativeVariants(String prefix) {
-        if (variants == null)
-            variants = new ArrayList<>();
-
-        var ret = new HashMap<GradleAttributes.NativeDescriptor, Variant>();
-
-        for (var os : GradleAttributes.OperatingSystemFamily.ALL) {
-            var natives = new GradleAttributes.NativeDescriptor(os);
-            var variant = Variant.ofNative(prefix, natives);
-            variants.add(variant);
-            ret.put(natives, variant);
-        }
-
-        return ret;
     }
 
     /** Describes the identity of the component contained in the module. */
@@ -127,6 +111,11 @@ public class GradleModule {
         /** Information about where the metadata and files of this variant are available. */
         public AvailableAt availableAt;
 
+        public Variant() {}
+        public Variant(String name) {
+            this.name = name;
+        }
+
         public void addDependency(Dependency dependency) {
             if (this.dependencies == null)
                 this.dependencies = new ArrayList<>();
@@ -139,15 +128,48 @@ public class GradleModule {
             dependencies.forEach(this::addDependency);
         }
 
-        public static Variant ofNative(String prefix, GradleAttributes.NativeDescriptor natives) {
-            var ret = new Variant();
-            ret.name = prefix + "-" + natives.variantName();
-            ret.dependencies = new ArrayList<>();
-            ret.attributes = new HashMap<>(natives.toMap());
+        public static Variant of(String name) {
+            return new Variant(name);
+        }
+
+        public static Variant of(String name, Consumer<Variant> action) {
+            var ret = new Variant(name);
+            action.accept(ret);
             return ret;
         }
 
-        public record NativeDescriptor(OS os, Arch arch) { }
+        public Variant attribute(Attribute attribute) {
+            return this.attribute(attribute.getName(), attribute.getValue());
+        }
+
+        public Variant attribute(String key, Object value) {
+            if (this.attributes == null)
+                this.attributes = new TreeMap<>();
+            this.attributes.put(key, value);
+            return this;
+        }
+
+        public Variant deps(Iterable<? extends Artifact> artifacts) {
+            for (var artifact : artifacts)
+                addDependency(Dependency.of(artifact));
+            return this;
+        }
+
+        public Variant dep(Artifact artifact) {
+            addDependency(Dependency.of(artifact));
+            return this;
+        }
+
+        public Variant file(java.io.File file) {
+            return this.file(new File(file));
+        }
+
+        public Variant file(File file) {
+            if (this.files == null)
+                this.files = new ArrayList<>();
+            this.files.add(file);
+            return this;
+        }
 
         /** Describes a file of a variant. */
         public static class File {
@@ -173,10 +195,15 @@ public class GradleModule {
             public File(String name, java.io.File file) {
                 this.name = this.url = name;
                 this.size = file.length();
-                this.sha1 = HashFunction.SHA1.sneakyHash(file);
-                this.sha256 = HashFunction.SHA256.sneakyHash(file);
-                this.sha512 = HashFunction.SHA512.sneakyHash(file);
-                this.md5 = HashFunction.MD5.sneakyHash(file);
+                try {
+                    var hashes = HashUtils.bulkHash(file, HashFunction.SHA1, HashFunction.SHA256, HashFunction.SHA512, HashFunction.MD5);
+                    this.sha1 = hashes[0];
+                    this.sha256 = hashes[1];
+                    this.sha512 = hashes[2];
+                    this.md5 = hashes[3];
+                } catch (IOException e) {
+                    Util.sneak(e);
+                }
             }
         }
 
@@ -370,5 +397,10 @@ public class GradleModule {
             /** The version of the module. */
             public String version;
         }
+    }
+
+    public interface Attribute {
+        String getName();
+        Object getValue();
     }
 }

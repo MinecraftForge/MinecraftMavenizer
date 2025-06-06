@@ -6,19 +6,19 @@ package net.minecraftforge.mcmaven.impl.repo.forge;
 
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
+import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
-import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPRenamer;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
+import net.minecraftforge.mcmaven.impl.tasks.RecompileTask;
+import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
-import net.minecraftforge.mcmaven.impl.util.GradleAttributes;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
-import net.minecraftforge.util.data.OS;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
@@ -31,12 +31,11 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 // TODO: [MCMaven][ForgeRepo] For now, the ForgeRepo needs to be fully complete with everything it has to do.
@@ -47,9 +46,8 @@ import java.util.Set;
 /** Represents the Forge repository. */
 public final class ForgeRepo extends Repo {
     // TODO: [MCMaven][FGVersion] Handle this as an edge-case in FGVersion
-    private static final ComparableVersion
-        USERDEV3_START = new ComparableVersion("1.12.2-14.23.5.2851"),
-        USERDEV3_END = new ComparableVersion("1.12.2-14.23.5.2860");
+    private static final ComparableVersion USERDEV3_START = new ComparableVersion("1.12.2-14.23.5.2851");
+    private static final ComparableVersion USERDEV3_END = new ComparableVersion("1.12.2-14.23.5.2860");
 
     final MCPConfigRepo mcpconfig;
     final File globalBuild;
@@ -60,46 +58,35 @@ public final class ForgeRepo extends Repo {
      * @param cache  The cache directory
      * @param output The output directory.
      */
-    public ForgeRepo(Cache cache, File output) {
-        super(cache, output);
-        this.mcpconfig = new MCPConfigRepo(cache, output);
+    public ForgeRepo(Cache cache, MCPConfigRepo mcpconfig) {
+        super(cache);
+        this.mcpconfig = mcpconfig;
         this.globalBuild = new File(cache.root(), "forge/.global");
     }
 
     @Override
-    public void process(String module, String version) {
-        //noinspection SwitchStatementWithTooFewBranches - fmlonly will be added later
-        switch (module) {
-            case Constants.FORGE_ARTIFACT/*, Constants.FMLONLY_ARTIFACT */:
-                break;
-            default:
-                throw new IllegalArgumentException("Unknown or unsupported module: " + module);
-        }
+    public List<PendingArtifact> process(String module, String version, Mappings mappings) {
+        if (!Constants.FORGE_ARTIFACT.equals(module))
+            throw new IllegalArgumentException("Unknown or unsupported module: " + module);
 
         var fg = FGVersion.fromForge(version);
         Log.info("Processing Minecraft Forge (userdev): " + version);
         var indent = Log.push();
         try {
-            switch (fg) {
-                // TODO [MCMaven][Backporting] You know what has to be done eventually...
-                case null -> throw new IllegalArgumentException("Python version unsupported!");
-                case v1_1, v1_2, v2, v2_1, v2_2, v2_3 ->
-                    throw new IllegalArgumentException("Only FG 3+ currently supported");
-                case v3, v4, v5, v6 -> processV3(version, "official", forgeToMcVersion(version));
-            }
+            if (fg == null)
+                throw new IllegalArgumentException("Python version unsupported!");
+
+            // TODO [MCMaven][Backporting] You know what has to be done eventually...
+            if (fg.ordinal() < FGVersion.v3.ordinal())
+                throw new IllegalArgumentException("Only FG 3+ currently supported");
+
+            if (fg.ordinal() <= FGVersion.v6.ordinal())
+                return processV3(version, mappings);
+
+            throw new IllegalArgumentException("Forge version %s is not supported yet".formatted(version));
         } finally {
             Log.pop(indent);
         }
-    }
-
-    @SuppressWarnings("unused")
-    private static String forgeToMcVersion(String version) {
-        // Save for a few april-fools versions, Minecraft doesn't use _ in their version names.
-        // So when Forge needs to reference a version of Minecraft that uses - in the name, it replaces
-        // it with _
-        // This could cause issues if we ever support a version with _ in it, but fuck it I don't care right now.
-        int idx = version.indexOf('-');
-        return version.substring(0, idx).replace('_', '-');
     }
 
     private static Artifact getUserdev(String forge) {
@@ -109,49 +96,61 @@ public final class ForgeRepo extends Repo {
         return Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge, userdev3 ? "userdev3" : "userdev", "jar");
     }
 
-    private void processV3(String version, String channel, String mapping) {
+    /**
+     * This handles UserDev3 artifacts, which are anything created using FG 3->6
+     *
+     * We need to generate the following artifacts:
+     *   net.minecraftforge:forge:{version}
+     *     default:
+     *       The default jar contains the recompiled class files, patcher assets
+     *     sources:
+     *       Source files used to recompile the default jar.
+     *     metadata.zip:
+     *       Metadata about the version, such as runs.json and version.json.
+     *   net.minecraft:{mcp-version}:client
+     *     extra:
+     *       This is the client jar file with class files removed. This is for legacy versions which expect it to exist.
+     *   net.minecraft:mappings_{CHANNEL}:{MCP_VERSION}[-{VERSION}]@zip
+     *     A zip file containing fields, methods, and params.csv files mapping SRG->MCP names.
+     *
+     *   All variants need to provide their gradle module metadata information to be merged as needed.
+     *   Currently, we don't support any non-standard variants. So there is no merging.
+     *   But my idea is that the custom mapping channels would be custom attributes.
+     *   As well as a new flag to skip the client-extra, and merge it in the main jar instead.
+     *
+     *   If the mappings are `official`, we also need to generate:
+     *     pom:
+     *       Standard maven pom file that contains all dependency information.
+     *
+     */
+    private List<PendingArtifact> processV3(String version, Mappings mappings) {
         var name = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version);
         var userdev = getUserdev(version);
 
         var build = new File(this.cache.root(), "forge/" + userdev.getFolder());
 
         var patcher = new Patcher(build, this, userdev);
-        var renamer = new MCPRenamer(build, userdev, patcher.getMCP().getSide(MCPSide.JOINED), patcher);
-        var recompiler = new ForgeRecompiler(build, this.cache, name, patcher, renamer);
+        var joined = patcher.getMCP().getSide(MCPSide.JOINED);
+        var sourcesTask = new RenameTask(build, userdev, joined, patcher.get(), mappings);
+        var recompile = new RecompileTask(build, name, patcher.getMCP(), patcher::getClasspath, sourcesTask.get());
+        var extraTask = joined.getTasks().getExtra(); // TODO: [MCMaven][ForgeRepo] Inject Client Extra into Patcher recompiled
+        var classesTask = new InjectTask(build, this.cache, name, patcher, recompile.get());
 
-        var mcVersion = patcher.getMCP().getName().getVersion();
+        var extraCoords = Artifact.from(Constants.MC_GROUP, Constants.MC_CLIENT, patcher.getMCP().getName().getVersion()).withClassifier("extra");
+        var mappingCoords = mappings.getArtifact(joined);
 
-        var sources = pending("Generating Sources", renamer.getSources(), name.withClassifier("sources"));
-        var classes = pending("Recompiling Sources", recompiler.getClasses(), name);
+        var mapzip = pending("Mappings Zip", mappings.getCsvZip(joined), mappingCoords);
+        var extra = pending("Client Extra", extraTask, extraCoords);
 
-        var clientExtra = this.mcpconfig.processExtraOnly("net.minecraft:client", mcVersion);
+        var sources = pending("Sources", sourcesTask.get(), name.withClassifier("sources"), sourceVariant(mappings));
+        var classes = pending("Classes", classesTask.get(), name, () -> classVariants(mappings, patcher, extraCoords, mappingCoords));
+        var metadata = pending("Metadata", metadata(build, patcher), name.withClassifier("metadata").withExtension("zip"));
 
-        // TODO remove the scope, put this in a method properly
-        {
-            var extraOutput = new File(this.output, sources.getArtifact().getLocalPath()).getParentFile();
-            var symlink = new File(extraOutput, "client-extra.jar").toPath();
+        PendingArtifact pom = null;
+        if (mappings.isPrimary())
+            pom = pending("Maven POM", pom(build, patcher, version, extraCoords, mappingCoords), name.withExtension("pom"));
 
-            try {
-                Files.createDirectories(extraOutput.toPath());
-
-                Files.createSymbolicLink(
-                    symlink,
-                    clientExtra.get().toPath()
-                );
-            } catch (FileAlreadyExistsException ignored) {
-                // do nothing. i don't have the time or energy for proper error handling of this right now.
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-
-            clientExtra = clientExtra.withFile(symlink.toFile());
-        }
-
-        var pom = pending("Generating Maven POM", pom(build, patcher, version, clientExtra), name.withExtension("pom"));
-        var gradleModule = pending("Generating Gradle Module", gradleModule(build, patcher, version, classes, sources, clientExtra), name.withExtension("module"));
-        var metadata = pending("Generating Metadata", metadata(build, patcher), name.withClassifier("metadata").withExtension("zip"));
-
-        this.output(sources, classes, pom, gradleModule, metadata);
+        return List.of(mapzip, extra, sources, classes, pom, metadata);
     }
 
     private static Task metadata(File build, Patcher patcher) {
@@ -171,10 +170,10 @@ public final class ForgeRepo extends Repo {
             var versionJson = patcher.getMCP().getMinecraftTasks().versionJson.get();
 
             var cache = HashStore
-                .fromFile(output).add(output)
-                .add("runs", runsJsonStr.getBytes(StandardCharsets.UTF_8))
+                .fromFile(output)
+                .add("data", patcher.getDataHash())
                 .add(versionJson)
-                .add(versionProperties);
+                .addKnown("version", "1");
             if (output.exists() && cache.isSame())
                 return output;
 
@@ -213,15 +212,20 @@ public final class ForgeRepo extends Repo {
                 Util.sneak(e);
             }
 
-            cache.add(output).save();
+            cache.save();
             return output;
         });
     }
 
-    private static Task pom(File build, Patcher patcher, String version, OutputArtifact clientExtra) {
+    private static Task pom(File build, Patcher patcher, String version, Artifact clientExtra, Artifact mappings) {
         return Task.named("pom[forge]", () -> {
             var output = new File(build, "forge.pom");
-            var cache = HashStore.fromFile(output).add(output);
+            var cache = HashStore.fromFile(output)
+                .addKnown("data", patcher.getDataHash())
+                .addKnown("extra", clientExtra == null ? null : clientExtra.toString())
+                .addKnown("mappings", mappings == null ? null : mappings.toString())
+                ;
+
             if (output.exists() && cache.isSame())
                 return output;
 
@@ -229,11 +233,14 @@ public final class ForgeRepo extends Repo {
 
             var builder = new POMBuilder("net.minecraftforge", "forge", version).withGradleMetadata();
 
-            builder.dependencies().add(clientExtra.artifact(), "compile");
+            if (clientExtra != null)
+                builder.dependencies().add(clientExtra, "compile");
 
-            for (var a : patcher.getArtifacts()) {
-                builder.dependencies().add(a, "compile");
-            }
+            if (mappings != null)
+                builder.dependencies().add(mappings, "compile");
+
+            for (var dep : patcher.getArtifacts())
+                builder.dependencies().add(dep, "compile");
 
             FileUtils.ensureParent(output);
             try (var os = new FileOutputStream(output)) {
@@ -242,115 +249,14 @@ public final class ForgeRepo extends Repo {
                 Util.sneak(e);
             }
 
-            cache.add(output).save();
+            cache.save();
             return output;
         });
     }
 
-    // TODO CLEANUP
-    // TODO [MCMaven][ForgeRepo] store partial variants as files in a "variants" folder, then merge them into the module
-    private static Task gradleModule(File build, Patcher patcher, String version, PendingArtifact classes, PendingArtifact sources, OutputArtifact clientExtra) {
-        return Task.named("gradleModule[forge]", Set.of(classes.getAsTask(), sources.getAsTask()), () -> {
-            var output = new File(build, "forge.module");
-            var classesF = classes.get();
-            var sourcesF = sources.get();
-            var cache = HashStore
-                .fromFile(output)
-                .add(output, classesF, sourcesF);
-            if (output.exists() && cache.isSame())
-                return output;
-
-            GlobalOptions.assertNotCacheOnly();
-
-            @Deprecated var mcVersionWithoutMCP = forgeToMcVersion(version);
-            @Deprecated var officialVersion = "official-" + mcVersionWithoutMCP;
-
-            // set the mappings version. unused for now.
-            // if the current mappings = the official mappings, set to null so we don't duplicate the variants
-            final var mappingsVersion = Util.replace("official-" + mcVersionWithoutMCP, s -> {
-                if (officialVersion.equals(s)) {
-                    return null;
-                }
-
-                return s;
-            });
-
-            var module = GradleModule.of("net.minecraftforge", "forge", version);
-
-            var variants = module.nativeVariants("classes-" + officialVersion);
-            var all = new ArrayList<GradleModule.Variant.Dependency>();
-
-            for (var artifact : patcher.getMCPSide().getMCLibraries()) {
-                var selected = variants.get(GradleAttributes.NativeDescriptor.from(artifact.getOs()));
-                var dependency = GradleModule.Variant.Dependency.of(artifact);
-
-                if (selected != null) {
-                    selected.addDependency(dependency);
-                } else {
-                    all.add(dependency);
-                }
-            }
-
-            for (var artifact : patcher.getMCPSide().getMCPConfigLibraries()) {
-                all.add(GradleModule.Variant.Dependency.of(artifact));
-            }
-
-            for (var artifact : patcher.getArtifacts()) {
-                all.add(GradleModule.Variant.Dependency.of(artifact));
-            }
-
-            var java = Util.replace(
-                JsonData.minecraftVersion(patcher.getMCPSide().getMCP().getMinecraftTasks().versionJson.get()),
-                v -> v.javaVersion != null ? v.javaVersion.majorVersion : null
-            );
-            var files = List.of(
-                new GradleModule.Variant.File(classes.getArtifact().getFilename(), classesF),
-                new GradleModule.Variant.File(clientExtra.get())
-            );
-            for (var variant : variants.values()) {
-                variant.attributes.putAll(Map.of(
-                    "org.gradle.usage", "java-runtime",
-                    "org.gradle.category", "library",
-                    "org.gradle.dependency.bundling", "external",
-                    "org.gradle.libraryelements", "jar",
-                    "org.gradle.jvm.environment", "standard-jvm",
-                    "net.minecraftforge.mappings.channel", "official",
-                    "net.minecraftforge.mappings.version", mcVersionWithoutMCP
-                ));
-
-                if (java != null)
-                    variant.attributes.put("org.gradle.jvm.version", java);
-
-                variant.files = files;
-                variant.addDependencies(all);
-            }
-
-            module.variant(variant -> {
-                variant.name = "sources-" + officialVersion;
-                variant.attributes = Map.of(
-                    "org.gradle.usage", "java-runtime",
-                    "org.gradle.category", "documentation",
-                    "org.gradle.dependency.bundling", "external",
-                    "org.gradle.docstype", "sources",
-                    "org.gradle.libraryelements", "jar",
-                    "net.minecraftforge.mappings.channel", "official",
-                    "net.minecraftforge.mappings.version", mcVersionWithoutMCP
-                );
-                variant.files = List.of(new GradleModule.Variant.File(sources.getArtifact().getFilename(), sourcesF));
-            });
-
-            // TODO [MCMaven][ForgeRepo] This is a mess. Clean it up.
-            // ALSO TODO add parchment mappings and other mappings support
-
-            FileUtils.ensureParent(output);
-            try {
-                JsonData.toJson(module, output);
-            } catch (IOException e) {
-                Util.sneak(e);
-            }
-
-            cache.add(output).save();
-            return output;
-        });
+    protected GradleModule.Variant[] classVariants(Mappings mappings, Patcher patcher, Artifact... extraDeps) {
+        var extra = new ArrayList<>(Arrays.asList(extraDeps));
+        extra.addAll(patcher.getArtifacts());
+        return super.classVariants(mappings, patcher.getMCPSide(), extra.toArray(Artifact[]::new));
     }
 }

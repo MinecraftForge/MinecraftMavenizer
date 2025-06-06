@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.zip.ZipFile;
 
@@ -25,7 +26,6 @@ import io.codechicken.diffpatch.util.Input.MultiInput;
 import io.codechicken.diffpatch.util.Output.MultiOutput;
 import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
-import net.minecraftforge.mcmaven.impl.repo.SourcesProvider;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
@@ -45,14 +45,19 @@ import org.jetbrains.annotations.Nullable;
 // TODO: [MCMaven] This class needs to be split off into some sort of abstract class so that other patching processes can be implemented.
 // The current way this is implemented by trying to parse a specific config is not that great. And if we want to support other versions, this HAS to be abstracted.
 /**
- * This class is responsible for the <strong>entire</strong> patching process. It continues work after MCP has
- * decompiled the game.
+ * This class is responsible for the <strong>entire</strong> patching process.
+ * It continues work after MCP has decompiled the game.
+ *
+ * After construction the 'last' task will be the final task that produces source files ready to be recompiled.
+ * These files may or may not be in SRG names, depending on the patcher configuration.
+ * But the point is this creates source code.
  */
-class Patcher implements SourcesProvider {
+class Patcher implements Supplier<Task> {
     private final File build;
     private final ForgeRepo forge;
     private final Artifact name;
     private final File data;
+    private final String dataHash;
     public final PatcherConfig.V2 config;
     private final Patcher parent;
     private final @Nullable MCP mcp;
@@ -78,6 +83,7 @@ class Patcher implements SourcesProvider {
         if (!this.data.exists())
             throw new IllegalStateException("Failed to download " + name);
 
+        this.dataHash = HashFunction.SHA1.sneakyHash(this.data);
         this.config = loadConfig(this.data);
         validateConfig();
 
@@ -112,19 +118,28 @@ class Patcher implements SourcesProvider {
         stack.add(this);
 
         // Check if we need to do anything pre-decompile
-        if (!this.config.getAts().isEmpty() || !this.config.getSASs().isEmpty()) {
-            var ats = extractATs();
-            var sass = extractSASs();
-            var hash = HashFunction.SHA1.sneakyHash(ats, sass);
+        var ats = extractATs();
+        var sass = extractSASs();
+        if (ats != null || sass != null) {
             var mcpver = this.getMCP().getName().getVersion();
+
+            File[] files;
+            if (ats == null)
+                files = new File[] { sass };
+            else if (sass == null)
+                files = new File[] { ats };
+            else
+                files = new File[] { ats, sass };
+
+            var hash = HashFunction.SHA1.sneakyHash(files);
             var dir = new File(this.forge.globalBuild, "mcp/" + mcpver + '/' + this.name.getName() + '/' + hash);
 
-            if (!this.config.getAts().isEmpty()) {
+            if (ats != null) {
                 var tmp = predecomp;
                 predecomp = Task.named("modifyAccess", Set.of(tmp), () -> modifyAccess(dir, tmp, ats));
             }
 
-            if (!this.config.getSASs().isEmpty()) {
+            if (sass != null) {
                 var tmp = predecomp;
                 predecomp = Task.named("stripSides", Set.of(tmp), () -> stripSides(dir, tmp, sass));
             }
@@ -196,6 +211,10 @@ class Patcher implements SourcesProvider {
         return this.mcpSide == null ? this.parent.getMCPSide() : this.mcpSide;
     }
 
+    public String getDataHash() {
+        return this.dataHash;
+    }
+
     public List<Artifact> getArtifacts() {
         // TODO MOVE ALL THIS LOGIC TO SOME SORT OF "ARTIFACT LIST GENERATOR" IN ARTIFACT.JAVA
         var artifacts = new ArrayList<Artifact>() /*{
@@ -261,7 +280,7 @@ class Patcher implements SourcesProvider {
     }
 
     /** @return The final unnamed sources */
-    public Task getSources() {
+    public Task get() {
         return this.last;
     }
 
@@ -577,7 +596,7 @@ class Patcher implements SourcesProvider {
         if (this.downloadSources == null)
             return input;
 
-        var output = new File(outputDir, "injectedSources.jar");
+        var output = new File(outputDir, "injected-sources.jar");
         return Task.named("injectSources[" + this.name.getName() + ']',
             Set.of(input, this.downloadSources),
             () -> injectSourcesImpl(input, output)

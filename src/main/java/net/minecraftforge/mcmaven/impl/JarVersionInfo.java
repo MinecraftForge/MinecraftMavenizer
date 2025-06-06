@@ -1,17 +1,12 @@
 /*
- * Copyright (c) Forge Development LLC
+ * Copyright (c) Forge Development LLC and contributors
  * SPDX-License-Identifier: LGPL-2.1-only
  */
 package net.minecraftforge.mcmaven.impl;
 
 import org.jetbrains.annotations.UnknownNullability;
 
-import java.util.Objects;
-import java.util.function.Consumer;
-
-@SuppressWarnings("SameParameterValue")
 record JarVersionInfo(
-    String fallbackTitle,
     String specificationTitle,
     String specificationVendor,
     String specificationVersion,
@@ -19,13 +14,13 @@ record JarVersionInfo(
     String implementationVendor,
     String implementationVersion
 ) {
-    void hello(Consumer<String> consumer, boolean vendor, boolean newLine) {
-        consumer.accept(this.getHello(vendor) + (newLine ? "\n" : ""));
-    }
-
-    String getHello(boolean vendor) {
-        var ret = "%s %s".formatted(!this.implementationTitle.isEmpty() ? this.implementationTitle : this.fallbackTitle, this.implementationVersion);
-        return vendor && !this.implementationVendor.isEmpty() ? ret + " by %s".formatted(this.implementationVendor) : ret;
+    String implementation() {
+        var ret = new StringBuilder().append(this.implementationTitle);
+        if (!this.implementationVersion.isEmpty())
+            ret.append(' ').append(this.implementationVersion);
+        if (!this.implementationVendor.isEmpty())
+            ret.append(" by ").append(this.implementationVendor);
+        return ret.toString();
     }
 
     @SuppressWarnings("deprecation")
@@ -42,14 +37,20 @@ record JarVersionInfo(
     }
 
     static JarVersionInfo of(String fallbackTitle, @UnknownNullability Package pkg) {
+        if (pkg == null)
+            return new JarVersionInfo(null, null, null, fallbackTitle, null, null);
+
         return new JarVersionInfo(
-            fallbackTitle,
-            pkg != null ? Objects.requireNonNullElse(pkg.getSpecificationTitle(), "") : "",
-            pkg != null ? Objects.requireNonNullElse(pkg.getSpecificationVendor(), "") : "",
-            pkg != null ? Objects.requireNonNullElse(pkg.getSpecificationVersion(), "") : "",
-            pkg != null ? Objects.requireNonNullElse(pkg.getImplementationTitle(), "") : "",
-            pkg != null ? Objects.requireNonNullElse(pkg.getImplementationVendor(), "") : "",
-            pkg != null ? Objects.requireNonNullElse(pkg.getImplementationVersion(), "") : ""
+            notNullOrEmpty(pkg.getSpecificationTitle(), ""),
+            notNullOrEmpty(pkg.getSpecificationVendor(), ""),
+            notNullOrEmpty(pkg.getSpecificationVersion(), "Undefined"),
+            notNullOrEmpty(pkg.getImplementationTitle(), fallbackTitle),
+            notNullOrEmpty(pkg.getImplementationVendor(), ""),
+            notNullOrEmpty(pkg.getImplementationVersion(), "Undefined")
         );
+    }
+
+    private static String notNullOrEmpty(String value, String defaultValue) {
+        return value == null || value.isEmpty() ? defaultValue : value;
     }
 }

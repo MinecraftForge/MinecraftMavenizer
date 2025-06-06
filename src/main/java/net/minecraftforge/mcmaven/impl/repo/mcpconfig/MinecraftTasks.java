@@ -40,7 +40,7 @@ public class MinecraftTasks {
 
     private File downloadLauncherManifest() {
         var target = new File(this.cache, "launcher_manifest.json");
-        if (!target.exists() || (!GlobalOptions.cacheOnly && target.lastModified() < System.currentTimeMillis() - Constants.CACHE_TIMEOUT)) {
+        if (!target.exists() || (!GlobalOptions.isCacheOnly() && target.lastModified() < System.currentTimeMillis() - Constants.CACHE_TIMEOUT)) {
             try {
                 GlobalOptions.assertNotCacheOnly();
                 GlobalOptions.assertOnline();
@@ -81,7 +81,7 @@ public class MinecraftTasks {
         return target;
     }
 
-    Task versionFile(String key, String ext) {
+    public Task versionFile(String key, String ext) {
         return this.versionFiles.computeIfAbsent(key, k ->
             Task.named("download[" + this.version + "][" + key + ']',
                 () -> downloadVersionFile(key, ext)

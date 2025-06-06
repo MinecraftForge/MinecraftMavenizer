@@ -4,7 +4,6 @@
  */
 package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
-import net.minecraftforge.mcmaven.impl.repo.SourcesProvider;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Task;
 
@@ -12,7 +11,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MCPSide implements SourcesProvider {
+public class MCPSide {
     public static final String CLIENT = "client";
     public static final String SERVER = "server";
     public static final String JOINED = "joined";
@@ -76,7 +75,6 @@ public class MCPSide implements SourcesProvider {
         return artifacts;
     }
 
-    @Override
     public Task getSources() {
         return this.getTasks().getLastTask();
     }

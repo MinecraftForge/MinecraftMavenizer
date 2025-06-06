@@ -12,6 +12,7 @@ import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.logging.Log;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,14 +27,14 @@ public class Main {
             throw e;
         }
 
-        var total = (System.nanoTime() - start) / 1_000_000;
+        var time = Duration.ofNanos(System.nanoTime() - start);
         if (Log.isCapturing()) {
             Log.drop();
             Log.INFO.print("Minecraft Maven is up-to-date");
         } else {
             Log.INFO.print("Minecraft Maven has finished");
         }
-        Log.INFO.println(", took " + total + "ms");
+        Log.INFO.println(String.format(", took %d:%02d.%03d", time.toMinutesPart(), time.toSecondsPart(), time.toMillisPart()));
     }
 
     private static void run(String[] args) throws Exception {
@@ -117,15 +118,16 @@ public class Main {
         }
 
         // global options
-        GlobalOptions.setOffline(options.has(offlineO));
-        GlobalOptions.cacheOnly = options.has(cacheOnlyO);
+        if (options.has(offlineO))
+            GlobalOptions.setOffline();
+        if (options.has(cacheOnlyO))
+            GlobalOptions.setCacheOnly();
 
         var output = options.valueOf(outputO);
         var cache = options.valueOf(cacheO);
         var jdkCache = !options.has(cacheO) || options.has(jdkCacheO)
             ? options.valueOf(jdkCacheO)
             : new File(cache, "jdks");
-        var mcmaven = new MinecraftMaven(output, cache, jdkCache);
 
         var artifact = options.valueOf(artifactO);
         for (var entry : artifacts.entrySet()) {
@@ -135,6 +137,7 @@ public class Main {
 
         var version = options.valueOf(versionO);
 
-        mcmaven.minecraft(artifact, version);
+        var mcmaven = new MinecraftMaven(output, cache, jdkCache);
+        mcmaven.run(artifact, version);
     }
 }

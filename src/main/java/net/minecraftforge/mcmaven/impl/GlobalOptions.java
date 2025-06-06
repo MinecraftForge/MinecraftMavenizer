@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Forge Development LLC and contributors
+ * SPDX-License-Identifier: LGPL-2.1-only
+ */
 package net.minecraftforge.mcmaven.impl;
 
 import net.minecraftforge.util.logging.Log;
@@ -5,15 +9,23 @@ import net.minecraftforge.util.logging.Log;
 public final class GlobalOptions {
     private static boolean offline = false;
 
-    public static boolean cacheOnly = false;
+    private static boolean cacheOnly = false;
     private static boolean cacheMiss = false;
 
     public static boolean isOffline() {
         return offline || cacheOnly;
     }
 
-    public static void setOffline(boolean isOffline) {
-        offline = isOffline;
+    public static void setOffline() {
+        offline = true;
+    }
+
+    public static boolean isCacheOnly() {
+        return cacheOnly;
+    }
+
+    public static void setCacheOnly() {
+        cacheOnly = true;
     }
 
     public static void assertOnline() {
