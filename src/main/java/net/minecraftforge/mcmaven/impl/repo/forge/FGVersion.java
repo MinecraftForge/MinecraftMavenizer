@@ -16,7 +16,7 @@ import java.util.TreeMap;
  * @see <a href="https://github.com/MinecraftForge/ForgeGradle"><code>MinecraftForge/ForgeGradle</code> on
  * GitHub.com</a>
  */
-enum FGVersion {
+public enum FGVersion {
     v1_1("1.1"),
     v1_2("1.2"),
     v2  ("2.0"),

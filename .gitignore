@@ -15,3 +15,5 @@
 
 # Jonathan's IntelliJ Fuckery
 /.idea/
+/output.jar
+/output.jar.cache

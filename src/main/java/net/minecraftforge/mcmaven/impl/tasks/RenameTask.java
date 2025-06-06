@@ -45,7 +45,7 @@ public final class RenameTask implements Supplier<Task> {
     public RenameTask(File build, Artifact name, MCPSide side, Task sources, Mappings mappings) {
         this.name = name;
         this.side = side;
-        this.task = this.remapSources(sources, build, mappings);
+        this.task = this.remapSources(sources, mappings.getFolder(build), mappings);
     }
 
     /** @return The final named sources */
@@ -56,7 +56,7 @@ public final class RenameTask implements Supplier<Task> {
     private Task remapSources(Task input, File outputDir, Mappings provider) {
         var output = new File(outputDir, "remapped.jar");
         var mappings = provider.getCsvZip(side);
-        return Task.named("remap[" + this.name.getName() + "][" + provider.getKey(side) + ']',
+        return Task.named("remap[" + this.name.getName() + "][" + provider + ']',
             Set.of(input, mappings),
             () -> remapSourcesImpl(input, mappings, output)
         );
@@ -81,6 +81,7 @@ public final class RenameTask implements Supplier<Task> {
 
             // TODO: [MCMaven][Renamer] This garbage was copy-pasted from FG.
             // I changed the while loop to a for loop, though. I guess it is fine?
+            FileUtils.ensureParent(output);
             try (var zin = new ZipInputStream(new FileInputStream(input));
                  var zout = new ZipOutputStream(new FileOutputStream(output))) {
                 for (var entry = zin.getNextEntry(); entry != null; entry = zin.getNextEntry()) {

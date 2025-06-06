@@ -8,12 +8,13 @@ import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
+import net.minecraftforge.mcmaven.impl.repo.forge.FGVersion;
 import net.minecraftforge.mcmaven.impl.repo.forge.ForgeRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
+import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.data.json.JsonData;
-import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.util.hash.HashUtils;
 import net.minecraftforge.util.logging.Log;
@@ -27,14 +28,13 @@ import java.util.List;
 //  use single detached configuration to resolve individual configurations
 //  pass in downloaded files to mcmaven (absolute path)
 public record MinecraftMaven(File output, Cache cache) {
-    private static final String DISPLAY_NAME = "Minecraft Mavenizer";
+    private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.14.4"); // Only 1.14.4+ has official mappings, we can support more when we add more mappings
 
     public MinecraftMaven(File output, File cacheRoot, File jdkCacheRoot) {
         this(output, new Cache(cacheRoot, jdkCacheRoot));
     }
 
     public MinecraftMaven {
-        Log.info(JarVersionInfo.of(DISPLAY_NAME, this).implementation());
         Log.info("  Output:     " + output.getAbsolutePath());
         Log.info("  Cache:      " + cache.root().getAbsolutePath());
         Log.info("  JDK Cache:  " + cache.jdks().root().getAbsolutePath());
@@ -56,7 +56,15 @@ public record MinecraftMaven(File output, Cache cache) {
             if ("all".equals(version)) {
                 var versions = this.cache.maven().getVersions(artifact);
                 for (var ver : versions.reversed()) {
-                    var mappings = new Mappings("official", forgeToMcVersion(version));
+                    var cver = new ComparableVersion(ver);
+                    if (cver.compareTo(MIN_SUPPORTED_FORGE) < 0)
+                        continue;
+
+                    var fg = FGVersion.fromForge(ver);
+                    if (fg == null || fg.ordinal() < FGVersion.v3.ordinal()) // Unsupported
+                        continue;
+
+                    var mappings = new Mappings("official", forgeToMcVersion(ver));
                     var artifacts = repo.process(module, ver, mappings);
                     finalize(artifact.withVersion(ver), mappings, artifacts);
                 }
@@ -83,6 +91,8 @@ public record MinecraftMaven(File output, Cache cache) {
         // it with _
         // This could cause issues if we ever support a version with _ in it, but fuck it I don't care right now.
         int idx = version.indexOf('-');
+        if (idx == -1)
+            throw new IllegalArgumentException("Invalid Forge version: " + version);
         return version.substring(0, idx).replace('_', '-');
     }
 

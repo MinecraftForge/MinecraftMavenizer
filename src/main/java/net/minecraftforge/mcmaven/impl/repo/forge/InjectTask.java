@@ -6,6 +6,7 @@ package net.minecraftforge.mcmaven.impl.repo.forge;
 
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
+import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
@@ -26,13 +27,15 @@ public final class InjectTask implements Supplier<Task> {
     private final Artifact name;
     private final Cache cache;
     private final Patcher patcher;
+    private final Mappings mappings;
     private final Task task;
 
-    InjectTask(File build, Cache cache, Artifact name, Patcher patcher, Task input) {
-        this.build = build;
+    InjectTask(File build, Cache cache, Artifact name, Patcher patcher, Task input, Mappings mappings) {
+        this.build = mappings.getFolder(build);
         this.name = name;
         this.cache = cache;
         this.patcher = patcher;
+        this.mappings = mappings;
         this.task = this.injectData(input);
     }
 
@@ -42,7 +45,7 @@ public final class InjectTask implements Supplier<Task> {
     }
 
     private Task injectData(Task input) {
-        return Task.named("injectData[" + this.name.getName() + ']',
+        return Task.named("injectData[" + this.name.getName() + "][" + mappings + ']',
             Set.of(input),
             () -> injectDataImpl(input, new File(this.build, "injected.jar"))
         );

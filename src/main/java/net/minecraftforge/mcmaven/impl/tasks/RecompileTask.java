@@ -5,6 +5,7 @@
 package net.minecraftforge.mcmaven.impl.tasks;
 
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
@@ -26,13 +27,15 @@ public final class RecompileTask implements Supplier<Task> {
     private final Artifact name;
     private final MCP mcp;
     private final Supplier<List<File>> classpath;
+    private final Mappings mappings;
     private final Task task;
 
-    public RecompileTask(File build, Artifact name, MCP mcp, Supplier<List<File>> classpath, Task sources) {
-        this.build = build;
+    public RecompileTask(File build, Artifact name, MCP mcp, Supplier<List<File>> classpath, Task sources, Mappings mappings) {
+        this.build = mappings.getFolder(build);
         this.name = name;
         this.mcp = mcp;
         this.classpath = classpath;
+        this.mappings = mappings;
         this.task = this.recompileSources(sources);
     }
 
@@ -44,7 +47,7 @@ public final class RecompileTask implements Supplier<Task> {
 
     protected Task recompileSources(Task input) {
         var output = new File(this.build, "recompiled.jar");
-        return Task.named("recompile[" + this.name.getName() + ']',
+        return Task.named("recompile[" + this.name.getName() + "][" + mappings + ']',
             Set.of(input),
             () -> recompileSourcesImpl(input, output)
         );

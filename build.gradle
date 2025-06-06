@@ -7,6 +7,7 @@ plugins {
     alias libs.plugins.licenser
     alias libs.plugins.gradleutils
     alias libs.plugins.shadow
+    //alias libs.plugins.modules
 }
 
 final projectDisplayName = 'Minecraft Mavenizer'
@@ -34,6 +35,15 @@ dependencies {
     // Static Analysis
     compileOnly libs.nulls
 }
+
+/* Can't do modules yet with JavaProvisioner having JavaProbe in the root package.
+extraJavaModuleInfo {
+    failOnMissingModuleInfo = false
+    //skipLocalJars = true
+
+    automaticModule(libs.diff, 'io.codechicken.diffpatch')
+}
+*/
 
 license {
     header = rootProject.file('LICENSE-header.txt')

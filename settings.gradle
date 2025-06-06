@@ -12,14 +12,15 @@ dependencyResolutionManagement {
 
     //@formatter:off
     versionCatalogs.register('libs') {
-        plugin 'licenser',    'net.minecraftforge.licenser'    version '1.2.0'
-        plugin 'gradleutils', 'net.minecraftforge.gradleutils' version '2.6.0'
-        plugin 'shadow',      'com.gradleup.shadow'            version '9.0.0-beta13'
+        plugin 'licenser',    'net.minecraftforge.licenser'        version '1.2.0'
+        plugin 'gradleutils', 'net.minecraftforge.gradleutils'     version '2.6.0'
+        plugin 'shadow',      'com.gradleup.shadow'                version '9.0.0-beta13'
+        plugin 'modules',     'org.gradlex.extra-java-module-info' version '1.12'
 
         library 'gson',     'com.google.code.gson', 'gson'             version '2.10.1'
         library 'jopt',     'net.sf.jopt-simple',   'jopt-simple'      version '6.0-alpha-3'
         library 'jver',     'net.minecraftforge',   'java-provisioner' version '1.0.8'
-        library 'srgutils', 'net.minecraftforge',   'srgutils'         version '0.5.11'
+        library 'srgutils', 'net.minecraftforge',   'srgutils'         version '0.5.14'
         library 'diff',     'io.codechicken',       'DiffPatch'        version '2.0.0.36' // Fuzzy patching
 
         library 'fastcsv',   'de.siegmar', 'fastcsv'    version '3.4.0'

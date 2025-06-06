@@ -597,6 +597,7 @@ public class MCPTaskFactory {
         }
 
         try {
+            FileUtils.ensureParent(libsVarCache);
             JsonData.toJson(downloadedLibs.stream().map(Lib::cacheable).toList(), libsVarCache);
             cache.add(libsVarCache);
         } catch (IOException e) {

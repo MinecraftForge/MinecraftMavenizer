@@ -40,15 +40,20 @@ public class Mappings {
         return this.version;
     }
 
+    @Override
+    public String toString() {
+        return channel() + '-' + version();
+    }
+
+    public File getFolder(File root) {
+        return new File(root, channel() + '/' + version());
+    }
+
     public boolean isPrimary() {
         // This is the 'primary' mapping and thus what we publish as the root artifacts.
         // Not as gradle module metadata only variants.
         // Basically the thing that looks like a normal maven artifact
         return true;
-    }
-
-    public String getKey(MCPSide side) {
-        return "official";
     }
 
     public Artifact getArtifact(MCPSide side) {
@@ -72,7 +77,7 @@ public class Mappings {
         var srg = side.getTasks().getMappings();
         var client = mc.versionFile("client_mappings", "txt");
         var server = mc.versionFile("server_mappings", "txt");
-        ret = Task.named("srg2names[" + "official" + ']',
+        ret = Task.named("srg2names[" + this + ']',
             Set.of(srg, client, server),
             () -> getMappings(side, srg, client, server)
         );
@@ -84,8 +89,9 @@ public class Mappings {
     private File getMappings(MCPSide side, Task srgMappings, Task clientTask, Task serverTask) {
         var tool = side.getMCP().getCache().maven().download(Constants.INSTALLER_TOOLS);
 
-        var output = new File(side.getBuildFolder(), "data/mappings/official.zip");
-        var log = new File(side.getBuildFolder(), "data/mappings/official.txt");
+        var root = getFolder(new File(side.getBuildFolder(), "data/mapings"));
+        var output = new File(root, "official.zip");
+        var log = new File(root, "official.log");
 
         var mappings = srgMappings.execute();
         var client = clientTask.execute();

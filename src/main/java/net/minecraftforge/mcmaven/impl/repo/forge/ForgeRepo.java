@@ -132,9 +132,9 @@ public final class ForgeRepo extends Repo {
         var patcher = new Patcher(build, this, userdev);
         var joined = patcher.getMCP().getSide(MCPSide.JOINED);
         var sourcesTask = new RenameTask(build, userdev, joined, patcher.get(), mappings);
-        var recompile = new RecompileTask(build, name, patcher.getMCP(), patcher::getClasspath, sourcesTask.get());
+        var recompile = new RecompileTask(build, name, patcher.getMCP(), patcher::getClasspath, sourcesTask.get(), mappings);
         var extraTask = joined.getTasks().getExtra(); // TODO: [MCMaven][ForgeRepo] Inject Client Extra into Patcher recompiled
-        var classesTask = new InjectTask(build, this.cache, name, patcher, recompile.get());
+        var classesTask = new InjectTask(build, this.cache, name, patcher, recompile.get(), mappings);
 
         var extraCoords = Artifact.from(Constants.MC_GROUP, Constants.MC_CLIENT, patcher.getMCP().getName().getVersion()).withClassifier("extra");
         var mappingCoords = mappings.getArtifact(joined);

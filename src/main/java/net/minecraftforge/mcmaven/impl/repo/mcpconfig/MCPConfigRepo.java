@@ -98,8 +98,8 @@ public final class MCPConfigRepo extends Repo {
         var name = Artifact.from("net.minecraft", side, version);
 
         var sourcesTask = new RenameTask(build, name, mcpSide, mcpSide.getSources(), mappings);
-        var recompile = new RecompileTask(build, name, mcpSide.getMCP(), mcpSide::getClasspath, sourcesTask.get());
-        var classesTask = mergeExtra(build, side, recompile.get(), mcpSide.getTasks().getExtra());
+        var recompile = new RecompileTask(build, name, mcpSide.getMCP(), mcpSide::getClasspath, sourcesTask.get(), mappings);
+        var classesTask = mergeExtra(build, side, recompile.get(), mcpSide.getTasks().getExtra(), mappings);
 
         var sources = pending("Sources", sourcesTask.get(), name.withClassifier("sources"), sourceVariant(mappings));
         var classes = pending("Classes", classesTask, name, () -> classVariants(mappings, mcpSide));
@@ -112,9 +112,9 @@ public final class MCPConfigRepo extends Repo {
     }
 
     // TODO [MCMaven][client-extra] Band-aid fix for merging for clean! Remove later.
-    private static Task mergeExtra(File build, String side, Task recompiled, Task extra) {
-        return Task.named("mergeExtra[" + side + ']', Set.of(extra, recompiled), () -> {
-            var output = new File(build, "recompiled-extra.jar");
+    private static Task mergeExtra(File build, String side, Task recompiled, Task extra, Mappings mappings) {
+        return Task.named("mergeExtra[" + side + "][" + mappings + ']', Set.of(extra, recompiled), () -> {
+            var output = new File(mappings.getFolder(build), "recompiled-extra.jar");
             var recompiledF = recompiled.get();
             var extraF = extra.get();
             var cache = HashStore
