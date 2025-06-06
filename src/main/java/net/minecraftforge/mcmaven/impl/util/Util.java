@@ -4,8 +4,13 @@
  */
 package net.minecraftforge.mcmaven.impl.util;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Stream;
+
+import net.minecraftforge.util.hash.HashFunction;
 
 // TODO [MCMaven][Documentation] Document
 public class Util {
@@ -58,5 +63,14 @@ public class Util {
      */
     public static <T, R> R replace(T obj, Function<T, R> action) {
         return action.apply(obj);
+    }
+
+    public static String hash(HashFunction func, File... files) {
+        try {
+            var existing = Stream.of(files).filter(f -> f != null && f.exists()).toList();
+            return func.hash(existing);
+        } catch (IOException e) {
+            return sneak(e);
+        }
     }
 }

@@ -26,6 +26,7 @@ import io.codechicken.diffpatch.util.Input.MultiInput;
 import io.codechicken.diffpatch.util.Output.MultiOutput;
 import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
@@ -52,7 +53,7 @@ import org.jetbrains.annotations.Nullable;
  * These files may or may not be in SRG names, depending on the patcher configuration.
  * But the point is this creates source code.
  */
-class Patcher implements Supplier<Task> {
+public class Patcher implements Supplier<Task> {
     private final File build;
     private final ForgeRepo forge;
     private final Artifact name;
@@ -123,25 +124,18 @@ class Patcher implements Supplier<Task> {
         if (ats != null || sass != null) {
             var mcpver = this.getMCP().getName().getVersion();
 
-            File[] files;
-            if (ats == null)
-                files = new File[] { sass };
-            else if (sass == null)
-                files = new File[] { ats };
-            else
-                files = new File[] { ats, sass };
-
-            var hash = HashFunction.SHA1.sneakyHash(files);
+            var hash = Util.hash(HashFunction.SHA1, ats, sass);
             var dir = new File(this.forge.globalBuild, "mcp/" + mcpver + '/' + this.name.getName() + '/' + hash);
+            var cache = this.forge.getCache();
 
             if (ats != null) {
                 var tmp = predecomp;
-                predecomp = Task.named("modifyAccess", Set.of(tmp), () -> modifyAccess(dir, tmp, ats));
+                predecomp = Task.named("modifyAccess", Set.of(tmp), () -> modifyAccess(dir, tmp, ats, cache));
             }
 
             if (sass != null) {
                 var tmp = predecomp;
-                predecomp = Task.named("stripSides", Set.of(tmp), () -> stripSides(dir, tmp, sass));
+                predecomp = Task.named("stripSides", Set.of(tmp), () -> stripSides(dir, tmp, sass, cache));
             }
 
             // If we changed the decompile input, rebuild decompile and subsequent tasks
@@ -392,9 +386,9 @@ class Patcher implements Supplier<Task> {
         }
     }
 
-    private File modifyAccess(File globalBase, Task inputTask, File cfg) {
+    public static File modifyAccess(File globalBase, Task inputTask, File cfg, Cache dlCache) {
         var input = inputTask.execute();
-        var tool = this.forge.getCache().maven().download(Constants.ACCESS_TRANSFORMER);
+        var tool = dlCache.maven().download(Constants.ACCESS_TRANSFORMER);
 
         var output = new File(globalBase, "modifyAccess.jar");
         var log    = new File(globalBase, "modifyAccess.log");
@@ -415,7 +409,7 @@ class Patcher implements Supplier<Task> {
             "--outJar", output.getAbsolutePath()
         );
 
-        var jdk = this.getMCP().getCache().jdks().get(Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
+        var jdk = dlCache.jdks().get(Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
         if (jdk == null)
             throw new IllegalStateException("Failed to find JDK for version " + Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
 
@@ -427,9 +421,9 @@ class Patcher implements Supplier<Task> {
         return output;
     }
 
-    private File stripSides(File globalBase, Task inputTask, File cfg) {
+    public static File stripSides(File globalBase, Task inputTask, File cfg, Cache dlCache) {
         var input = inputTask.execute();
-        var tool = this.forge.getCache().maven().download(Constants.SIDE_STRIPPER);
+        var tool = dlCache.maven().download(Constants.SIDE_STRIPPER);
         var output = new File(globalBase, "stripSides.jar");
         var log    = new File(globalBase, "stripSides.log");
         var cache = HashStore.fromFile(output);
@@ -451,7 +445,7 @@ class Patcher implements Supplier<Task> {
         args.add("--output");
         args.add(output.getAbsolutePath());
 
-        var jdk = this.getMCP().getCache().jdks().get(Constants.SIDE_STRIPPER_JAVA_VERSION);
+        var jdk = dlCache.jdks().get(Constants.SIDE_STRIPPER_JAVA_VERSION);
         if (jdk == null)
             throw new IllegalStateException("Failed to find JDK for version " + Constants.SIDE_STRIPPER_JAVA_VERSION);
 
