@@ -4,19 +4,25 @@
  */
 package net.minecraftforge.mcmaven.impl.repo;
 
+import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.GradleAttributes;
+import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
+import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.util.logging.Log;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +30,9 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.jetbrains.annotations.Nullable;
+
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerException;
 
 public abstract class Repo {
     protected final Cache cache;
@@ -133,6 +142,29 @@ public abstract class Repo {
         return variants.toArray(new GradleModule.Variant[0]);
     }
 
+    protected static Task simplePom(File build, Artifact artifact) {
+        return Task.named("pom[" + artifact.getName() + ']', () -> {
+            var output = new File(build, artifact.getName() + '-' + artifact.getVersion() + ".pom");
+            var cache = HashStore.fromFile(output);
+            if (output.exists() && cache.isSame())
+                return output;
+
+            GlobalOptions.assertNotCacheOnly();
+
+            var builder = new POMBuilder(artifact.getGroup(), artifact.getName(), artifact.getVersion());
+
+            FileUtils.ensureParent(output);
+            try (var os = new FileOutputStream(output)) {
+                os.write(builder.build().getBytes(StandardCharsets.UTF_8));
+            } catch (IOException | ParserConfigurationException | TransformerException e) {
+                Util.sneak(e);
+            }
+
+            cache.save();
+            return output;
+        });
+    }
+
     public static final class PendingArtifact implements Supplier<File> {
         private final String message;
         private final Task task;
@@ -156,6 +188,9 @@ public abstract class Repo {
                 Log.push();
                 return this.task.execute();
             } finally {
+                if (this.variants != null)
+                    this.variants.execute();
+
                 Log.pop();
             }
         }

@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 // TODO: [MCMaven][ForgeRepo] For now, the ForgeRepo needs to be fully complete with everything it has to do.
 // later, we can worry about refactoring it so that other repositories such as MCP (clean) and FMLOnly can function.
@@ -96,33 +97,33 @@ public final class ForgeRepo extends Repo {
         return Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge, userdev3 ? "userdev3" : "userdev", "jar");
     }
 
-    /**
-     * This handles UserDev3 artifacts, which are anything created using FG 3->6
-     *
-     * We need to generate the following artifacts:
-     *   net.minecraftforge:forge:{version}
-     *     default:
-     *       The default jar contains the recompiled class files, patcher assets
-     *     sources:
-     *       Source files used to recompile the default jar.
-     *     metadata.zip:
-     *       Metadata about the version, such as runs.json and version.json.
-     *   net.minecraft:{mcp-version}:client
-     *     extra:
-     *       This is the client jar file with class files removed. This is for legacy versions which expect it to exist.
-     *   net.minecraft:mappings_{CHANNEL}:{MCP_VERSION}[-{VERSION}]@zip
-     *     A zip file containing fields, methods, and params.csv files mapping SRG->MCP names.
-     *
-     *   All variants need to provide their gradle module metadata information to be merged as needed.
-     *   Currently, we don't support any non-standard variants. So there is no merging.
-     *   But my idea is that the custom mapping channels would be custom attributes.
-     *   As well as a new flag to skip the client-extra, and merge it in the main jar instead.
-     *
-     *   If the mappings are `official`, we also need to generate:
-     *     pom:
-     *       Standard maven pom file that contains all dependency information.
-     *
-     */
+    /// This handles UserDev3 artifacts, which are anything created using FG 3->6
+    ///
+    /// We need to generate the following artifacts:
+    /// - `net.minecraftforge:forge:{version}`
+    ///   - default:
+    ///     - The default jar contains the recompiled class files, patcher assets
+    ///   - sources:
+    ///     - Source files used to recompile the default jar.
+    ///   - metadata.zip:
+    ///     - Metadata about the version, such as runs.json and version.json.
+    /// - `net.minecraft:{mcp-version}:client`
+    ///   - extra:
+    ///     - This is the client jar file with class files removed. This is for legacy versions which expect it to
+    /// exist.
+    /// - `net.minecraft:mappings_{CHANNEL}:{MCP_VERSION}[-{VERSION}]@zip`
+    ///   - A zip file containing fields, methods, and params.csv files mapping SRG->MCP names.
+    ///
+    /// All variants need to provide their gradle module metadata information to be merged as needed.
+    ///
+    /// Currently, we don't support any non-standard variants. So there is no merging. But my idea is that the custom
+    /// mapping channels would be custom attributes. As well as a new flag to skip the client-extra, and merge it in the
+    /// main jar instead.
+    ///
+    /// If the mappings are `official`, we also need to generate:
+    ///   - pom:
+    ///     - Standard maven pom file that contains all dependency information.
+    // Made this an MD comment to make it easier to read in IDE - Jonathan
     private List<PendingArtifact> processV3(String version, Mappings mappings) {
         var name = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version);
         var userdev = getUserdev(version);
@@ -133,14 +134,13 @@ public final class ForgeRepo extends Repo {
         var joined = patcher.getMCP().getSide(MCPSide.JOINED);
         var sourcesTask = new RenameTask(build, userdev, joined, patcher.get(), mappings);
         var recompile = new RecompileTask(build, name, patcher.getMCP(), patcher::getClasspath, sourcesTask.get(), mappings);
-        var extraTask = joined.getTasks().getExtra(); // TODO: [MCMaven][ForgeRepo] Inject Client Extra into Patcher recompiled
         var classesTask = new InjectTask(build, this.cache, name, patcher, recompile.get(), mappings);
 
-        var extraCoords = Artifact.from(Constants.MC_GROUP, Constants.MC_CLIENT, patcher.getMCP().getName().getVersion()).withClassifier("extra");
+        var extraCoords = Artifact.from(Constants.MC_GROUP, Constants.MC_CLIENT + "-extra", patcher.getMCP().getName().getVersion());
         var mappingCoords = mappings.getArtifact(joined);
 
         var mapzip = pending("Mappings Zip", mappings.getCsvZip(joined), mappingCoords);
-        var extra = pending("Client Extra", extraTask, extraCoords);
+        var mappom = pending("Mappings POM", simplePom(build, mappingCoords), mappingCoords.withExtension("pom"));
 
         var sources = pending("Sources", sourcesTask.get(), name.withClassifier("sources"), sourceVariant(mappings));
         var classes = pending("Classes", classesTask.get(), name, () -> classVariants(mappings, patcher, extraCoords, mappingCoords));
@@ -150,7 +150,11 @@ public final class ForgeRepo extends Repo {
         if (mappings.isPrimary())
             pom = pending("Maven POM", pom(build, patcher, version, extraCoords, mappingCoords), name.withExtension("pom"));
 
-        return List.of(mapzip, extra, sources, classes, pom, metadata);
+        var extraOutput = this.mcpconfig.processExtra(Constants.MC_GROUP + ':' + Constants.MC_CLIENT, patcher.getMCP().getName().getVersion());
+        return Stream.concat(
+            extraOutput.stream(),
+            Stream.of(mapzip, mappom, sources, classes, pom, metadata)
+        ).toList();
     }
 
     private static Task metadata(File build, Patcher patcher) {

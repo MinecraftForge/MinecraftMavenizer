@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -109,6 +110,27 @@ public final class MCPConfigRepo extends Repo {
             pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"));
 
         return List.of(sources, classes, pom, metadata);
+    }
+
+    public List<PendingArtifact> processExtra(String module, String version) {
+        if (!module.startsWith("net.minecraft:"))
+            throw new IllegalArgumentException("MCPConfigRepo cannot process modules that aren't for group net.minecraft");
+
+        var side = module.substring("net.minecraft:".length());
+        var displayName = Character.toUpperCase(side.charAt(0)) + side.substring(1);
+        var mcp = this.get(Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip"));
+        var mcpSide = mcp.getSide(side);
+
+        var build = mcpSide.getBuildFolder();
+        var name = Artifact.from("net.minecraft", side + "-extra", version);
+
+        var extraTask = mcpSide.getTasks().getExtra();
+        var pomTask = pomExtra(build, side + "-extra", version);
+
+        var extra = pending(displayName + " Extra", extraTask, name);
+        var pom = pending(displayName + " Maven POM", pomTask, name.withExtension("pom"));
+
+        return List.of(extra, pom);
     }
 
     // TODO [MCMaven][client-extra] Band-aid fix for merging for clean! Remove later.
@@ -205,6 +227,29 @@ public final class MCPConfigRepo extends Repo {
             Util.make(mcpSide.getMCPConfigLibraries(), l -> l.removeIf(a -> a.getOs() != OS.UNKNOWN)).forEach(a -> {
                 builder.dependencies().add(a, "compile");
             });
+
+            FileUtils.ensureParent(output);
+            try (var os = new FileOutputStream(output)) {
+                os.write(builder.build().getBytes(StandardCharsets.UTF_8));
+            } catch (IOException | ParserConfigurationException | TransformerException e) {
+                Util.sneak(e);
+            }
+
+            cache.save();
+            return output;
+        });
+    }
+
+    private static Task pomExtra(File build, String side, String version) {
+        return Task.named("pom[" + side + ']', () -> {
+            var output = new File(build, side + ".pom");
+            var cache = HashStore.fromFile(output);
+            if (output.exists() && cache.isSame())
+                return output;
+
+            GlobalOptions.assertNotCacheOnly();
+
+            var builder = new POMBuilder("net.minecraft", side, version);
 
             FileUtils.ensureParent(output);
             try (var os = new FileOutputStream(output)) {
