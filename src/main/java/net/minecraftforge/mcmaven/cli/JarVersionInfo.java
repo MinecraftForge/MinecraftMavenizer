@@ -4,6 +4,7 @@
  */
 package net.minecraftforge.mcmaven.cli;
 
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnknownNullability;
 
 record JarVersionInfo(
@@ -14,11 +15,36 @@ record JarVersionInfo(
     String implementationVendor,
     String implementationVersion
 ) {
+    JarVersionInfo(String title) {
+        this("", "", "Undefined", title, "", "Undefined");
+    }
+
+    JarVersionInfo(
+        String fallbackTitle,
+        @Nullable String specificationTitle,
+        @Nullable String specificationVendor,
+        @Nullable String specificationVersion,
+        @Nullable String implementationTitle,
+        @Nullable String implementationVendor,
+        @Nullable String implementationVersion
+    ) {
+        this(
+            notNullOrEmpty(specificationTitle, ""),
+            notNullOrEmpty(specificationVendor, ""),
+            notNullOrEmpty(specificationVersion, "Undefined"),
+            notNullOrEmpty(implementationTitle, fallbackTitle),
+            notNullOrEmpty(implementationVendor, ""),
+            notNullOrEmpty(implementationVersion, "Undefined")
+        );
+    }
+
+    // NOTE: This should only be used once. If we need to use it more than once, consider making it a record parameter.
     String implementation() {
-        var ret = new StringBuilder().append(this.implementationTitle);
-        if (!this.implementationVersion.isEmpty())
+        var size = this.implementationTitle.length() + this.implementationVersion.length() + this.implementationVendor.length() + 5;
+        var ret = new StringBuilder(size).append(this.implementationTitle);
+        if (notEmptyOrUndefined(this.implementationVersion))
             ret.append(' ').append(this.implementationVersion);
-        if (!this.implementationVendor.isEmpty())
+        if (notEmptyOrUndefined(this.implementationVendor))
             ret.append(" by ").append(this.implementationVendor);
         return ret.toString();
     }
@@ -38,19 +64,24 @@ record JarVersionInfo(
 
     static JarVersionInfo of(String fallbackTitle, @UnknownNullability Package pkg) {
         if (pkg == null)
-            return new JarVersionInfo(null, null, null, fallbackTitle, null, null);
+            return new JarVersionInfo(fallbackTitle);
 
         return new JarVersionInfo(
-            notNullOrEmpty(pkg.getSpecificationTitle(), ""),
-            notNullOrEmpty(pkg.getSpecificationVendor(), ""),
-            notNullOrEmpty(pkg.getSpecificationVersion(), "Undefined"),
-            notNullOrEmpty(pkg.getImplementationTitle(), fallbackTitle),
-            notNullOrEmpty(pkg.getImplementationVendor(), ""),
-            notNullOrEmpty(pkg.getImplementationVersion(), "Undefined")
+            fallbackTitle,
+            pkg.getSpecificationTitle(),
+            pkg.getSpecificationVendor(),
+            pkg.getSpecificationVersion(),
+            pkg.getImplementationTitle(),
+            pkg.getImplementationVendor(),
+            pkg.getImplementationVersion()
         );
     }
 
-    private static String notNullOrEmpty(String value, String defaultValue) {
-        return value == null || value.isEmpty() ? defaultValue : value;
+    private static String notNullOrEmpty(@Nullable String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value;
+    }
+
+    private static boolean notEmptyOrUndefined(String value) {
+        return !value.isEmpty() && !"Undefined".equals(value);
     }
 }
