@@ -628,7 +628,11 @@ public class MCPTaskFactory {
     }
 
     public List<Lib> getLibraries() {
-        return Objects.requireNonNull(this.libraries, "Libraries have not been downloaded yet. Please finalize MCP before using.");
+        // no libraries? run the task to populate the field.
+        if (this.libraries == null)
+            this.findStep("listLibraries").execute();
+
+        return this.libraries;
     }
 
     private Task listLibrariesBundle(String name, Map<String, String> step) {
