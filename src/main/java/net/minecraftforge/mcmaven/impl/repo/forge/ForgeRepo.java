@@ -243,6 +243,12 @@ public final class ForgeRepo extends Repo {
             if (mappings != null)
                 builder.dependencies().add(mappings, "compile");
 
+            for (var dep : patcher.getMCPSide().getMCLibraries())
+                builder.dependencies().add(dep, "compile");
+
+            for (var dep : patcher.getMCPSide().getMCPConfigLibraries())
+                builder.dependencies().add(dep, "compile");
+
             for (var dep : patcher.getArtifacts())
                 builder.dependencies().add(dep, "compile");
 
