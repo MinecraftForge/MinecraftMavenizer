@@ -4,6 +4,8 @@
  */
 package net.minecraftforge.mcmaven.impl;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
@@ -205,6 +207,7 @@ public record MinecraftMaven(File output, Cache cache) {
 
         try {
             JsonData.toJson(module, target);
+            HashUtils.updateHash(target);
             cache.save();
         } catch (Throwable t) {
             throw new RuntimeException("Failed to write artifact module: %s".formatted(artifact), t);

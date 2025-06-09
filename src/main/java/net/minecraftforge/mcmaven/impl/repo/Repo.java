@@ -132,9 +132,13 @@ public abstract class Repo {
 
 
         var variants = new ArrayList<GradleModule.Variant>();
-        variants.add(GradleModule.Variant.of("classes", common));
+        // TODO [MinecraftMaven][Gradle Modules] Cannot have a common variant because it has incomplete dependencies (missing natives)
+        //  Launching the game wouldn't work because of that. If we need a common variant, it would need to include everything
+        //  But since FG7 will never not have the OS attribute, it wouldn't be used anyways.
+        //variants.add(GradleModule.Variant.of("classes", common));
         for (var e : natives.entrySet()) {
             var variant = GradleModule.Variant.of("classes-" + e.getKey().getValue(), common);
+            variant.attribute(e.getKey());
             variant.deps(e.getValue());
             variants.add(variant);
         }

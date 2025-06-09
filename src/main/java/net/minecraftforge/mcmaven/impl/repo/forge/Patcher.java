@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.zip.ZipFile;
@@ -207,6 +209,24 @@ public class Patcher implements Supplier<Task> {
 
     public String getDataHash() {
         return this.dataHash;
+    }
+
+    public void forAllLibraries(Consumer<Artifact> consumer) {
+        this.forAllLibraries(consumer, null);
+    }
+
+    public void forAllLibraries(Consumer<Artifact> consumer, Predicate<Artifact> filter) {
+        this.forAllLibrariesInternal(consumer, filter, this.getMCPSide().getMCLibraries());
+        this.forAllLibrariesInternal(consumer, filter, this.getMCPSide().getMCPConfigLibraries());
+        this.forAllLibrariesInternal(consumer, filter, this.getArtifacts());
+    }
+
+    // to avoid duplicate code
+    private void forAllLibrariesInternal(Consumer<? super Artifact> consumer, @Nullable Predicate<? super Artifact> filter, Iterable<? extends Artifact> libraries) {
+        for (var library : libraries) {
+            if (filter == null || filter.test(library))
+                consumer.accept(library);
+        }
     }
 
     public List<Artifact> getArtifacts() {

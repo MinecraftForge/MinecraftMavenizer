@@ -14,7 +14,6 @@ import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
-import net.minecraftforge.util.data.OS;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
 
@@ -29,7 +28,6 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -219,13 +217,8 @@ public final class MCPConfigRepo extends Repo {
 
             GlobalOptions.assertNotCacheOnly();
 
-            var builder = new POMBuilder("net.minecraft", side, version).withGradleMetadata();
-
-            Util.make(mcpSide.getMCLibraries(), l -> l.removeIf(a -> a.getOs() != OS.UNKNOWN)).forEach(a -> {
-                builder.dependencies().add(a, "compile");
-            });
-            Util.make(mcpSide.getMCPConfigLibraries(), l -> l.removeIf(a -> a.getOs() != OS.UNKNOWN)).forEach(a -> {
-                builder.dependencies().add(a, "compile");
+            var builder = new POMBuilder("net.minecraft", side, version).preferGradleModule().dependencies(dependencies -> {
+                mcpSide.forAllLibraries(dependencies::add, Artifact::hasOs);
             });
 
             FileUtils.ensureParent(output);

@@ -11,10 +11,15 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 
 import net.minecraftforge.util.hash.HashFunction;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNullByDefault;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.UnknownNullability;
 
 // TODO [MCMaven][Documentation] Document
+@NotNullByDefault
 public class Util {
-    public static <S extends Comparable<S>> int compare(S a, S b) {
+    public static <S extends Comparable<S>> int compare(@Nullable S a, @Nullable S b) {
         if (a == null)
             return b == null ? 0 : -1;
         else if (b == null)
@@ -61,11 +66,12 @@ public class Util {
      * @param <T>    The type of the object
      * @return The object
      */
-    public static <T, R> R replace(T obj, Function<T, R> action) {
-        return action.apply(obj);
+    @Contract("null, _ -> null")
+    public static <T, R> @Nullable R replace(@Nullable T obj, Function<T, @Nullable R> action) {
+        return obj != null ? action.apply(obj) : null;
     }
 
-    public static String hash(HashFunction func, File... files) {
+    public static String hash(HashFunction func, @UnknownNullability File... files) {
         try {
             var existing = Stream.of(files).filter(f -> f != null && f.exists()).toList();
             return func.hash(existing);

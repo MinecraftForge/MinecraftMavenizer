@@ -6,12 +6,14 @@ package net.minecraftforge.mcmaven.impl.util;
 
 import net.minecraftforge.util.data.OS;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.UnknownNullability;
 
 import java.io.File;
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /**
@@ -216,6 +218,10 @@ public class Artifact implements Comparable<Artifact>, Serializable {
     /** @return The os of this artifact (defaults to {@link OS#UNKNOWN}) */
     public OS getOs() {
         return os;
+    }
+
+    public boolean hasOs() {
+        return this.os != OS.UNKNOWN;
     }
 
     /** @return The arch of this artifact (defaults to {@link Arch#UNKNOWN}) */

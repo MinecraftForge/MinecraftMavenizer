@@ -6,10 +6,13 @@ package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Task;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 public class MCPSide {
     public static final String CLIENT = "client";
@@ -50,6 +53,23 @@ public class MCPSide {
 
     public File getBuildFolder() {
         return this.build;
+    }
+
+    public void forAllLibraries(Consumer<Artifact> consumer) {
+        this.forAllLibraries(consumer, null);
+    }
+
+    public void forAllLibraries(Consumer<Artifact> consumer, Predicate<Artifact> filter) {
+        this.forAllLibrariesInternal(consumer, filter, this.getMCLibraries());
+        this.forAllLibrariesInternal(consumer, filter, this.getMCPConfigLibraries());
+    }
+
+    // to avoid duplicate code
+    private void forAllLibrariesInternal(Consumer<? super Artifact> consumer, @Nullable Predicate<? super Artifact> filter, Iterable<? extends Artifact> libraries) {
+        for (var library : libraries) {
+            if (filter == null || filter.test(library))
+                consumer.accept(library);
+        }
     }
 
     public List<Artifact> getMCLibraries() {

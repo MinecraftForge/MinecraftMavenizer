@@ -56,8 +56,8 @@ public final class ForgeRepo extends Repo {
     /**
      * Creates a new Forge repository.
      *
-     * @param cache  The cache directory
-     * @param output The output directory.
+     * @param cache     The cache directory
+     * @param mcpconfig The MCPConfig repo
      */
     public ForgeRepo(Cache cache, MCPConfigRepo mcpconfig) {
         super(cache);
@@ -226,8 +226,8 @@ public final class ForgeRepo extends Repo {
             var output = new File(build, "forge.pom");
             var cache = HashStore.fromFile(output)
                 .addKnown("data", patcher.getDataHash())
-                .addKnown("extra", clientExtra == null ? null : clientExtra.toString())
-                .addKnown("mappings", mappings == null ? null : mappings.toString())
+                .addKnown("extra", Util.replace(clientExtra, Object::toString))
+                .addKnown("mappings", Util.replace(mappings, Object::toString))
                 ;
 
             if (output.exists() && cache.isSame())
@@ -235,22 +235,15 @@ public final class ForgeRepo extends Repo {
 
             GlobalOptions.assertNotCacheOnly();
 
-            var builder = new POMBuilder("net.minecraftforge", "forge", version).withGradleMetadata();
+            var builder = new POMBuilder("net.minecraftforge", "forge", version).preferGradleModule().dependencies(dependencies -> {
+                if (clientExtra != null)
+                    dependencies.add(clientExtra);
 
-            if (clientExtra != null)
-                builder.dependencies().add(clientExtra, "compile");
+                if (mappings != null)
+                    dependencies.add(mappings);
 
-            if (mappings != null)
-                builder.dependencies().add(mappings, "compile");
-
-            for (var dep : patcher.getMCPSide().getMCLibraries())
-                builder.dependencies().add(dep, "compile");
-
-            for (var dep : patcher.getMCPSide().getMCPConfigLibraries())
-                builder.dependencies().add(dep, "compile");
-
-            for (var dep : patcher.getArtifacts())
-                builder.dependencies().add(dep, "compile");
+                patcher.forAllLibraries(dependencies::add, Artifact::hasOs);
+            });
 
             FileUtils.ensureParent(output);
             try (var os = new FileOutputStream(output)) {

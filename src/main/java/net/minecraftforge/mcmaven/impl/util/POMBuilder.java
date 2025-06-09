@@ -17,6 +17,8 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.ByteArrayOutputStream;
 import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -24,7 +26,11 @@ public final class POMBuilder {
     private final String group, name, version;
     private final Dependencies dependencies = new Dependencies();
     private @Nullable String description;
-    private boolean gradleMetadata;
+    private boolean preferGradleModule;
+
+    public POMBuilder(Artifact artifact) {
+        this(artifact.getGroup(), artifact.getName(), artifact.getVersion());
+    }
 
     public POMBuilder(String group, String name, String version) {
         this.group = group;
@@ -42,13 +48,9 @@ public final class POMBuilder {
         return this;
     }
 
-    public POMBuilder withGradleMetadata() {
-        this.gradleMetadata = true;
+    public POMBuilder preferGradleModule() {
+        this.preferGradleModule = true;
         return this;
-    }
-
-    public Dependencies dependencies() {
-        return dependencies;
     }
 
     /**
@@ -69,7 +71,7 @@ public final class POMBuilder {
         project.setAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
         doc.appendChild(project);
 
-        if (this.gradleMetadata)
+        if (this.preferGradleModule)
             project.appendChild(doc.createComment(" do_not_remove: published-with-gradle-metadata "));
 
         set(doc, project, "modelVersion", "4.0.0");
@@ -85,18 +87,21 @@ public final class POMBuilder {
             var dependencies = doc.createElement("dependencies");
             for (var dependency : this.dependencies.dependencies) {
                 var dep = doc.createElement("dependency");
-                set(doc, dep, "groupId", dependency.group);
-                set(doc, dep, "artifactId", dependency.name);
-                set(doc, dep, "version", dependency.version);
-                if (dependency.classifier != null && !"jar".equals(dependency.classifier)) {
-                    set(doc, dep, "classifier", dependency.classifier);
-                }
-                if (dependency.extension != null) {
-                    set(doc, dep, "type", dependency.extension);
-                }
-                if (dependency.scope != null) {
-                    set(doc, dep, "scope", dependency.scope);
-                }
+                set(doc, dep, "groupId", dependency.artifact.getGroup());
+                set(doc, dep, "artifactId", dependency.artifact.getName());
+                set(doc, dep, "version", dependency.artifact.getVersion());
+
+                var classifier = dependency.artifact.getClassifier();
+                var extension = dependency.artifact.getExtension();
+                if (classifier != null)
+                    set(doc, dep, "classifier", classifier);
+
+                if (extension != null && !"jar".equals(extension))
+                    set(doc, dep, "type", extension);
+
+                if (dependency.scope != null)
+                    set(doc, dep, "scope", dependency.scope.toString());
+
                 dependencies.appendChild(dep);
             }
             project.appendChild(dependencies);
@@ -126,23 +131,42 @@ public final class POMBuilder {
 
         private Dependencies() { }
 
-        public Dependency add(Artifact artifact, @Nullable String scope) {
-            var dep = new Dependency(
-                artifact.getGroup(),
-                artifact.getName(),
-                artifact.getVersion(),
-                artifact.getClassifier(),
-                artifact.getExtension(),
-                scope
-            );
+        // short-hand to use Dependencies::add. this sets a default scope of "compile"
+        // to omit a scope, use add(Artifact, Dependency.Scope) with a null scope
+        public Dependency add(Artifact artifact) {
+            return this.add(artifact, Dependency.Scope.COMPILE);
+        }
+
+        public Dependency add(Artifact artifact, @Nullable Dependency.Scope scope) {
+            var dep = new Dependency(artifact, scope);
             this.dependencies.add(dep);
             return dep;
         }
 
-        public record Dependency(
-            String group, String name, String version,
-            @Nullable String classifier, @Nullable String extension, @Nullable String scope
-        ) { }
+        // https://maven.apache.org/pom.html#POM_Relationships
+        public record Dependency(Artifact artifact, @Nullable Scope scope) implements Comparable<Dependency> {
+            @Override
+            public boolean equals(Object obj) {
+                return obj instanceof Dependency(Artifact artifact, Scope scope) &&
+                    Objects.equals(this.artifact, artifact) &&
+                    Objects.equals(this.scope, scope);
+            }
+
+            @Override
+            public int compareTo(Dependency o) {
+                var ret = Util.compare(this.artifact, o.artifact);
+                return ret != 0 ? ret : Util.compare(this.scope, o.scope);
+            }
+
+            public enum Scope {
+                COMPILE, PROVIDED, RUNTIME, TEST, SYSTEM;
+
+                @Override
+                public String toString() {
+                    return super.toString().toLowerCase(Locale.ENGLISH);
+                }
+            }
+        }
     }
 
 }
