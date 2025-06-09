@@ -6,7 +6,6 @@ on:
     paths-ignore:
       - '.github/workflows/**'
       - 'README.md'
-      - 'settings.gradle'
 
 permissions:
   contents: read
