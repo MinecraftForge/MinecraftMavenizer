@@ -218,7 +218,7 @@ public final class MCPConfigRepo extends Repo {
             GlobalOptions.assertNotCacheOnly();
 
             var builder = new POMBuilder("net.minecraft", side, version).preferGradleModule().dependencies(dependencies -> {
-                mcpSide.forAllLibraries(dependencies::add, Artifact::hasOs);
+                mcpSide.forAllLibraries(dependencies::add, Artifact::hasNoOs);
             });
 
             FileUtils.ensureParent(output);

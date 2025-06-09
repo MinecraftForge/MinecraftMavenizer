@@ -242,7 +242,7 @@ public final class ForgeRepo extends Repo {
                 if (mappings != null)
                     dependencies.add(mappings);
 
-                patcher.forAllLibraries(dependencies::add, Artifact::hasOs);
+                patcher.forAllLibraries(dependencies::add, Artifact::hasNoOs);
             });
 
             FileUtils.ensureParent(output);
