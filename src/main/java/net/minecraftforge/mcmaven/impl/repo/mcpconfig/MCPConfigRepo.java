@@ -59,7 +59,7 @@ import java.util.Set;
  *   Note: It does NOT provide the Obfed named jars for server and client, as that is provided by MinecraftRepo.
  */
 // client extra
-// TODO [MCMaven][Documentation] Document
+// TODO [MCMavenizer][Documentation] Document
 public final class MCPConfigRepo extends Repo {
     private final Map<Artifact, MCP> versions = new HashMap<>();
     private final Map<String, MinecraftTasks> mcTasks = new HashMap<>();
@@ -131,7 +131,7 @@ public final class MCPConfigRepo extends Repo {
         return List.of(extra, pom);
     }
 
-    // TODO [MCMaven][client-extra] Band-aid fix for merging for clean! Remove later.
+    // TODO [MCMavenizer][client-extra] Band-aid fix for merging for clean! Remove later.
     private static Task mergeExtra(File build, String side, Task recompiled, Task extra, Mappings mappings) {
         return Task.named("mergeExtra[" + side + "][" + mappings + ']', Set.of(extra, recompiled), () -> {
             var output = new File(mappings.getFolder(build), "recompiled-extra.jar");
@@ -185,7 +185,7 @@ public final class MCPConfigRepo extends Repo {
 
                 // version.properties
                 try (FileWriter writer = new FileWriter(versionProperties)) {
-                    // TODO [MCMaven][ForgeRepo] make this configurable later
+                    // TODO [MCMavenizer][ForgeRepo] make this configurable later
                     writer.append("version=1").append('\n').flush();
                 }
 

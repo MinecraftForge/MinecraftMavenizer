@@ -17,7 +17,7 @@ import net.minecraftforge.util.logging.Log;
 
 class MavenTask {
     static void run(String[] args) throws Exception {
-        // TODO [MCMaven] Make this into a --log [level] option
+        // TODO [MCMavenizer] Make this into a --log [level] option
         Log.enabled = Log.Level.INFO;
 
         var parser = new OptionParser();

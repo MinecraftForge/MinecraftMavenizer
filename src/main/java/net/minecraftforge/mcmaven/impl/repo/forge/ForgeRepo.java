@@ -39,14 +39,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
-// TODO: [MCMaven][ForgeRepo] For now, the ForgeRepo needs to be fully complete with everything it has to do.
+// TODO: [MCMavenizer][ForgeRepo] For now, the ForgeRepo needs to be fully complete with everything it has to do.
 // later, we can worry about refactoring it so that other repositories such as MCP (clean) and FMLOnly can function.
 // And yes, I DO want this tool to support as far back as possible. But for now, we worry about UserDev3 and up.
 // - Jonathing
 
 /** Represents the Forge repository. */
 public final class ForgeRepo extends Repo {
-    // TODO: [MCMaven][FGVersion] Handle this as an edge-case in FGVersion
+    // TODO: [MCMavenizer][FGVersion] Handle this as an edge-case in FGVersion
     private static final ComparableVersion USERDEV3_START = new ComparableVersion("1.12.2-14.23.5.2851");
     private static final ComparableVersion USERDEV3_END = new ComparableVersion("1.12.2-14.23.5.2860");
 
@@ -77,7 +77,7 @@ public final class ForgeRepo extends Repo {
             if (fg == null)
                 throw new IllegalArgumentException("Python version unsupported!");
 
-            // TODO [MCMaven][Backporting] You know what has to be done eventually...
+            // TODO [MCMavenizer][Backporting] You know what has to be done eventually...
             if (fg.ordinal() < FGVersion.v3.ordinal())
                 throw new IllegalArgumentException("Only FG 3+ currently supported");
 
@@ -191,7 +191,7 @@ public final class ForgeRepo extends Repo {
 
                 // version.properties
                 try (FileWriter writer = new FileWriter(versionProperties)) {
-                    // TODO [MCMaven][ForgeRepo] make this configurable later
+                    // TODO [MCMavenizer][ForgeRepo] make this configurable later
                     writer.append("version=1").append('\n').flush();
                 }
 

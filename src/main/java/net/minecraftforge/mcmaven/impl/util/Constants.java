@@ -19,7 +19,7 @@ public final class Constants {
     public static final String FMLONLY_NAME = "fmlonly";
     public static final String FMLONLY_ARTIFACT = FORGE_GROUP + ':' + FMLONLY_NAME;
 
-    // TODO [MCMaven][Options] Change cache timeout timer
+    // TODO [MCMavenizer][Options] Change cache timeout timer
     public static final int CACHE_TIMEOUT = 1000 * 60 * 60 * 1; // 1 hour
     public static final String LAUNCHER_MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest.json";
     public static final String MOJANG_MAVEN = "https://libraries.minecraft.net/";

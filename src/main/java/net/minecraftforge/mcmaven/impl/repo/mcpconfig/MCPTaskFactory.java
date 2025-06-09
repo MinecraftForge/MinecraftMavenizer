@@ -58,7 +58,7 @@ import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.logging.Log;
 import org.jetbrains.annotations.Nullable;
 
-// TODO [MCMaven][Documentation] Document
+// TODO [MCMavenizer][Documentation] Document
 public class MCPTaskFactory {
     private final MCPConfig.V2 cfg;
     private final MCPSide side;

@@ -15,7 +15,7 @@ import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.data.json.MCPConfig;
 
-// TODO [MCMaven][Documentation] Document
+// TODO [MCMavenizer][Documentation] Document
 /**
  * The MCP build process.
  */

@@ -76,7 +76,7 @@ final class MCPNames {
     // NOTE: this is a micro-optimization to avoid creating a new pattern for every line
     private static final Pattern ARGS_DELIM = Pattern.compile(", ");
 
-    // TODO [MCMaven][MCPNames] Not used for anything. Remove?
+    // TODO [MCMavenizer][MCPNames] Not used for anything. Remove?
     @SuppressWarnings("unused")
     private final String hash;
     private final Map<String, String> names;

@@ -79,7 +79,7 @@ public final class RenameTask implements Supplier<Task> {
             var names = MCPNames.load(mappings);
             names.rename(new FileInputStream(input), true);
 
-            // TODO: [MCMaven][Renamer] This garbage was copy-pasted from FG.
+            // TODO: [MCMavenizer][Renamer] This garbage was copy-pasted from FG.
             // I changed the while loop to a for loop, though. I guess it is fine?
             FileUtils.ensureParent(output);
             try (var zin = new ZipInputStream(new FileInputStream(input));

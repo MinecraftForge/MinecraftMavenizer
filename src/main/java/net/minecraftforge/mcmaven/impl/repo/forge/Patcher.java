@@ -45,7 +45,7 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.logging.Log;
 import org.jetbrains.annotations.Nullable;
 
-// TODO: [MCMaven] This class needs to be split off into some sort of abstract class so that other patching processes can be implemented.
+// TODO: [MCMavenizer] This class needs to be split off into some sort of abstract class so that other patching processes can be implemented.
 // The current way this is implemented by trying to parse a specific config is not that great. And if we want to support other versions, this HAS to be abstracted.
 /**
  * This class is responsible for the <strong>entire</strong> patching process.

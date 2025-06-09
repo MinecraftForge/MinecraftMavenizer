@@ -56,7 +56,7 @@ public final class MinecraftMavenCache extends MavenCache {
         var local = new File(LOCAL_MCLIBS, path.replace('/', File.separatorChar));
         if (local.exists()) {
             FileUtils.ensureParent(target);
-            // TODO: [MCMaven] Check hashes for local minecraft archive
+            // TODO: [MCMavenizer] Check hashes for local minecraft archive
             try {
                 Files.copy(local.toPath(), target.toPath());
             } catch (IOException e) {

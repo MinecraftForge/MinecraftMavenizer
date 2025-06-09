@@ -16,7 +16,7 @@ import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnknownNullability;
 
-// TODO [MCMaven][Documentation] Document
+// TODO [MCMavenizer][Documentation] Document
 @NotNullByDefault
 public class Util {
     public static <S extends Comparable<S>> int compare(@Nullable S a, @Nullable S b) {

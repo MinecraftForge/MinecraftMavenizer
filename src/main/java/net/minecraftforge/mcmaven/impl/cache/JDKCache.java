@@ -39,7 +39,7 @@ public final class JDKCache {
         return this.root;
     }
 
-    // TODO: [MCMaven][JDKCache] Make this thread safe. If this method is accessed concurrently, the same JDK could be downloaded more than once.
+    // TODO: [MCMavenizer][JDKCache] Make this thread safe. If this method is accessed concurrently, the same JDK could be downloaded more than once.
     /**
      * Gets the JDK for the given version.
      *

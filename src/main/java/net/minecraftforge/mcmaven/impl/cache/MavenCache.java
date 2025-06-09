@@ -24,7 +24,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
-// TODO: [MCMaven][MavenCache] Handle download failures properly
+// TODO: [MCMavenizer][MavenCache] Handle download failures properly
 /** Represents the maven cache for this tool. */
 public sealed class MavenCache permits MinecraftMavenCache {
     private static final HashFunction[] DEFAULT_HASHES = {
@@ -115,7 +115,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
         if (target.exists()) {
             boolean invalidHash = false;
 
-            // TODO [MCMaven][Cache] Double check hashes of existing files
+            // TODO [MCMavenizer][Cache] Double check hashes of existing files
             // maybe set it so we only do this for files from forge maven?
             /* check if existing files don't match the hash for the file, this would happen if something corrupted the file
              * But honestly just a waste of time.

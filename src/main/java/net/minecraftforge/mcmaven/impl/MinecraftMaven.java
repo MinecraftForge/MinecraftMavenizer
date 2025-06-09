@@ -26,7 +26,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
-// TODO [MinecraftMaven][Deobf] ADD DEOBF
+// TODO [MCMavenizer][Deobf] ADD DEOBF
 //  use single detached configuration to resolve individual configurations
 //  pass in downloaded files to mcmaven (absolute path)
 public record MinecraftMaven(File output, Cache cache) {
@@ -136,7 +136,7 @@ public record MinecraftMaven(File output, Cache cache) {
                     .add("source", source);
 
                 if (!target.exists() || !cache.isSame()) {
-                    // TODO: [MCMaven] Add --api argument to turn class artifacts to api-only targets for a public repo
+                    // TODO: [MCMavenizer] Add --api argument to turn class artifacts to api-only targets for a public repo
                     try {
                         org.apache.commons.io.FileUtils.copyFile(source, target);
                         HashUtils.updateHash(target);

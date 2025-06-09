@@ -11,7 +11,7 @@ plugins {
 }
 
 final projectDisplayName = 'Minecraft Mavenizer'
-final projectArtifactId = base.archivesName = 'minecraft-maven'
+final projectArtifactId = base.archivesName = 'minecraft-mavenizer'
 final projectVendor = 'Forge Development LLC'
 description = 'A pure-blooded Java tool to generate a maven repository for Minecraft artifacts.'
 group = 'net.minecraftforge'
@@ -71,10 +71,6 @@ tasks.named('jar', Jar) {
 }
 
 tasks.named('shadowJar', ShadowJar) {
-    minimize {
-        exclude dependency(libs.jver.get())
-    }
-
     archiveClassifier = ''
 }
 

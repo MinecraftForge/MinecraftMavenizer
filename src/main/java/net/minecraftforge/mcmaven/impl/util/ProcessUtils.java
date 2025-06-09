@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-// TODO [MCMaven][JavaVersion] Move to Java Version? It would be useful for ForgeGradle 7.
+// TODO [MCMavenizer][JavaVersion] Move to Java Version? It would be useful for ForgeGradle 7.
 /** Utility class for running processes. */
 public final class ProcessUtils {
     /** Represents the result of a process execution. */
