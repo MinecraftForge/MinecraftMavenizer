@@ -70,7 +70,7 @@ public final class RenameTask implements Supplier<Task> {
         cache.add("input", input);
         cache.add("mappings", mappings);
 
-        if (output.exists() && cache.exists() && cache.isSame())
+        if (output.exists() && cache.isSame())
             return output;
 
         GlobalOptions.assertNotCacheOnly();

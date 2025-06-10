@@ -45,7 +45,7 @@ public abstract class Repo {
         return cache;
     }
 
-    public abstract List<PendingArtifact> process(String module, String version, Mappings mappings);
+    public abstract List<PendingArtifact> process(Artifact artifact, Mappings mappings);
 
     protected static PendingArtifact pending(String message, Task task, Artifact artifact) {
         return pending(message, task, artifact, (Task)null);

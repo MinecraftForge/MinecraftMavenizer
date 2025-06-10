@@ -14,11 +14,11 @@ import java.util.function.Supplier;
 
 /** Represents a task that can be executed. Tasks in this tool <strong>will always</strong> provide a file. */
 public sealed interface Task extends Supplier<File> permits Task.Simple {
-    static Task named(String name, Supplier<File> supplier) {
+    static Task named(String name, ThrowingSupplier<File> supplier) {
         return named(name, Set.of(), supplier);
     }
 
-    static Task named(String name, Iterable<? extends Task> deps, Supplier<File> supplier) {
+    static Task named(String name, Iterable<? extends Task> deps, ThrowingSupplier<File> supplier) {
         return new Simple(name, deps, supplier);
     }
 
@@ -66,13 +66,17 @@ public sealed interface Task extends Supplier<File> permits Task.Simple {
         return this.execute();
     }
 
+    interface ThrowingSupplier<T> {
+        T get() throws Exception;
+    }
+
     final class Simple implements Task {
         private final String name;
         private final Iterable<? extends Task> deps;
-        private final Supplier<File> supplier;
+        private final ThrowingSupplier<File> supplier;
         private File file;
 
-        private Simple(String name, Iterable<? extends Task> deps, Supplier<File> supplier) {
+        private Simple(String name, Iterable<? extends Task> deps, ThrowingSupplier<File> supplier) {
             this.name = name;
             this.deps = deps;
             this.supplier = supplier;
@@ -85,7 +89,11 @@ public sealed interface Task extends Supplier<File> permits Task.Simple {
                     dep.execute();
                 Log.info(name);
                 Log.push();
-                this.file = supplier.get();
+                try {
+                    this.file = supplier.get();
+                } catch (Exception e) {
+                    Util.sneak(e);
+                }
                 Log.debug("-> " + this.file.getAbsolutePath());
                 Log.pop();
             }

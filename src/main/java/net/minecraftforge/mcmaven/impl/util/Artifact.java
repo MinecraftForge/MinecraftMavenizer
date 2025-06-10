@@ -90,6 +90,8 @@ public class Artifact implements Comparable<Artifact>, Serializable {
 
     private Artifact(String descriptor) {
         String[] pts = SEMI.split(descriptor);
+        if (pts.length < 2)
+            throw new IllegalArgumentException("Descriptor is missing group and name: " + descriptor);
         this.group = pts[0];
         this.name = pts[1];
 

@@ -6,9 +6,11 @@ package net.minecraftforge.mcmaven.impl.util;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.TimeZone;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
 
 import net.minecraftforge.util.hash.HashFunction;
 import org.jetbrains.annotations.Contract;
@@ -78,5 +80,20 @@ public class Util {
         } catch (IOException e) {
             return sneak(e);
         }
+    }
+
+    private static final long ZIPTIME = 628041600000L;
+    public static ZipEntry getStableEntry(String name) {
+        return getStableEntry(name, ZIPTIME);
+    }
+
+    private static final TimeZone GMT = TimeZone.getTimeZone("GMT");
+    public static ZipEntry getStableEntry(String name, long time) {
+        var _default = TimeZone.getDefault();
+        TimeZone.setDefault(GMT);
+        var ret = new ZipEntry(name);
+        ret.setTime(time);
+        TimeZone.setDefault(_default);
+        return ret;
     }
 }

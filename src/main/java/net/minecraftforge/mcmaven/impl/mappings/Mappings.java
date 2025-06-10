@@ -23,7 +23,7 @@ public class Mappings {
     public static final String CHANNEL_ATTR = "net.minecraftforge.mappings.channel";
     public static final String VERSION_ATTR = "net.minecraftforge.mappings.version";
 
-    private final Map<MCPSide, Task> tasks = new HashMap<>();
+    protected final Map<MCPSide, Task> tasks = new HashMap<>();
     private final String channel;
     private final String version;
 
@@ -42,7 +42,7 @@ public class Mappings {
 
     @Override
     public String toString() {
-        return channel() + '-' + version();
+        return channel() + (version() == null ? "" : '-' + version());
     }
 
     public File getFolder(File root) {
@@ -54,6 +54,10 @@ public class Mappings {
         // Not as gradle module metadata only variants.
         // Basically the thing that looks like a normal maven artifact
         return true;
+    }
+
+    public Mappings withMCVersion(String version) {
+        return new Mappings(channel(), version);
     }
 
     public Artifact getArtifact(MCPSide side) {
@@ -89,7 +93,7 @@ public class Mappings {
     private File getMappings(MCPSide side, Task srgMappings, Task clientTask, Task serverTask) {
         var tool = side.getMCP().getCache().maven().download(Constants.INSTALLER_TOOLS);
 
-        var root = getFolder(new File(side.getBuildFolder(), "data/mapings"));
+        var root = getFolder(new File(side.getMCP().getBuildFolder(), "data/mapings"));
         var output = new File(root, "official.zip");
         var log = new File(root, "official.log");
 
@@ -103,7 +107,7 @@ public class Mappings {
         cache.add("client", client);
         cache.add("server", server);
 
-        if (output.exists() && cache.exists())
+        if (output.exists() && cache.isSame())
             return output;
 
         GlobalOptions.assertNotCacheOnly();

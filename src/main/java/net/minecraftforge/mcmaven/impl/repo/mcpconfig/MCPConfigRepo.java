@@ -85,7 +85,9 @@ public final class MCPConfigRepo extends Repo {
     }
 
     @Override
-    public List<PendingArtifact> process(String module, String version, Mappings mappings) {
+    public List<PendingArtifact> process(Artifact artifact, Mappings mappings) {
+        var module = artifact.getGroup() + ':' + artifact.getName();
+        var version = artifact.getVersion();
         if (!module.startsWith("net.minecraft:"))
             throw new IllegalArgumentException("MCPConfigRepo cannot process modules that aren't for group net.minecraft");
 

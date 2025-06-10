@@ -625,7 +625,7 @@ public class Patcher implements Supplier<Task> {
         cache.add("input", input);
         cache.add("sources", sources);
 
-        if (output.exists() && cache.exists())
+        if (output.exists() && cache.isSame())
             return output;
 
         GlobalOptions.assertNotCacheOnly();

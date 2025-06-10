@@ -66,7 +66,9 @@ public final class ForgeRepo extends Repo {
     }
 
     @Override
-    public List<PendingArtifact> process(String module, String version, Mappings mappings) {
+    public List<PendingArtifact> process(Artifact artifact, Mappings mappings) {
+        var module = artifact.getGroup() + ':' + artifact.getName();
+        var version = artifact.getVersion();
         if (!Constants.FORGE_ARTIFACT.equals(module))
             throw new IllegalArgumentException("Unknown or unsupported module: " + module);
 

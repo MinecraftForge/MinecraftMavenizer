@@ -12,6 +12,9 @@ import joptsimple.OptionParser;
 import joptsimple.OptionSpecBuilder;
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.MinecraftMaven;
+import net.minecraftforge.mcmaven.impl.mappings.Mappings;
+import net.minecraftforge.mcmaven.impl.mappings.ParchmentMappings;
+import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.logging.Log;
 
@@ -63,6 +66,10 @@ class MavenTask {
         var cacheOnlyO = parser.accepts("cache-only",
             "Only use caches, fail if any downloads need to occur or if a task needs to do work");
 
+        var parchmentO = parser.accepts("parchment",
+            "Version of parchment mappings to use, snapshots are not supported")
+            .withRequiredArg();
+
         var shorthandOptions = new HashMap<String, OptionSpecBuilder>();
         var artifacts = Map.of(
             "forge",  Constants.FORGE_ARTIFACT,
@@ -108,15 +115,25 @@ class MavenTask {
             ? options.valueOf(jdkCacheO)
             : new File(cache, "jdks");
 
-        var artifact = options.valueOf(artifactO);
+        Artifact artifact = null;
         for (var entry : artifacts.entrySet()) {
-            if (options.has(entry.getKey()))
-                artifact = entry.getValue();
+            if (options.has(entry.getKey())) {
+                artifact = Artifact.from(entry.getValue());
+                break;
+            }
         }
 
-        var version = options.valueOf(versionO);
+        if (artifact == null)
+            artifact = Artifact.from(options.valueOf(artifactO));
 
-        var mcmaven = new MinecraftMaven(output, cache, jdkCache);
-        mcmaven.run(artifact, version);
+        if (artifact.getVersion() == null)
+            artifact = artifact.withVersion(options.valueOf(versionO));
+
+        var mappings = options.has(parchmentO)
+            ? new ParchmentMappings(options.valueOf(parchmentO))
+            : new Mappings("official", null);
+
+        var mcmaven = new MinecraftMaven(output, cache, jdkCache, mappings);
+        mcmaven.run(artifact);
     }
 }

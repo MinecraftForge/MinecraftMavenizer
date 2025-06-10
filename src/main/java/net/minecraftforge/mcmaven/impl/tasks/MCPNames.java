@@ -34,7 +34,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
 
-// TODO GARBAGE GARBAGE GARBAGE, CLEAN UP OR RE-IMPLEMENT
+// TODO: [MCMavenizer][MCPName] GARBAGE GARBAGE GARBAGE, CLEAN UP OR RE-IMPLEMENT
 final class MCPNames {
     //@formatter:off
     private static final Pattern

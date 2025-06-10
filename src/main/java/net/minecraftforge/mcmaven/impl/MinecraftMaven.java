@@ -4,8 +4,6 @@
  */
 package net.minecraftforge.mcmaven.impl;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
@@ -23,17 +21,18 @@ import net.minecraftforge.util.logging.Log;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
 // TODO [MCMavenizer][Deobf] ADD DEOBF
 //  use single detached configuration to resolve individual configurations
 //  pass in downloaded files to mcmaven (absolute path)
-public record MinecraftMaven(File output, Cache cache) {
+public record MinecraftMaven(File output, Cache cache, Mappings mappings) {
     private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.14.4"); // Only 1.14.4+ has official mappings, we can support more when we add more mappings
 
-    public MinecraftMaven(File output, File cacheRoot, File jdkCacheRoot) {
-        this(output, new Cache(cacheRoot, jdkCacheRoot));
+    public MinecraftMaven(File output, File cacheRoot, File jdkCacheRoot, Mappings mappings) {
+        this(output, new Cache(cacheRoot, jdkCacheRoot), mappings);
     }
 
     public MinecraftMaven {
@@ -42,21 +41,24 @@ public record MinecraftMaven(File output, Cache cache) {
         Log.info("  JDK Cache:  " + cache.jdks().root().getAbsolutePath());
         Log.info("  Offline:    " + GlobalOptions.isOffline());
         Log.info("  Cache Only: " + GlobalOptions.isCacheOnly());
+        Log.info("  Mappings:   " + mappings);
         Log.info();
     }
 
-    public void run(String module, String version) {
-        var artifact = Artifact.from(module).withVersion(version);
+    public void run(Artifact artifact) {
+        var module = artifact.getGroup() + ':' + artifact.getName();
+        var version = artifact.getVersion();
         Log.info("Processing Minecraft dependency: %s:%s".formatted(module, version));
         var mcprepo = new MCPConfigRepo(this.cache);
 
         if (Constants.FORGE_GROUP.equals(artifact.getGroup()) && Constants.FORGE_NAME.equals(artifact.getName())) {
             var repo = new ForgeRepo(this.cache, mcprepo);
-            if (version == null)
+            if (artifact.getVersion() == null)
                 throw new IllegalArgumentException("No version specified for Forge");
 
             if ("all".equals(version)) {
                 var versions = this.cache.maven().getVersions(artifact);
+                var mappingCache = new HashMap<String, Mappings>();
                 for (var ver : versions.reversed()) {
                     var cver = new ComparableVersion(ver);
                     if (cver.compareTo(MIN_SUPPORTED_FORGE) < 0)
@@ -66,21 +68,22 @@ public record MinecraftMaven(File output, Cache cache) {
                     if (fg == null || fg.ordinal() < FGVersion.v3.ordinal()) // Unsupported
                         continue;
 
-                    var mappings = new Mappings("official", forgeToMcVersion(ver));
-                    var artifacts = repo.process(module, ver, mappings);
-                    finalize(artifact.withVersion(ver), mappings, artifacts);
+                    var mappings = mappingCache.computeIfAbsent(forgeToMcVersion(ver), this.mappings()::withMCVersion);
+                    var art = artifact.withVersion(ver);
+                    var artifacts = repo.process(art, mappings);
+                    finalize(art, mappings, artifacts);
                 }
             } else {
-                var mappings = new Mappings("official", forgeToMcVersion(version));
-                var artifacts = repo.process(module, version, mappings);
+                var mappings = this.mappings().withMCVersion(forgeToMcVersion(version));
+                var artifacts = repo.process(artifact, mappings);
                 finalize(artifact, mappings, artifacts);
             }
         } else if (Constants.MC_GROUP.equals(artifact.getGroup())) {
             if (artifact.getVersion() == null)
                 throw new IllegalArgumentException("No version specified for MCPConfig");
 
-            var mappings = new Mappings("official", mcpToMcVersion(version));
-            var artifacts = mcprepo.process(module, version, mappings);
+            var mappings = this.mappings().withMCVersion(mcpToMcVersion(version));
+            var artifacts = mcprepo.process(artifact, mappings);
             finalize(artifact, mappings, artifacts);
         } else {
             throw new IllegalArgumentException("Artifact '%s' is currently Unsupported. Will add later".formatted(module));
