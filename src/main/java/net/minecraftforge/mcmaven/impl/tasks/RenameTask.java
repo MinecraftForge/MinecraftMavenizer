@@ -31,7 +31,7 @@ import java.util.zip.ZipOutputStream;
  * Applies mappings provided by a ziped csv file to them and returns the new sources.
  */
 public final class RenameTask implements Supplier<Task> {
-    private final Artifact name;
+    private final String name;
     private final MCPSide side;
     private final Task task;
 
@@ -43,6 +43,17 @@ public final class RenameTask implements Supplier<Task> {
      * @param sources The task that creates the unnamed sources
      */
     public RenameTask(File build, Artifact name, MCPSide side, Task sources, Mappings mappings) {
+        this(build, name.getName(), side, sources, mappings);
+    }
+
+    /**
+     * Creates a new renamer for the given patcher.
+     *
+     * @param build   The directory where the output will be stored
+     * @param name    The development artifact, only used for the task name
+     * @param sources The task that creates the unnamed sources
+     */
+    public RenameTask(File build, String name, MCPSide side, Task sources, Mappings mappings) {
         this.name = name;
         this.side = side;
         this.task = this.remapSources(sources, mappings.getFolder(build), mappings);
@@ -56,7 +67,7 @@ public final class RenameTask implements Supplier<Task> {
     private Task remapSources(Task input, File outputDir, Mappings provider) {
         var output = new File(outputDir, "remapped.jar");
         var mappings = provider.getCsvZip(side);
-        return Task.named("remap[" + this.name.getName() + "][" + provider + ']',
+        return Task.named("remap[" + this.name + "][" + provider + ']',
             Set.of(input, mappings),
             () -> remapSourcesImpl(input, mappings, output)
         );

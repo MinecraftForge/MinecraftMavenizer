@@ -8,9 +8,13 @@ import java.io.File;
 import java.util.Set;
 
 import joptsimple.OptionParser;
+import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
+import net.minecraftforge.mcmaven.impl.mappings.Mappings;
+import net.minecraftforge.mcmaven.impl.mappings.ParchmentMappings;
 import net.minecraftforge.mcmaven.impl.repo.forge.Patcher;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
+import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
@@ -18,6 +22,7 @@ import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.util.logging.Log;
 
+// TODO [Mavenizer][MCPTask] Cleanup. Works well but is a mess.
 public class MCPTask {
     public static void run(String[] args) throws Exception {
         // TODO [MCMavenizer] Make this into a --log [level] option
@@ -61,11 +66,18 @@ public class MCPTask {
 
         var atO = parser.accepts("at",
             "Access Transformer config file to apply")
-            .withRequiredArg().ofType(File.class);
+            .withOptionalArg().ofType(File.class);
 
         var sasO = parser.accepts("sas",
             "Side Annotation Stripper confg file to apply")
-            .withRequiredArg().ofType(File.class);
+            .withOptionalArg().ofType(File.class);
+
+        var mappingsO = parser.accepts("mappings",
+            "Use to enable using official mappings");
+
+        var parchmentO = parser.accepts("parchment",
+            "Version of parchment mappings to use, snapshots are not supported")
+            .availableIf(mappingsO).withRequiredArg();
         //@formatter:on
 
         var options = parser.parse(args);
@@ -130,16 +142,35 @@ public class MCPTask {
         }
 
         File sources = null;
-        Log.info("Creating MCP Source Jar");
-        var indent = Log.push();
-        try {
-            sources = sourcesTask.get();
-        } finally {
-             Log.pop(indent);
+        {
+            Log.info("Creating MCP Source Jar");
+            var indent = Log.push();
+            try {
+                sources = sourcesTask.execute();
+            } finally {
+                Log.pop(indent);
+            }
         }
 
         var cache = HashStore.fromFile(output)
             .add("sources", sources);
+
+        if (options.has(mappingsO)) {
+            Log.info("Renaming MCP Source Jar");
+            var indent = Log.push();
+            try {
+                var mappings = options.has(parchmentO)
+                    ? new ParchmentMappings(options.valueOf(parchmentO))
+                    : new Mappings("official", null).withMCVersion(MinecraftMaven.mcpToMcVersion(artifact.getVersion()));
+
+                var renameTask = new RenameTask(side.getBuildFolder(), pipeline, side, Task.existing("sources", sources), mappings).get();
+                sources = renameTask.execute();
+            } finally {
+                Log.pop(indent);
+            }
+
+            cache.add("renamed", sources);
+        }
 
         if (!output.exists() || !cache.isSame()) {
             try {

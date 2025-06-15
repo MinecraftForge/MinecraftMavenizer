@@ -10,15 +10,20 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 
 /** Represents a task that can be executed. Tasks in this tool <strong>will always</strong> provide a file. */
-public sealed interface Task extends Supplier<File> permits Task.Simple {
-    static Task named(String name, ThrowingSupplier<File> supplier) {
+public sealed interface Task extends Supplier<File> permits Task.Existing, Task.Simple {
+    static Task existing(String name, File file) {
+        return new Existing(name, file);
+    }
+
+    static Task named(String name, Callable<File> supplier) {
         return named(name, Set.of(), supplier);
     }
 
-    static Task named(String name, Iterable<? extends Task> deps, ThrowingSupplier<File> supplier) {
+    static Task named(String name, Iterable<? extends Task> deps, Callable<File> supplier) {
         return new Simple(name, deps, supplier);
     }
 
@@ -66,17 +71,13 @@ public sealed interface Task extends Supplier<File> permits Task.Simple {
         return this.execute();
     }
 
-    interface ThrowingSupplier<T> {
-        T get() throws Exception;
-    }
-
     final class Simple implements Task {
         private final String name;
         private final Iterable<? extends Task> deps;
-        private final ThrowingSupplier<File> supplier;
+        private final Callable<File> supplier;
         private File file;
 
-        private Simple(String name, Iterable<? extends Task> deps, ThrowingSupplier<File> supplier) {
+        private Simple(String name, Iterable<? extends Task> deps, Callable<File> supplier) {
             this.name = name;
             this.deps = deps;
             this.supplier = supplier;
@@ -90,7 +91,7 @@ public sealed interface Task extends Supplier<File> permits Task.Simple {
                 Log.info(name);
                 Log.push();
                 try {
-                    this.file = supplier.get();
+                    this.file = supplier.call();
                 } catch (Exception e) {
                     Util.sneak(e);
                 }
@@ -109,6 +110,18 @@ public sealed interface Task extends Supplier<File> permits Task.Simple {
         @Override
         public String name() {
             return this.name;
+        }
+
+        @Override
+        public String toString() {
+            return "Task[" + this.name + ']';
+        }
+    }
+
+    record Existing(String name, File execute) implements Task {
+        @Override
+        public boolean resolved() {
+            return true;
         }
 
         @Override
