@@ -18,6 +18,7 @@ import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.util.hash.HashStore;
+import org.jetbrains.annotations.Nullable;
 
 public class Mappings {
     public static final String CHANNEL_ATTR = "net.minecraftforge.mappings.channel";
@@ -25,9 +26,9 @@ public class Mappings {
 
     protected final Map<MCPSide, Task> tasks = new HashMap<>();
     private final String channel;
-    private final String version;
+    private final @Nullable String version;
 
-    public Mappings(String channel, String version) {
+    public Mappings(String channel, @Nullable String version) {
         this.channel = channel;
         this.version = version;
     }
@@ -36,7 +37,7 @@ public class Mappings {
         return this.channel;
     }
 
-    public String version() {
+    public @Nullable String version() {
         return this.version;
     }
 

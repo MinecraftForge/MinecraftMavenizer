@@ -88,6 +88,17 @@ public abstract class Repo {
         });
     }
 
+    protected Supplier<GradleModule.Variant[]> classVariant(String name, Mappings mappings) {
+        return () -> new GradleModule.Variant[] {
+            GradleModule.Variant
+                .of(name)
+                .attribute("org.gradle.category", "library")
+                .attribute("org.gradle.libraryelements", "jar")
+                .attribute(Mappings.CHANNEL_ATTR, mappings.channel())
+                .attribute(Mappings.VERSION_ATTR, mappings.version())
+        };
+    }
+
     // Classes needs a variant for each OS type so that we can have different natives
     protected GradleModule.Variant[] classVariants(Mappings mappings, MCPSide side, Artifact... extraDeps) {
         var all = new ArrayList<Artifact>();

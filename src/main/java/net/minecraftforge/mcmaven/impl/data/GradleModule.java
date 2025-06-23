@@ -8,6 +8,7 @@ import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashUtils;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -141,7 +142,9 @@ public class GradleModule {
             return this.attribute(attribute.getName(), attribute.getValue());
         }
 
-        public Variant attribute(String key, Object value) {
+        public Variant attribute(String key, @Nullable Object value) {
+            if (value == null) return this;
+
             if (this.attributes == null)
                 this.attributes = new TreeMap<>();
             this.attributes.put(key, value);

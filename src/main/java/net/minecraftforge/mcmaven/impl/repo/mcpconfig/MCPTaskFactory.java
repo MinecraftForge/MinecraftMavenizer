@@ -20,7 +20,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BiPredicate;
@@ -56,6 +55,7 @@ import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.logging.Log;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 // TODO [MCMavenizer][Documentation] Document
@@ -67,23 +67,27 @@ public class MCPTaskFactory {
     private final List<Map<String, String>> steps;
     private final Map<String, Task> data = new HashMap<>();
     private final Map<String, Task> tasks = new LinkedHashMap<>();
-    private final Task prestrip;
-    private final Task predecomp;
+    private final Task preStrip;
+    private final Task rawJar;
     private final Task mappings;
+    private final Task srgJar;
+    private final Task preDecomp;
     private final Task last;
 
     private final BiPredicate<File, String> injectFileFilter;
     private @Nullable List<Lib> libraries = null;
 
-    private MCPTaskFactory(MCPTaskFactory parent, File build, Task predecomp) {
+    private MCPTaskFactory(MCPTaskFactory parent, File build, Task preDecomp) {
         this.parent = parent;
         this.build = build;
         this.side = parent.side;
         this.cfg = parent.cfg;
         this.steps = parent.steps;
+        this.preStrip = parent.preStrip;
+        this.rawJar = parent.rawJar;
         this.mappings = parent.mappings;
-        this.predecomp = predecomp;
-        this.prestrip = parent.prestrip;
+        this.srgJar = parent.srgJar;
+        this.preDecomp = preDecomp;
 
         var foundDecomp = false;
         Task last = null;
@@ -98,7 +102,7 @@ public class MCPTaskFactory {
                 // Replace decompile input with our modified task
                 var inputTask = step.get("input");
                 inputTask = inputTask.substring(1, inputTask.length() - 7);
-                tasks.replace(inputTask, predecomp);
+                tasks.replace(inputTask, preDecomp);
 
                 task = createTask(step);
                 tasks.put(name, task);
@@ -124,16 +128,17 @@ public class MCPTaskFactory {
         this.cfg = this.side.getMCP().getConfig();
 
         var entries = cfg.getData(this.side.getName());
-        for (var key : entries.keySet()) {
-            var value = entries.get(key);
+        for (Map.Entry<String, String> entry : entries.entrySet()) {
+            var key = entry.getKey();
+            var value = entry.getValue();
             data.put(key, Task.named("extract[" + key + ']', () -> extract(key, value)));
         }
 
         this.steps = cfg.getSteps(this.side.getName());
         if (this.steps.isEmpty())
-            throw except("Does not contain requested side `" + side + "`");
+            throw except("Does not contain requested side `" + side.getName() + "`");
 
-        Task prestrip = null, predecomp = null, mappings = null, last = null;
+        Task prestrip = null, rawJar = null, mappings = null, srgJar = null, predecomp = null, last = null;
         for (var step : this.steps) {
             var type = step.get("type");
             var name = step.getOrDefault("name", type);
@@ -142,37 +147,54 @@ public class MCPTaskFactory {
             tasks.put(name, task);
             last = task;
 
-            if ("strip".equals(name) || "stripClient".equals(name))
-                prestrip = this.findStep(step.get("input"));
-            else if ("decompile".equals(name))
-                predecomp = this.findStep(step.get("input"));
-            else if ("rename".equals(name)) {
-                var value = step.getOrDefault("mappings", "{mappings}");
-                if (!value.startsWith("{") || !value.endsWith("}"))
-                    throw except("Expected `rename` step's `mappings` argument to be a variable");
+            switch (name) {
+                case "strip", "stripClient":
+                    prestrip = this.findStep(step.get("input"));
+                case "merge":
+                    rawJar = this.findStep(name);
+                    break;
+                case "decompile":
+                    predecomp = this.findStep(step.get("input"));
+                    break;
+                case "rename":
+                    srgJar = this.findStep(name);
 
-                if (value.endsWith("Output}"))
-                    mappings = this.findStep(value);
-                else
-                    mappings = this.findData(value);
+                    var value = step.getOrDefault("mappings", "{mappings}");
+                    if (!value.startsWith("{") || !value.endsWith("}"))
+                        throw except("Expected `rename` step's `mappings` argument to be a variable");
+
+                    if (value.endsWith("Output}"))
+                        mappings = this.findStep(value);
+                    else
+                        mappings = this.findData(value);
+                default:
+                    break;
             }
         }
 
         if (prestrip == null)
-            throw except("Could not find `strip(Client)` step");
+            throw except("Could not find `strip%s` step".formatted(MCPSide.JOINED.equals(side.getName()) ? "Client" : ""));
 
-        if (predecomp == null)
-            throw except("Could not find `decompile` step");
+        if (rawJar == null)
+            throw except("Could not find `%s` task".formatted(MCPSide.JOINED.equals(side.getName()) ? "merge" : "strip"));
 
         if (mappings == null)
             throw except("Could not find `mappings` task");
 
+        if (srgJar == null)
+            throw except("Could not find `rename` task");
+
+        if (predecomp == null)
+            throw except("Could not find `decompile` step");
+
         if (last == null)
             throw except("No steps defined");
 
-        this.prestrip = prestrip;
-        this.predecomp = predecomp;
+        this.preStrip = prestrip;
+        this.rawJar = rawJar;
         this.mappings = mappings;
+        this.srgJar = srgJar;
+        this.preDecomp = predecomp;
         this.last = last;
         //this.mappingHelper = new MappingTasks(mappings);
 
@@ -189,12 +211,20 @@ public class MCPTaskFactory {
         return new MCPTaskFactory(this, dir, predecomp);
     }
 
-    public Task getPreDecompile() {
-        return this.predecomp;
+    public Task getRawJar() {
+        return this.rawJar;
     }
 
     public Task getMappings() {
         return this.mappings;
+    }
+
+    public Task getSrgJar() {
+        return this.srgJar;
+    }
+
+    public Task getPreDecompile() {
+        return this.preDecomp;
     }
 
     public Task getLastTask() {
@@ -728,8 +758,8 @@ public class MCPTaskFactory {
 
     public Task getExtra() {
         return Task.named("extra[" + this.side.getName() + ']',
-            Set.of(this.prestrip, this.mappings),
-            () -> getExtra(this.prestrip, mappings)
+            Set.of(this.preStrip, this.mappings),
+            () -> getExtra(this.preStrip, mappings)
         );
     }
 

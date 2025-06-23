@@ -16,6 +16,7 @@ import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
+import org.jetbrains.annotations.Nullable;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -84,8 +86,12 @@ public final class MCPConfigRepo extends Repo {
         return this.mcTasks.computeIfAbsent(version, k -> new MinecraftTasks(this.cache.root(), version));
     }
 
+    public List<PendingArtifact> process(Artifact artifact) {
+        return this.process(artifact, null);
+    }
+
     @Override
-    public List<PendingArtifact> process(Artifact artifact, Mappings mappings) {
+    public List<PendingArtifact> process(Artifact artifact, @Nullable Mappings mappings) {
         var module = artifact.getGroup() + ':' + artifact.getName();
         var version = artifact.getVersion();
         if (!module.startsWith("net.minecraft:"))
@@ -94,22 +100,36 @@ public final class MCPConfigRepo extends Repo {
         var side = module.substring("net.minecraft:".length());
         var mcp = this.get(Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip"));
         var mcpSide = mcp.getSide(side);
+        var mcpTasks = mcpSide.getTasks();
 
         var build = mcpSide.getBuildFolder();
         var name = Artifact.from("net.minecraft", side, version);
 
-        var sourcesTask = new RenameTask(build, name, mcpSide, mcpSide.getSources(), mappings);
-        var recompile = new RecompileTask(build, name, mcpSide.getMCP(), mcpSide::getClasspath, sourcesTask.get(), mappings);
-        var classesTask = mergeExtra(build, side, recompile.get(), mcpSide.getTasks().getExtra(), mappings);
+        var notchObf = pending("Notch-obf Classes", mcpTasks.getRawJar(), name.withClassifier("raw"), classVariant("obf-notch", new Mappings("notch", null)));
+        var srgObf = pending("SRG-obf Classes", mcpTasks.getSrgJar(), name.withClassifier("srg"), classVariant("obf-searge", new Mappings("searge", null)));
+        var pending = new ArrayList<>(List.of(
+            notchObf, srgObf
+        ));
 
-        var sources = pending("Sources", sourcesTask.get(), name.withClassifier("sources"), sourceVariant(mappings));
-        var classes = pending("Classes", classesTask, name, () -> classVariants(mappings, mcpSide));
-        var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"));
-        PendingArtifact pom = null;
-        if (mappings.isPrimary())
-            pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"));
+        if (mappings != null) {
+            var sourcesTask = new RenameTask(build, name, mcpSide, mcpSide.getSources(), mappings);
+            var recompile = new RecompileTask(build, name, mcpSide.getMCP(), mcpSide::getClasspath, sourcesTask.get(), mappings);
+            var classesTask = mergeExtra(build, side, recompile.get(), mcpSide.getTasks().getExtra(), mappings);
 
-        return List.of(sources, classes, pom, metadata);
+            var sources = pending("Sources", sourcesTask.get(), name.withClassifier("sources"), sourceVariant(mappings));
+            var classes = pending("Classes", classesTask, name, () -> classVariants(mappings, mcpSide));
+            var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"));
+            pending.addAll(List.of(
+                sources, classes, metadata
+            ));
+
+            if (mappings.isPrimary()) {
+                var pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"));
+                pending.add(pom);
+            }
+        }
+
+        return pending;
     }
 
     public List<PendingArtifact> processExtra(String module, String version) {
