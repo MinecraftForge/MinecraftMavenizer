@@ -660,7 +660,12 @@ public class MCPTaskFactory {
             if (entry == null)
                 throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries.list");
 
-            record LibLine(String hash, Artifact artifact, String path) {}
+            record LibLine(String hash, Artifact artifact, String path) implements Comparable<LibLine> {
+                @Override
+                public int compareTo(LibLine o) {
+                    return Util.compare(this.artifact, o.artifact);
+                }
+            }
             var libs = new TreeSet<LibLine>();
 
             var reader = new BufferedReader(new InputStreamReader(jar.getInputStream(entry)));
@@ -693,7 +698,7 @@ public class MCPTaskFactory {
 
                 downloadedLibs.add(new Lib(artifact, target));
                 if (!target.exists()) {
-                    entry = jar.getEntry("META-INF/libraries/" + lib);
+                    entry = jar.getEntry("META-INF/libraries/" + artifact.getLocalPath());
                     if (entry == null)
                         throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries/" + lib);
 
