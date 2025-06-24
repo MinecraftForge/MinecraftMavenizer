@@ -728,7 +728,7 @@ public class MCPTaskFactory {
 
                 downloadedLibs.add(new Lib(artifact, target));
                 if (!target.exists()) {
-                    entry = jar.getEntry("META-INF/libraries/" + artifact.getLocalPath());
+                    entry = jar.getEntry("META-INF/libraries/" + lib.path());
                     if (entry == null)
                         throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries/" + lib);
 
