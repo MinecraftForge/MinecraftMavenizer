@@ -66,6 +66,10 @@ class MavenTask {
         var cacheOnlyO = parser.accepts("cache-only",
             "Only use caches, fail if any downloads need to occur or if a task needs to do work");
 
+        var mappingsO = parser.accepts("mappings",
+            "Mappings to use for this artifact. Formatted as channel:version")
+            .withRequiredArg().ofType(String.class).defaultsTo("official");
+
         var parchmentO = parser.accepts("parchment",
             "Version of parchment mappings to use, snapshots are not supported")
             .withRequiredArg();
@@ -131,7 +135,7 @@ class MavenTask {
 
         var mappings = options.has(parchmentO)
             ? new ParchmentMappings(options.valueOf(parchmentO))
-            : new Mappings("official", null);
+            : Mappings.of(options.valueOf(mappingsO));
 
         var mcmaven = new MinecraftMaven(output, cache, jdkCache, mappings);
         mcmaven.run(artifact);

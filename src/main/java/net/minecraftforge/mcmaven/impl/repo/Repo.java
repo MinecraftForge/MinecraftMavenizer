@@ -88,7 +88,7 @@ public abstract class Repo {
         });
     }
 
-    protected Supplier<GradleModule.Variant[]> classVariant(String name, Mappings mappings) {
+    protected Supplier<GradleModule.Variant[]> simpleVariant(String name, Mappings mappings) {
         return () -> new GradleModule.Variant[] {
             GradleModule.Variant
                 .of(name)

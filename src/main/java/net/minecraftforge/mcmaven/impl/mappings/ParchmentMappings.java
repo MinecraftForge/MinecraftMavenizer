@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
@@ -32,12 +33,13 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
+import org.jetbrains.annotations.Nullable;
 
 public class ParchmentMappings extends Mappings {
     private Task downloadTask;
 
     public ParchmentMappings(String version) {
-        super("parchment", version);
+        super("parchment", Objects.requireNonNull(version, "Parchment mappings version must be present"));
         if (version.contains("-SNAPSHOT"))
             throw new IllegalArgumentException("Parchment snapshots are not supported: " + version);
     }

@@ -28,6 +28,16 @@ public class Mappings {
     private final String channel;
     private final @Nullable String version;
 
+    public static Mappings of(String mappingsNotation) {
+        var split = mappingsNotation.split(":", 2);
+        var channel = split[0];
+        var version = split.length > 1 ? split[1] : null;
+
+        return "parchment".equalsIgnoreCase(channel)
+            ? new ParchmentMappings(version)
+            : new Mappings(channel, version);
+    }
+
     public Mappings(String channel, @Nullable String version) {
         this.channel = channel;
         this.version = version;

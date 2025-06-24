@@ -47,7 +47,7 @@ public class MCPTask {
             "Directory to store jdks downloaded from the disoco api")
             .withRequiredArg().ofType(File.class).defaultsTo(new File("cache/jdks"));
 
-        // root output directory
+        // mcp artifact output
         var outputO = parser.accepts("output",
             "Root directory to generate the maven repository")
             .withRequiredArg().ofType(File.class).defaultsTo(new File("output.jar"));
