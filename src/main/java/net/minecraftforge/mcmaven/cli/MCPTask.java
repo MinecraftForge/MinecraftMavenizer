@@ -64,16 +64,24 @@ public class MCPTask {
             "MCPConfig pipeline to run, typically [client|server|joined]")
             .withRequiredArg().defaultsTo("joined");
 
+        var rawO = parser.accepts("raw",
+            "Use to output a raw jar file without any MCPConfig transformations.");
+
+        var seargeO = parser.accepts("searge",
+            "Use with --raw to output the raw jar file renamed with SRG names")
+            .availableIf(rawO);
+
         var atO = parser.accepts("at",
             "Access Transformer config file to apply")
-            .withOptionalArg().ofType(File.class);
+            .availableUnless(rawO).withOptionalArg().ofType(File.class);
 
         var sasO = parser.accepts("sas",
             "Side Annotation Stripper confg file to apply")
-            .withOptionalArg().ofType(File.class);
+            .availableUnless(rawO).withOptionalArg().ofType(File.class);
 
         var mappingsO = parser.accepts("mappings",
-            "Use to enable using official mappings");
+            "Use to enable using official mappings")
+            .availableUnless(rawO);
 
         var parchmentO = parser.accepts("parchment",
             "Version of parchment mappings to use, snapshots are not supported")
@@ -114,12 +122,46 @@ public class MCPTask {
         Log.info("  JDK Cache:  " + jdkCacheRoot.getAbsolutePath());
         Log.info("  Artifact:   " + artifact);
         Log.info("  Pipeline:   " + pipeline);
-        Log.info("  Access:     " + (ats == null ? null : ats.getAbsolutePath()));
-        Log.info("  SAS:        " + (sas == null ? null : sas.getAbsolutePath()));
+        if (options.has(rawO)) {
+            Log.info("  Raw Names:  " + (options.has(seargeO) ? "Searge" : "Notch"));
+        } else {
+            Log.info("  Access:     " + (ats == null ? null : ats.getAbsolutePath()));
+            Log.info("  SAS:        " + (sas == null ? null : sas.getAbsolutePath()));
+        }
         Log.info();
 
         var mcp = repo.get(artifact);
         var side = mcp.getSide(pipeline);
+
+        if (options.has(rawO)) {
+            var searge = options.has(seargeO);
+            var cache = HashStore.fromFile(output)
+                .addKnown("obfuscation", searge ? "srg" : "notch");
+
+            Task rawTask = searge ? side.getTasks().getSrgJar() : side.getTasks().getRawJar();
+            File raw;
+
+            Log.info("Creating Raw Jar");
+            var indent = Log.push();
+            try {
+                raw = rawTask.execute();
+                cache.add("raw", raw);
+            } finally {
+                Log.pop(indent);
+            }
+
+            if (!output.exists() || !cache.isSame()) {
+                try {
+                    org.apache.commons.io.FileUtils.copyFile(raw, output);
+                    cache.save();
+                } catch (Throwable t) {
+                    throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
+                }
+            }
+
+            return;
+        }
+
         var sourcesTask = side.getSources();
 
         if (ats != null || sas != null) {
