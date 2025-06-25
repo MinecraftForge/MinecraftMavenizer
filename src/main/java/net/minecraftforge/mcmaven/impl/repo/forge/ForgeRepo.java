@@ -16,6 +16,7 @@ import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.util.GradleAttributes;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
@@ -244,7 +245,7 @@ public final class ForgeRepo extends Repo {
                 if (mappings != null)
                     dependencies.add(mappings);
 
-                patcher.forAllLibraries(dependencies::add, Artifact::hasNoOs);
+                patcher.forAllLibraries(dependencies::add, GradleAttributes.OperatingSystemFamily::allowsAll);
             });
 
             FileUtils.ensureParent(output);
