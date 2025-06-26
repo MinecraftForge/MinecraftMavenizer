@@ -11,7 +11,6 @@ import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
-import net.minecraftforge.mcmaven.impl.util.GradleAttributes;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
@@ -236,7 +235,7 @@ public final class MCPConfigRepo extends Repo {
             GlobalOptions.assertNotCacheOnly();
 
             var builder = new POMBuilder("net.minecraft", side, version).preferGradleModule().dependencies(dependencies -> {
-                mcpSide.forAllLibraries(dependencies::add, GradleAttributes.OperatingSystemFamily::allowsAll);
+                mcpSide.forAllLibraries(dependencies::add, Artifact::hasNoOs);
             });
 
             FileUtils.ensureParent(output);

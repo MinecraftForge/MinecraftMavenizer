@@ -618,7 +618,9 @@ public class MCPTaskFactory {
 
             buf.append("-e=").append(target.getAbsolutePath()).append('\n');
 
-            var artifact = Artifact.from(lib.coord).withOS(lib.os);
+            var artifact = Artifact.from(lib.coord);
+            if (lib.os != null && lib.os != OS.UNKNOWN)
+                artifact = artifact.withOS(lib.os);
 
             downloadedLibs.add(new Lib(artifact, target));
             cache.add(lib.coord, target);

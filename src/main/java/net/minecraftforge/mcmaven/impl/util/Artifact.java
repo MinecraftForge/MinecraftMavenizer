@@ -10,8 +10,6 @@ import org.jetbrains.annotations.Nullable;
 import java.io.File;
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -29,7 +27,8 @@ public class Artifact implements Comparable<Artifact>, Serializable {
     private final @Nullable String version;
     private final @Nullable String classifier;
     private final String ext;
-    private final EnumSet<OS> os;
+    private final OS os;
+    private final Arch arch;
 
     // Cached after building the first time we're asked
     // Transient field so these aren't serialized
@@ -59,7 +58,7 @@ public class Artifact implements Comparable<Artifact>, Serializable {
      * @return The created artifact
      */
     public static Artifact from(String group, String name, String version) {
-        return new Artifact(group, name, version, null, null, OS.UNKNOWN);
+        return new Artifact(group, name, version, null, null, OS.UNKNOWN, Arch.UNKNOWN);
     }
 
     /**
@@ -72,7 +71,7 @@ public class Artifact implements Comparable<Artifact>, Serializable {
      * @return The created artifact
      */
     public static Artifact from(String group, String name, String version, @Nullable String classifier) {
-        return new Artifact(group, name, version, classifier, null, OS.UNKNOWN);
+        return new Artifact(group, name, version, classifier, null, OS.UNKNOWN, Arch.UNKNOWN);
     }
 
     /**
@@ -86,7 +85,7 @@ public class Artifact implements Comparable<Artifact>, Serializable {
      * @return The created artifact
      */
     public static Artifact from(String group, String name, String version, @Nullable String classifier, @Nullable String ext) {
-        return new Artifact(group, name, version, classifier, ext, OS.UNKNOWN);
+        return new Artifact(group, name, version, classifier, ext, OS.UNKNOWN, Arch.UNKNOWN);
     }
 
     private Artifact(String descriptor) {
@@ -107,24 +106,44 @@ public class Artifact implements Comparable<Artifact>, Serializable {
 
         this.version = pts.length > 2 ? pts[2] : null;
         this.classifier = pts.length > 3 ? pts[3] : null;
-        this.os = EnumSet.noneOf(OS.class);
+        this.os = this.classifier != null ? findOS(this.classifier) : OS.UNKNOWN;
+        this.arch = this.classifier != null ? findArch(this.classifier) : Arch.UNKNOWN;
     }
 
-    private Artifact(String group, String name, String version, @Nullable String classifier, @Nullable String ext, OS os) {
-        this(group, name, version, classifier, ext, os, new OS[0]);
-    }
-
-    private Artifact(String group, String name, String version, @Nullable String classifier, @Nullable String ext, OS osFirst, OS... osRest) {
-        this(group, name, version, classifier, ext, EnumSet.of(osFirst, osRest));
-    }
-
-    private Artifact(String group, String name, String version, @Nullable String classifier, @Nullable String ext, EnumSet<OS> os) {
+    private Artifact(String group, String name, String version, @Nullable String classifier, @Nullable String ext, OS os, Arch arch) {
         this.group = group;
         this.name = name;
         this.version = version;
         this.classifier = classifier;
         this.ext = Objects.requireNonNullElse(ext, "jar");
-        this.os = os;
+        this.os = os == OS.UNKNOWN && classifier != null ? findOS(classifier) : os;
+        this.arch = arch == Arch.UNKNOWN && classifier != null ? findArch(classifier) : arch;
+    }
+
+    private static OS findOS(String classifier) {
+        for (var s : classifier.split("-")) {
+            if (s.isBlank()) continue;
+
+            var osCandidate = OS.byName(s);
+            if (osCandidate != OS.UNKNOWN) {
+                return osCandidate;
+            }
+        }
+
+        return OS.UNKNOWN;
+    }
+
+    private static Arch findArch(String classifier) {
+        for (var s : classifier.split("-")) {
+            if (s.isBlank()) continue;
+
+            var archCandidate = Arch.byName(s);
+            if (archCandidate != Arch.UNKNOWN) {
+                return archCandidate;
+            }
+        }
+
+        return Arch.UNKNOWN;
     }
 
     /**
@@ -196,13 +215,18 @@ public class Artifact implements Comparable<Artifact>, Serializable {
         return ext;
     }
 
-    public EnumSet<OS> getOs() {
+    /** @return The os of this artifact (defaults to {@link OS#UNKNOWN}) */
+    public OS getOs() {
         return os;
     }
 
-    /** @return The os of this artifact (defaults to {@link OS#UNKNOWN}) */
-    public boolean allowsOS(OS os) {
-        return this.os.isEmpty() || this.os.contains(os);
+    public boolean hasNoOs() {
+        return this.os == OS.UNKNOWN;
+    }
+
+    /** @return The arch of this artifact (defaults to {@link Arch#UNKNOWN}) */
+    public Arch getArch() {
+        return arch;
     }
 
     /** @return The file name of this artifact */
@@ -235,25 +259,23 @@ public class Artifact implements Comparable<Artifact>, Serializable {
      * @return The new artifact
      */
     public Artifact withVersion(String version) {
-        return new Artifact(group, name, version, classifier, ext, os);
+        return new Artifact(group, name, version, classifier, ext, os, arch);
     }
 
     public Artifact withClassifier(String classifier) {
-        return new Artifact(group, name, version, classifier, ext, os);
+        return new Artifact(group, name, version, classifier, ext, os, arch);
     }
 
     public Artifact withExtension(String ext) {
-        return new Artifact(group, name, version, classifier, ext, os);
+        return new Artifact(group, name, version, classifier, ext, os, arch);
     }
 
     public Artifact withOS(OS os) {
-        var osSet = EnumSet.copyOf(this.os);
-        osSet.add(os);
-        return new Artifact(group, name, version, classifier, ext, osSet);
+        return new Artifact(group, name, version, classifier, ext, os, arch);
     }
 
-    public Artifact withOS(EnumSet<OS> os) {
-        return new Artifact(group, name, version, classifier, ext, os);
+    public Artifact withArch(Arch arch) {
+        return new Artifact(group, name, version, classifier, ext, os, arch);
     }
 
     @Override

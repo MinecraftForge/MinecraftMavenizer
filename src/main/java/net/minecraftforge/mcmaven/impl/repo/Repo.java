@@ -14,7 +14,6 @@ import net.minecraftforge.mcmaven.impl.util.GradleAttributes;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
-import net.minecraftforge.util.data.OS;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
@@ -25,14 +24,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -109,27 +102,23 @@ public abstract class Repo {
     // Classes needs a variant for each OS type so that we can have different natives
     protected GradleModule.Variant[] classVariants(Mappings mappings, MCPSide side, Artifact... extraDeps) {
         var all = new ArrayList<Artifact>();
-        var natives = new EnumMap<GradleAttributes.OperatingSystemFamily, List<Artifact>>(GradleAttributes.OperatingSystemFamily.class);
-        natives.put(GradleAttributes.OperatingSystemFamily.WINDOWS, new ArrayList<>());
-        natives.put(GradleAttributes.OperatingSystemFamily.MACOS, new ArrayList<>());
-        natives.put(GradleAttributes.OperatingSystemFamily.LINUX, new ArrayList<>());
+        var natives = new HashMap<GradleAttributes.OperatingSystemFamily, List<Artifact>>();
 
-        Consumer<Artifact> addToVariants = artifact -> {
-            if (artifact == null) return;
-
-            if (GradleAttributes.OperatingSystemFamily.allowsAll(artifact)) {
+        for (var artifact : side.getMCLibraries()) {
+            var variant = GradleAttributes.OperatingSystemFamily.from(artifact.getOs());
+            if (variant == null)
                 all.add(artifact);
-            } else {
-                for (var os : artifact.getOs()) {
-                    GradleAttributes.OperatingSystemFamily variant = GradleAttributes.OperatingSystemFamily.from(os);
-                    natives.get(variant).add(artifact);
-                }
-            }
-        };
+            else
+                natives.computeIfAbsent(variant, k -> new ArrayList<>()).add(artifact);
+        }
 
-        side.getMCLibraries().forEach(addToVariants);
-        side.getMCPConfigLibraries().forEach(addToVariants);
-        Arrays.asList(extraDeps).forEach(addToVariants);
+        for (var artifact : side.getMCPConfigLibraries())
+            all.add(artifact);
+
+        for (var extra : extraDeps) {
+            if (extra != null)
+                all.add(extra);
+        }
 
         var java = Util.replace(
             JsonData.minecraftVersion(side.getMCP().getMinecraftTasks().versionJson.get()),
@@ -158,14 +147,12 @@ public abstract class Repo {
         //  Launching the game wouldn't work because of that. If we need a common variant, it would need to include everything
         //  But since FG7 will never not have the OS attribute, it wouldn't be used anyways.
         //variants.add(GradleModule.Variant.of("classes", common));
-        natives.forEach((os, deps) -> {
-            variants.add(
-                GradleModule.Variant
-                    .of("classes-" + os.getValue(), common)
-                    .attribute(os)
-                    .deps(deps)
-            );
-        });
+        for (var e : natives.entrySet()) {
+            var variant = GradleModule.Variant.of("classes-" + e.getKey().getValue(), common);
+            variant.attribute(e.getKey());
+            variant.deps(e.getValue());
+            variants.add(variant);
+        }
 
         return variants.toArray(new GradleModule.Variant[0]);
     }

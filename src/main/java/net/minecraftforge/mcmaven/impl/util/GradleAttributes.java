@@ -32,21 +32,5 @@ public interface GradleAttributes {
                 case null, default -> null;
             };
         }
-
-        public OS toOS() {
-            return switch (this) {
-                case WINDOWS -> OS.WINDOWS;
-                case MACOS -> OS.MACOS;
-                case LINUX -> OS.LINUX;
-            };
-        }
-
-        public static boolean allowsAll(Artifact artifact) {
-            for (var os : OperatingSystemFamily.values()) {
-                if (!artifact.allowsOS(os.toOS())) return false;
-            }
-
-            return true;
-        }
     }
 }
