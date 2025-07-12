@@ -9,8 +9,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.util.Artifact;

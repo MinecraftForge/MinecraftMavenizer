@@ -72,6 +72,7 @@ class MavenTask {
 
         var parchmentO = parser.accepts("parchment",
             "Version of parchment mappings to use, snapshots are not supported")
+            .availableUnless(mappingsO)
             .withRequiredArg();
 
         var shorthandOptions = new HashMap<String, OptionSpecBuilder>();
@@ -80,7 +81,8 @@ class MavenTask {
             "fml",    Constants.FMLONLY_ARTIFACT,
             "mc",     "net.minecraft:joined",
             "client", "net.minecraft:client",
-            "server", "net.minecraft:server"
+            "server", "net.minecraft:server",
+            "mapping-data", "net.minecraft:mappings"
         );
         for (var entry : artifacts.entrySet()) {
             var key = entry.getKey();

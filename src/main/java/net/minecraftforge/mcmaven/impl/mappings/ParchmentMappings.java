@@ -16,7 +16,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
-import java.util.zip.Deflater;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
@@ -33,7 +32,6 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
-import org.jetbrains.annotations.Nullable;
 
 public class ParchmentMappings extends Mappings {
     private Task downloadTask;
@@ -149,7 +147,7 @@ public class ParchmentMappings extends Mappings {
         FileUtils.ensureParent(output);
         try (var fos = new FileOutputStream(output);
              var out = new ZipOutputStream(fos)) {
-            out.setLevel(Deflater.NO_COMPRESSION); // Don't compress in case the system has custom zlib library, which will case hash differences
+            //out.setLevel(Deflater.NO_COMPRESSION); // Don't compress in case the system has custom zlib library, which will case hash differences
 
             var uncloseable = new OutputStreamWriter(out, StandardCharsets.UTF_8) {
                 public void close() throws IOException {

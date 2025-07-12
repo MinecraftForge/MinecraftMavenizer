@@ -30,7 +30,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /*
  * Provides the following artifacts:
@@ -93,10 +92,21 @@ public final class MCPConfigRepo extends Repo {
             throw new IllegalArgumentException("MCPConfigRepo cannot process modules that aren't for group net.minecraft");
 
         var side = module.substring("net.minecraft:".length());
+        boolean isMappings = "mappings".equals(side);
+        if (isMappings)
+            side = "joined";
+
         var mcp = this.get(Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip"));
         var mcpSide = mcp.getSide(side);
-        var mcpTasks = mcpSide.getTasks();
 
+        if (isMappings) {
+            var name = mappings.getArtifact(mcpSide);
+            return List.of(
+                pending("Mappings", mappings.getCsvZip(mcpSide), name)
+            );
+        }
+
+        var mcpTasks = mcpSide.getTasks();
         var build = mcpSide.getBuildFolder();
         var name = Artifact.from("net.minecraft", side, version);
 
