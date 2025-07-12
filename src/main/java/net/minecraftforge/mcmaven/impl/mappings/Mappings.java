@@ -93,7 +93,7 @@ public class Mappings {
         var client = mc.versionFile("client_mappings", "txt");
         var server = mc.versionFile("server_mappings", "txt");
         ret = Task.named("srg2names[" + this + ']',
-            Set.of(srg, client, server),
+            Task.deps(srg, client, server),
             () -> getMappings(side, srg, client, server)
         );
         tasks.put(side, ret);

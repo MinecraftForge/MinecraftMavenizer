@@ -398,7 +398,7 @@ public class MCPTaskFactory {
         var output = new File(this.build, name + ".jar").getAbsoluteFile();
         var input = findStep(step.get("input"));
         return Task.named(name,
-            Task.collect(input, (Supplier<Task>) () -> this.mappings),
+            Task.deps(() -> input, () -> this.mappings),
             () -> strip(input, whitelist, output)
         );
     }
@@ -452,7 +452,7 @@ public class MCPTaskFactory {
         var packages = new File(this.build, name + "/packages.jar").getAbsoluteFile();
         var output = new File(this.build, name + "/output.jar").getAbsoluteFile();
         return Task.named(name,
-            Set.of(input, inject),
+            Task.deps(input, inject),
             () -> inject(input, inject, packages, output)
         );
     }
@@ -527,7 +527,7 @@ public class MCPTaskFactory {
         var output = new File(this.build, name + "/output.jar");
         var rejects = new File(this.build, name + "/rejects.jar");
         return Task.named(name,
-            Set.of(input, patches),
+            Task.deps(input, patches),
             () -> patch(input, patches, output, rejects)
         );
     }
@@ -583,7 +583,7 @@ public class MCPTaskFactory {
         var output = new File(this.build, name + ".txt");
         var json = this.findStep("downloadJson");
         return Task.named(name,
-            Set.of(json),
+            Task.deps(json),
             () -> listLibraries(json, output)
         );
     }
@@ -670,7 +670,7 @@ public class MCPTaskFactory {
         var libraries = new File(this.build, name);
         var output = new File(this.build, name + "/libraries.txt");
         return Task.named(name,
-            Set.of(bundle),
+            Task.deps(bundle),
             () -> listLibrariesBundle(bundle, libraries, output)
         );
     }
@@ -758,7 +758,7 @@ public class MCPTaskFactory {
 
     public Task getExtra() {
         return Task.named("extra[" + this.side.getName() + ']',
-            Set.of(this.preStrip, this.mappings),
+            Task.deps(this.preStrip, this.mappings),
             () -> getExtra(this.preStrip, mappings)
         );
     }
@@ -819,7 +819,7 @@ public class MCPTaskFactory {
         var jvmArgs = fillArgs(func.jvmargs, args, deps);
         var runArgs = fillArgs(func.args, args, deps);
 
-        return Task.named(name, deps,
+        return Task.named(name, Task.deps(deps),
             () -> execute(jvmArgs, runArgs, func, log, output)
         );
     }

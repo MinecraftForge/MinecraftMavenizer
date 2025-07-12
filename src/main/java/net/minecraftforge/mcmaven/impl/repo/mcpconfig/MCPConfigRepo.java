@@ -107,10 +107,10 @@ public final class MCPConfigRepo extends Repo {
                 var pending = new ArrayList<PendingArtifact>();
 
                 var sourcesTask = new RenameTask(build, name, mcpSide, mcpSide.getSources(), mappings);
-                var recompile = new RecompileTask(build, name, mcpSide.getMCP(), mcpSide::getClasspath, sourcesTask.get(), mappings);
-                var classesTask = mergeExtra(build, side, recompile.get(), mcpSide.getTasks().getExtra(), mappings);
+                var recompile = new RecompileTask(build, name, mcpSide.getMCP(), mcpSide::getClasspath, sourcesTask, mappings);
+                var classesTask = mergeExtra(build, side, recompile, mcpSide.getTasks().getExtra(), mappings);
 
-                var sources = pending("Sources", sourcesTask.get(), name.withClassifier("sources"), sourceVariant(mappings));
+                var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), sourceVariant(mappings));
                 var classes = pending("Classes", classesTask, name, () -> classVariants(mappings, mcpSide));
                 var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"));
                 pending.addAll(List.of(
@@ -150,10 +150,10 @@ public final class MCPConfigRepo extends Repo {
 
     // TODO [MCMavenizer][client-extra] Band-aid fix for merging for clean! Remove later.
     private static Task mergeExtra(File build, String side, Task recompiled, Task extra, Mappings mappings) {
-        return Task.named("mergeExtra[" + side + "][" + mappings + ']', Set.of(extra, recompiled), () -> {
+        return Task.named("mergeExtra[" + side + "][" + mappings + ']', Task.deps(extra, recompiled), () -> {
             var output = new File(mappings.getFolder(build), "recompiled-extra.jar");
-            var recompiledF = recompiled.get();
-            var extraF = extra.get();
+            var recompiledF = recompiled.execute();
+            var extraF = extra.execute();
             var cache = HashStore
                 .fromFile(output)
                 .add(recompiledF, extraF);
@@ -175,7 +175,7 @@ public final class MCPConfigRepo extends Repo {
 
     private static Task metadata(File build, MCPSide side) {
         var minecraftTasks = side.getMCP().getMinecraftTasks();
-        return Task.named("metadata[forge]", Set.of(minecraftTasks.versionJson), () -> {
+        return Task.named("metadata[forge]", Task.deps(minecraftTasks.versionJson), () -> {
             var output = new File(build, "metadata.zip");
 
             // metadata
@@ -184,7 +184,7 @@ public final class MCPConfigRepo extends Repo {
 
             // metadata/minecraft
             var minecraftDir = new File(metadataDir, "minecraft");
-            var versionJson = minecraftTasks.versionJson.get();
+            var versionJson = minecraftTasks.versionJson.execute();
 
             var cache = HashStore
                 .fromFile(output)

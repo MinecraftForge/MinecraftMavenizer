@@ -30,7 +30,7 @@ import java.util.zip.ZipOutputStream;
  * Takes a input jar file filled with SRG named sources.
  * Applies mappings provided by a ziped csv file to them and returns the new sources.
  */
-public final class RenameTask implements Supplier<Task> {
+public final class RenameTask implements Task {
     private final String name;
     private final MCPSide side;
     private final Task task;
@@ -59,16 +59,26 @@ public final class RenameTask implements Supplier<Task> {
         this.task = this.remapSources(sources, mappings.getFolder(build), mappings);
     }
 
-    /** @return The final named sources */
-    public Task get() {
-        return this.task;
+    @Override
+    public File execute() {
+        return this.task.execute();
+    }
+
+    @Override
+    public boolean resolved() {
+        return this.task.resolved();
+    }
+
+    @Override
+    public String name() {
+        return this.task.name();
     }
 
     private Task remapSources(Task input, File outputDir, Mappings provider) {
         var output = new File(outputDir, "remapped.jar");
         var mappings = provider.getCsvZip(side);
         return Task.named("remap[" + this.name + "][" + provider + ']',
-            Set.of(input, mappings),
+            Task.deps(input, mappings),
             () -> remapSourcesImpl(input, mappings, output)
         );
     }

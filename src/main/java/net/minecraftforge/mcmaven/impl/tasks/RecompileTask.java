@@ -22,7 +22,7 @@ import java.util.function.Supplier;
  * A list of libraries
  * And recompiles them to a jar file containing all class files.
  */
-public final class RecompileTask implements Supplier<Task> {
+public final class RecompileTask implements Task {
     private final File build;
     private final Artifact name;
     private final MCP mcp;
@@ -39,16 +39,25 @@ public final class RecompileTask implements Supplier<Task> {
         this.task = this.recompileSources(sources);
     }
 
-    /** @return The final recompiled classes */
     @Override
-    public Task get() {
-        return this.task;
+    public File execute() {
+        return this.task.execute();
+    }
+
+    @Override
+    public boolean resolved() {
+        return this.task.resolved();
+    }
+
+    @Override
+    public String name() {
+        return this.task.name();
     }
 
     protected Task recompileSources(Task input) {
         var output = new File(this.build, "recompiled.jar");
         return Task.named("recompile[" + this.name.getName() + "][" + mappings + ']',
-            Set.of(input),
+            Task.deps(input),
             () -> recompileSourcesImpl(input, output)
         );
     }

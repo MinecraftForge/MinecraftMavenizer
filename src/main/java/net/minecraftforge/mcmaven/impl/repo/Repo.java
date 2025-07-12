@@ -74,10 +74,10 @@ public abstract class Repo {
     }
 
     protected static Task variantTask(Task parent, Supplier<GradleModule.Variant[]> supplier) {
-        return Task.named(parent.name() + "[variants]", List.of(parent), () -> {
+        return Task.named(parent.name() + "[variants]", Task.deps(parent), () -> {
             var variants = supplier.get();
 
-            var variantFile = new File(parent.get().getAbsolutePath() + ".variants");
+            var variantFile = new File(parent.execute().getAbsolutePath() + ".variants");
             try {
                 FileUtils.ensureParent(variantFile);
                 JsonData.toJson(variants, variantFile);
@@ -121,7 +121,7 @@ public abstract class Repo {
         }
 
         var java = Util.replace(
-            JsonData.minecraftVersion(side.getMCP().getMinecraftTasks().versionJson.get()),
+            JsonData.minecraftVersion(side.getMCP().getMinecraftTasks().versionJson.execute()),
             v -> v.javaVersion != null ? v.javaVersion.majorVersion : null
         );
 
@@ -196,7 +196,7 @@ public abstract class Repo {
         @Override
         public File get() {
             if (this.task.resolved())
-                return this.task.get();
+                return this.task.execute();
 
             try {
                 Log.info(this.message);

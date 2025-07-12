@@ -71,7 +71,7 @@ public class ParchmentMappings extends Mappings {
         var data = downloadTask(side.getMCP());
 
         ret = Task.named("srg2names[" + this + ']',
-            Set.of(srg, client, server, data).stream().filter(e -> e != null).toList(),
+            Task.deps(Set.of(srg, client, server, data).stream().filter(Objects::nonNull).toList()),
             () -> getMappings(side.getMCP(), srg, client, server, data)
         );
         tasks.put(side, ret);
@@ -82,7 +82,6 @@ public class ParchmentMappings extends Mappings {
     private Task downloadTask(MCP mcp) {
         if (downloadTask == null) {
             downloadTask = Task.named("download[" + version() + "][parchment]",
-                Set.of(),
                 () -> download(mcp.getCache())
             );
         }

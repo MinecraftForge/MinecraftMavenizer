@@ -151,7 +151,7 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings) {
             }
 
             if (pending.getVariants() != null) {
-                var source = pending.getVariants().get();
+                var source = pending.getVariants().execute();
                 var cache = HashStore.fromFile(target)
                     .add("source", source);
 

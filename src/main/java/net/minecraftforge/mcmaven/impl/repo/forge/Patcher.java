@@ -132,12 +132,12 @@ public class Patcher implements Supplier<Task> {
 
             if (ats != null) {
                 var tmp = predecomp;
-                predecomp = Task.named("modifyAccess", Set.of(tmp), () -> modifyAccess(dir, tmp, ats, cache));
+                predecomp = Task.named("modifyAccess", Task.deps(tmp), () -> modifyAccess(dir, tmp, ats, cache));
             }
 
             if (sass != null) {
                 var tmp = predecomp;
-                predecomp = Task.named("stripSides", Set.of(tmp), () -> stripSides(dir, tmp, sass, cache));
+                predecomp = Task.named("stripSides", Task.deps(tmp), () -> stripSides(dir, tmp, sass, cache));
             }
 
             // If we changed the decompile input, rebuild decompile and subsequent tasks
@@ -494,7 +494,7 @@ public class Patcher implements Supplier<Task> {
             deps.add(extractSingle(entry.getKey(), entry.getValue()));
 
         return Task.named("postProcess[" + this.name.getName() + ']',
-            deps,
+            Task.deps(deps),
             () -> postProcess(input, data, output, log)
         );
     }
@@ -553,7 +553,7 @@ public class Patcher implements Supplier<Task> {
         var output = new File(outputDir, "patched.jar");
         var rejects = new File(outputDir, "patched-rejects.jar");
         return Task.named("patch[" + this.name.getName() + ']',
-            Set.of(input),
+            Task.deps(input),
             () -> patch(input, output, rejects)
         );
     }
@@ -612,7 +612,7 @@ public class Patcher implements Supplier<Task> {
 
         var output = new File(outputDir, "injected-sources.jar");
         return Task.named("injectSources[" + this.name.getName() + ']',
-            Set.of(input, this.downloadSources),
+            Task.deps(input, this.downloadSources),
             () -> injectSourcesImpl(input, output)
         );
     }

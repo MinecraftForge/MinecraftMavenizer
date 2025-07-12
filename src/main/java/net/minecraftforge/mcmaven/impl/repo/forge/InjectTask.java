@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /**
  * Takes a jar containing compiled class files, and injects extra data/resources from a patcher into it.
  */
-public final class InjectTask implements Supplier<Task> {
+public final class InjectTask implements Task {
     private final File build;
     private final Artifact name;
     private final Cache cache;
@@ -40,13 +40,23 @@ public final class InjectTask implements Supplier<Task> {
     }
 
     @Override
-    public Task get() {
-        return this.task;
+    public File execute() {
+        return this.task.execute();
+    }
+
+    @Override
+    public boolean resolved() {
+        return this.task.resolved();
+    }
+
+    @Override
+    public String name() {
+        return this.task.name();
     }
 
     private Task injectData(Task input) {
         return Task.named("injectData[" + this.name.getName() + "][" + mappings + ']',
-            Set.of(input),
+            Task.deps(input),
             () -> injectDataImpl(input, new File(this.build, "injected.jar"))
         );
     }

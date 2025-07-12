@@ -171,12 +171,12 @@ public class MCPTask {
             var predecomp = side.getTasks().getPreDecompile();
             if (ats != null) {
                 var tmp = predecomp;
-                predecomp = Task.named("modifyAccess", Set.of(tmp), () -> Patcher.modifyAccess(dir, tmp, ats, repo.getCache()));
+                predecomp = Task.named("modifyAccess", Task.deps(tmp), () -> Patcher.modifyAccess(dir, tmp, ats, repo.getCache()));
             }
 
             if (sas != null) {
                 var tmp = predecomp;
-                predecomp = Task.named("stripSides", Set.of(tmp), () -> Patcher.stripSides(dir, tmp, sas, repo.getCache()));
+                predecomp = Task.named("stripSides", Task.deps(tmp), () -> Patcher.stripSides(dir, tmp, sas, repo.getCache()));
             }
 
             var factory = side.getTasks().child(dir, predecomp);
@@ -205,7 +205,7 @@ public class MCPTask {
                     ? new ParchmentMappings(options.valueOf(parchmentO))
                     : new Mappings("official", null).withMCVersion(MinecraftMaven.mcpToMcVersion(artifact.getVersion()));
 
-                var renameTask = new RenameTask(side.getBuildFolder(), pipeline, side, Task.existing("sources", sources), mappings).get();
+                var renameTask = new RenameTask(side.getBuildFolder(), pipeline, side, sourcesTask, mappings);
                 sources = renameTask.execute();
             } finally {
                 Log.pop(indent);

@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.TimeZone;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 
@@ -41,6 +42,10 @@ public class Util {
     @SuppressWarnings("unchecked")
     public static <R, E extends Throwable> R sneak(Throwable t) throws E {
         throw (E) t;
+    }
+
+    public static <T> Supplier<T> supplyingSelf(T obj) {
+        return () -> obj;
     }
 
     /**

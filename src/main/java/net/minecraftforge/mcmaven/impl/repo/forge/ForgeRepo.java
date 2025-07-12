@@ -135,8 +135,8 @@ public final class ForgeRepo extends Repo {
         var patcher = new Patcher(build, this, userdev);
         var joined = patcher.getMCP().getSide(MCPSide.JOINED);
         var sourcesTask = new RenameTask(build, userdev, joined, patcher.get(), mappings);
-        var recompile = new RecompileTask(build, name, patcher.getMCP(), patcher::getClasspath, sourcesTask.get(), mappings);
-        var classesTask = new InjectTask(build, this.cache, name, patcher, recompile.get(), mappings);
+        var recompile = new RecompileTask(build, name, patcher.getMCP(), patcher::getClasspath, sourcesTask, mappings);
+        var classesTask = new InjectTask(build, this.cache, name, patcher, recompile, mappings);
 
         var extraCoords = Artifact.from(Constants.MC_GROUP, Constants.MC_CLIENT + "-extra", patcher.getMCP().getName().getVersion());
         var mappingCoords = mappings.getArtifact(joined);
@@ -144,8 +144,8 @@ public final class ForgeRepo extends Repo {
         var mapzip = pending("Mappings Zip", mappings.getCsvZip(joined), mappingCoords);
         var mappom = pending("Mappings POM", simplePom(build, mappingCoords), mappingCoords.withExtension("pom"));
 
-        var sources = pending("Sources", sourcesTask.get(), name.withClassifier("sources"), sourceVariant(mappings));
-        var classes = pending("Classes", classesTask.get(), name, () -> classVariants(mappings, patcher, extraCoords, mappingCoords));
+        var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), sourceVariant(mappings));
+        var classes = pending("Classes", classesTask, name, () -> classVariants(mappings, patcher, extraCoords, mappingCoords));
         var metadata = pending("Metadata", metadata(build, patcher), name.withClassifier("metadata").withExtension("zip"));
 
         PendingArtifact pom = null;
@@ -160,7 +160,7 @@ public final class ForgeRepo extends Repo {
     }
 
     private static Task metadata(File build, Patcher patcher) {
-        return Task.named("metadata[forge]", Set.of(patcher.getMCP().getMinecraftTasks().versionJson), () -> {
+        return Task.named("metadata[forge]", Task.deps(patcher.getMCP().getMinecraftTasks().versionJson), () -> {
             var output = new File(build, "metadata.zip");
 
             // metadata
@@ -173,7 +173,7 @@ public final class ForgeRepo extends Repo {
 
             // metadata/minecraft
             var minecraftDir = new File(metadataDir, "minecraft");
-            var versionJson = patcher.getMCP().getMinecraftTasks().versionJson.get();
+            var versionJson = patcher.getMCP().getMinecraftTasks().versionJson.execute();
 
             var cache = HashStore
                 .fromFile(output)
