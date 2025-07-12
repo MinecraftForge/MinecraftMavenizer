@@ -8,7 +8,8 @@ import java.util.Locale;
 
 enum Tasks {
     MAVEN(MavenTask::run, "Generates a maven repository for Minecraft Artifacts"),
-    MCP(MCPTask::run, "Generates a 'clean' sources jar from a MCPConfig pipeline")
+    MCP(MCPTask::run, "Generates a 'clean' sources jar from a MCPConfig pipeline"),
+    MCP_DATA(MCPDataTask::run, "Extracts a data file from a MCPConfig archive")
     ;
 
     interface Callback {
@@ -19,7 +20,7 @@ enum Tasks {
     final String description;
 
     private Tasks(Callback callback, String description) {
-        this.key = name().toLowerCase(Locale.ENGLISH);
+        this.key = name().toLowerCase(Locale.ENGLISH).replace('_', '-');
         this.callback = callback;
         this.description = description;
     }

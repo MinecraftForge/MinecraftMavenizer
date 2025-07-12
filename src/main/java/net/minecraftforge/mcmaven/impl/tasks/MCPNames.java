@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.tasks;
 
-import de.siegmar.fastcsv.reader.CsvReader;
+import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.logging.Log;
 import org.apache.commons.io.IOUtils;
@@ -15,7 +15,6 @@ import org.jetbrains.annotations.Unmodifiable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -23,7 +22,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -32,7 +30,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.zip.ZipFile;
 
 // TODO: [MCMavenizer][MCPName] GARBAGE GARBAGE GARBAGE, CLEAN UP OR RE-IMPLEMENT
 final class MCPNames {
@@ -49,28 +46,8 @@ final class MCPNames {
     //@formatter:on
 
     static MCPNames load(File data) throws IOException {
-        var names = new HashMap<String, String>();
-        var docs = new HashMap<String, String>();
-        try (var zip = new ZipFile(data)) {
-            var entries = zip.stream().filter(e -> e.getName().endsWith(".csv")).toList();
-            for (var entry : entries) {
-                try (var reader = CsvReader.builder().ofNamedCsvRecord(new InputStreamReader(zip.getInputStream(entry)))) {
-                    for (var row : reader) {
-                        var header = row.getHeader();
-                        var obf = header.contains("searge") ? "searge" : "param";
-                        var searge = row.getField(obf);
-                        names.put(searge, row.getField("name"));
-                        if (header.contains("desc")) {
-                            String desc = row.getField("desc");
-                            if (!desc.isBlank())
-                                docs.put(searge, desc);
-                        }
-                    }
-                }
-            }
-        }
-
-        return new MCPNames(HashFunction.SHA1.hash(data), names, docs);
+        var loaded = Mappings.load(data);
+        return new MCPNames(HashFunction.SHA1.hash(data), loaded.names(), loaded.docs());
     }
 
     // NOTE: this is a micro-optimization to avoid creating a new pattern for every line

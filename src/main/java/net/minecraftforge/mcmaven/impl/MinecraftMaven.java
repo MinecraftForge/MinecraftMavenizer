@@ -105,9 +105,9 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings) {
         // MCP names can either be {MCVersion} or {MCVersion}-{Timestamp}, EXA: 1.21.1-20240808.132146
         // So lets see if the thing following the last - matches a timestamp
         int idx = version.lastIndexOf('-');
-        if (idx < 0 || idx != version.length() - 15)
+        if (idx < 0)
             return version;
-        if (!version.substring(idx).matches("\\d{8}\\.\\d{6}"))
+        if (!version.substring(idx + 1).matches("\\d{8}\\.\\d{6}"))
             return version;
         return version.substring(0, idx);
     }

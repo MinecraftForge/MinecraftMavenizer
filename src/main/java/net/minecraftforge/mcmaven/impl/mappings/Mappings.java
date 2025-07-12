@@ -5,10 +5,14 @@
 package net.minecraftforge.mcmaven.impl.mappings;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.ZipFile;
+
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
@@ -17,6 +21,8 @@ import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.util.hash.HashStore;
 import org.jetbrains.annotations.Nullable;
+
+import de.siegmar.fastcsv.reader.CsvReader;
 
 public class Mappings {
     public static final String CHANNEL_ATTR = "net.minecraftforge.mappings.channel";
@@ -34,6 +40,32 @@ public class Mappings {
         return "parchment".equalsIgnoreCase(channel)
             ? new ParchmentMappings(version)
             : new Mappings(channel, version);
+    }
+
+    public record Data(Map<String, String> names, Map<String, String> docs) { }
+    public static Data load(File data) throws IOException {
+        var names = new HashMap<String, String>();
+        var docs = new HashMap<String, String>();
+        try (var zip = new ZipFile(data)) {
+            var entries = zip.stream().filter(e -> e.getName().endsWith(".csv")).toList();
+            for (var entry : entries) {
+                try (var reader = CsvReader.builder().ofNamedCsvRecord(new InputStreamReader(zip.getInputStream(entry)))) {
+                    for (var row : reader) {
+                        var header = row.getHeader();
+                        var obf = header.contains("searge") ? "searge" : "param";
+                        var searge = row.getField(obf);
+                        names.put(searge, row.getField("name"));
+                        if (header.contains("desc")) {
+                            String desc = row.getField("desc");
+                            if (!desc.isBlank())
+                                docs.put(searge, desc);
+                        }
+                    }
+                }
+            }
+        }
+
+        return new Data(names, docs);
     }
 
     public Mappings(String channel, @Nullable String version) {
