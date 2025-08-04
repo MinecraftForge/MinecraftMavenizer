@@ -36,7 +36,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Stream;
 
 // TODO: [MCMavenizer][ForgeRepo] For now, the ForgeRepo needs to be fully complete with everything it has to do.
@@ -148,9 +147,7 @@ public final class ForgeRepo extends Repo {
         var classes = pending("Classes", classesTask, name, () -> classVariants(mappings, patcher, extraCoords, mappingCoords));
         var metadata = pending("Metadata", metadata(build, patcher), name.withClassifier("metadata").withExtension("zip"));
 
-        PendingArtifact pom = null;
-        if (mappings.isPrimary())
-            pom = pending("Maven POM", pom(build, patcher, version, extraCoords, mappingCoords), name.withExtension("pom"));
+        var pom = pending("Maven POM", pom(build, patcher, version, extraCoords, mappingCoords), name.withExtension("pom"));
 
         var extraOutput = this.mcpconfig.processExtra(Constants.MC_GROUP + ':' + Constants.MC_CLIENT, patcher.getMCP().getName().getVersion());
         return Stream.concat(

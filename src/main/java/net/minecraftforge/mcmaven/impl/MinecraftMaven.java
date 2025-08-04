@@ -138,7 +138,15 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings) {
                 var cache = HashStore.fromFile(target)
                     .add("source", source);
 
-                if (!target.exists() || !cache.isSame()) {
+                boolean write;
+                if ("pom".equals(pending.getArtifact().getExtension())) {
+                    // Write the pom for non-primary mappings if we haven't generated primary mappings yet
+                    write = !target.exists() || (mappings.isPrimary() && !cache.isSame());
+                } else {
+                    write = !target.exists() || !cache.isSame();
+                }
+
+                if (write) {
                     // TODO: [MCMavenizer] Add --api argument to turn class artifacts to api-only targets for a public repo
                     try {
                         org.apache.commons.io.FileUtils.copyFile(source, target);

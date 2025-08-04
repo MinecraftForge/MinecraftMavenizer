@@ -123,14 +123,11 @@ public final class MCPConfigRepo extends Repo {
                 var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), sourceVariant(mappings));
                 var classes = pending("Classes", classesTask, name, () -> classVariants(mappings, mcpSide));
                 var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"));
-                pending.addAll(List.of(
-                    sources, classes, metadata
-                ));
+                var pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"));
 
-                if (mappings.isPrimary()) {
-                    var pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"));
-                    pending.add(pom);
-                }
+                pending.addAll(List.of(
+                    sources, classes, metadata, pom
+                ));
 
                 yield pending;
             }
