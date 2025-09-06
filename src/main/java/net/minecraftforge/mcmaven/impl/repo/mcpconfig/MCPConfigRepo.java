@@ -99,16 +99,17 @@ public final class MCPConfigRepo extends Repo {
         var mcp = this.get(Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip"));
         var mcpSide = mcp.getSide(side);
 
-        if (isMappings) {
-            var name = mappings.getArtifact(mcpSide);
-            return List.of(
-                pending("Mappings", mappings.getCsvZip(mcpSide), name)
-            );
-        }
-
         var mcpTasks = mcpSide.getTasks();
         var build = mcpSide.getBuildFolder();
         var name = Artifact.from("net.minecraft", side, version);
+
+        if (isMappings) {
+            name = mappings.getArtifact(mcpSide);
+            return List.of(
+                pending("Mappings", mappings.getCsvZip(mcpSide), name),
+                pending("Mappings POM", simplePom(build, name), name.withExtension("pom"))
+            );
+        }
 
         return switch (mappings.channel()) {
             case "notch" -> List.of(pending("Classes", mcpTasks.getRawJar(), name.withClassifier("raw"), simpleVariant("obf-notch", new Mappings("notch", null))));

@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.tasks;
 
-import net.minecraftforge.mcmaven.impl.mappings.Mappings;
+import de.siegmar.fastcsv.reader.CsvReader;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.logging.Log;
 import org.apache.commons.io.IOUtils;
@@ -15,6 +15,7 @@ import org.jetbrains.annotations.Unmodifiable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -30,9 +32,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.ZipFile;
 
-// TODO: [MCMavenizer][MCPName] GARBAGE GARBAGE GARBAGE, CLEAN UP OR RE-IMPLEMENT
-final class MCPNames {
+// TODO [Mavenizer][MCPNames] This is also in ForgeDev! Consolidate this!
+// TODO [Mavenizer][MCPNames] GARBAGE GARBAGE GARBAGE, CLEAN UP OR RE-IMPLEMENT
+record MCPNames(String hash, Map<String, String> names, Map<String, String> docs) {
     //@formatter:off
     private static final Pattern
         SRG_FINDER                  = Pattern.compile("[fF]unc_\\d+_[a-zA-Z_]+|m_\\d+_|[fF]ield_\\d+_[a-zA-Z_]+|f_\\d+_|p_\\w+_\\d+_|p_\\d+_"),
@@ -45,25 +49,42 @@ final class MCPNames {
         LAMBDA_DECL                 = Pattern.compile("\\((?<args>(?:(?:, ){0,1}p_[\\w]+_\\d+_\\b)+)\\) ->");
     //@formatter:on
 
+    private record Data(Map<String, String> names, Map<String, String> docs) { }
+    private static Data loadData(File data) throws IOException {
+        var names = new HashMap<String, String>();
+        var docs = new HashMap<String, String>();
+        try (var zip = new ZipFile(data)) {
+            var entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                var entry = entries.nextElement();
+                if (!entry.getName().endsWith(".csv")) continue;
+
+                try (var reader = CsvReader.builder().ofNamedCsvRecord(new InputStreamReader(zip.getInputStream(entry)))) {
+                    for (var row : reader) {
+                        var header = row.getHeader();
+                        var obf = header.contains("searge") ? "searge" : "param";
+                        var searge = row.getField(obf);
+                        names.put(searge, row.getField("name"));
+                        if (header.contains("desc")) {
+                            String desc = row.getField("desc");
+                            if (!desc.isBlank())
+                                docs.put(searge, desc);
+                        }
+                    }
+                }
+            }
+        }
+
+        return new Data(names, docs);
+    }
+
     static MCPNames load(File data) throws IOException {
-        var loaded = Mappings.load(data);
-        return new MCPNames(HashFunction.SHA1.hash(data), loaded.names(), loaded.docs());
+        var loaded = loadData(data);
+        return new MCPNames(HashFunction.SHA1.hash(data), loaded.names, loaded.docs);
     }
 
     // NOTE: this is a micro-optimization to avoid creating a new pattern for every line
     private static final Pattern ARGS_DELIM = Pattern.compile(", ");
-
-    // TODO [MCMavenizer][MCPNames] Not used for anything. Remove?
-    @SuppressWarnings("unused")
-    private final String hash;
-    private final Map<String, String> names;
-    private final Map<String, String> docs;
-
-    MCPNames(String hash, Map<String, String> names, Map<String, String> docs) {
-        this.hash = hash;
-        this.names = names;
-        this.docs = docs;
-    }
 
     String rename(String entry) {
         return this.names.getOrDefault(entry, entry);
@@ -78,14 +99,13 @@ final class MCPNames {
     }
 
     String rename(InputStream stream, boolean javadocs, boolean lambdas, Charset sourceFileCharset) throws IOException {
-        String data = IOUtils.toString(stream, sourceFileCharset);
-        List<String> input = IOUtils.readLines(new StringReader(data));
+        var data = IOUtils.toString(stream, sourceFileCharset);
+        var input = IOUtils.readLines(new StringReader(data));
 
-        // Return early on emtpy files
-        if (data.isEmpty())
-            return "";
+        // Return early on empty files
+        if (data.isEmpty()) return "";
 
-        //Reader doesn't give us the empty line if the file ends with a newline.. so add one.
+        // Reader doesn't give us the empty line if the file ends with a newline... so add one.
         if (data.charAt(data.length() - 1) == '\r' || data.charAt(data.length() - 1) == '\n')
             input.add("");
 
@@ -104,7 +124,7 @@ final class MCPNames {
         }
 
         for (String line : input) {
-            Matcher m = PACKAGE_DECL.matcher(line);
+            var m = PACKAGE_DECL.matcher(line);
             if (m.find())
                 _package = m.group("name") + ".";
 
@@ -137,16 +157,16 @@ final class MCPNames {
             matcher = METHOD_JAVADOC_PATTERN.matcher(line);
 
         if (isConstructor || matcher.find()) {
-            String name = isConstructor ? "<init>" : matcher.group("name");
-            String javadoc = docs.get(name);
+            var name = isConstructor ? "<init>" : matcher.group("name");
+            var javadoc = docs.get(name);
             if (javadoc == null && !innerClasses.isEmpty() && !name.startsWith("func_") && !name.startsWith("m_")) {
-                String currentClass = innerClasses.peek().getLeft();
+                var currentClass = innerClasses.peek().getLeft();
                 javadoc = docs.get(currentClass + '#' + name);
             }
             if (javadoc != null)
                 insertAboveAnnotations(lines, JavadocAdder.buildJavadoc(matcher.group("indent"), javadoc, true));
 
-            // worked, so return and don't try the fields.
+            // worked, so return and don't try the others
             return true;
         }
 
@@ -162,6 +182,7 @@ final class MCPNames {
             if (javadoc != null)
                 insertAboveAnnotations(lines, JavadocAdder.buildJavadoc(matcher.group("indent"), javadoc, false));
 
+            // worked, so return and don't try the others
             return true;
         }
 
@@ -177,6 +198,7 @@ final class MCPNames {
                 insertAboveAnnotations(lines, JavadocAdder.buildJavadoc(matcher.group("indent"), javadoc, true));
             }
 
+            // worked, so return and don't try the others
             return true;
         }
 
@@ -185,10 +207,11 @@ final class MCPNames {
         if (matcher.find()) {
             if (!innerClasses.isEmpty()) {
                 int len = matcher.group("indent").length();
-                if (len == innerClasses.peek().getRight()) {
+                var value = innerClasses.peek();
+                if (len == value.getRight()) {
                     innerClasses.pop();
-                } else if (len < innerClasses.peek().getRight()) {
-                    Log.error("Failed to properly track class blocks around class " + innerClasses.peek().getLeft() + ":" + (lines.size() + 1));
+                } else if (len < value.getRight()) {
+                    Log.error("Failed to properly track class blocks around class " + value.getLeft() + ":" + (lines.size() + 1));
                     return false;
                 }
             }

@@ -108,7 +108,7 @@ public class MCPDataTask {
         }
 
         var mcVersion = MinecraftMaven.mcpToMcVersion(artifact.getVersion());
-        Mappings mappings = null;
+        Mappings mappings;
         if (options.has(officialO))
             mappings = new Mappings("official", null).withMCVersion(mcVersion);
         else if (options.has(parchmentO))
