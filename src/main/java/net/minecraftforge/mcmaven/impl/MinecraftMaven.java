@@ -28,20 +28,21 @@ import java.util.List;
 // TODO [MCMavenizer][Deobf] ADD DEOBF
 //  use single detached configuration to resolve individual configurations
 //  pass in downloaded files to mcmaven (absolute path)
-public record MinecraftMaven(File output, Cache cache, Mappings mappings) {
+public record MinecraftMaven(File output, Cache cache, Mappings mappings, boolean globalAuxiliaryVariants) {
     private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.14.4"); // Only 1.14.4+ has official mappings, we can support more when we add more mappings
 
-    public MinecraftMaven(File output, File cacheRoot, File jdkCacheRoot, Mappings mappings) {
-        this(output, new Cache(cacheRoot, jdkCacheRoot), mappings);
+    public MinecraftMaven(File output, File cacheRoot, File jdkCacheRoot, Mappings mappings, boolean globalAuxiliaryVariants) {
+        this(output, new Cache(cacheRoot, jdkCacheRoot), mappings, globalAuxiliaryVariants);
     }
 
     public MinecraftMaven {
-        Log.info("  Output:     " + output.getAbsolutePath());
-        Log.info("  Cache:      " + cache.root().getAbsolutePath());
-        Log.info("  JDK Cache:  " + cache.jdks().root().getAbsolutePath());
-        Log.info("  Offline:    " + GlobalOptions.isOffline());
-        Log.info("  Cache Only: " + GlobalOptions.isCacheOnly());
-        Log.info("  Mappings:   " + mappings);
+        Log.info("  Output:            " + output.getAbsolutePath());
+        Log.info("  Cache:             " + cache.root().getAbsolutePath());
+        Log.info("  JDK Cache:         " + cache.jdks().root().getAbsolutePath());
+        Log.info("  Offline:           " + GlobalOptions.isOffline());
+        Log.info("  Cache Only:        " + GlobalOptions.isCacheOnly());
+        Log.info("  Mappings:          " + mappings);
+        Log.info("  GradleVariantHack: " + globalAuxiliaryVariants);
         Log.info();
     }
 
@@ -170,7 +171,7 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings) {
                         var file = new GradleModule.Variant.File(target);
                         for (var variant : data) {
                             variant.file(file);
-                            if (suffix != null)
+                            if (suffix != null && !(pending.isAuxiliary() && this.globalAuxiliaryVariants))
                                 variant.name = variant.name + '-' + suffix;
                         }
                         JsonData.toJson(data, varTarget);

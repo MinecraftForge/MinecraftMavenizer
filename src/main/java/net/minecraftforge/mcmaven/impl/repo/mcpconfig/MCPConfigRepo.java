@@ -106,14 +106,14 @@ public final class MCPConfigRepo extends Repo {
         if (isMappings) {
             name = mappings.getArtifact(mcpSide);
             return List.of(
-                pending("Mappings", mappings.getCsvZip(mcpSide), name),
-                pending("Mappings POM", simplePom(build, name), name.withExtension("pom"))
+                pending("Mappings", mappings.getCsvZip(mcpSide), name, false),
+                pending("Mappings POM", simplePom(build, name), name.withExtension("pom"), false)
             );
         }
 
         return switch (mappings.channel()) {
-            case "notch" -> List.of(pending("Classes", mcpTasks.getRawJar(), name.withClassifier("raw"), simpleVariant("obf-notch", new Mappings("notch", null))));
-            case "srg", "searge" -> List.of(pending("Classes", mcpTasks.getSrgJar(), name.withClassifier("srg"), simpleVariant("obf-searge", new Mappings("searge", null))));
+            case "notch" -> List.of(pending("Classes", mcpTasks.getRawJar(), name.withClassifier("raw"), false, simpleVariant("obf-notch", new Mappings("notch", null))));
+            case "srg", "searge" -> List.of(pending("Classes", mcpTasks.getSrgJar(), name.withClassifier("srg"), false, simpleVariant("obf-searge", new Mappings("searge", null))));
             default -> {
                 var pending = new ArrayList<PendingArtifact>();
 
@@ -121,10 +121,10 @@ public final class MCPConfigRepo extends Repo {
                 var recompile = new RecompileTask(build, name, mcpSide.getMCP(), mcpSide::getClasspath, sourcesTask, mappings);
                 var classesTask = mergeExtra(build, side, recompile, mcpSide.getTasks().getExtra(), mappings);
 
-                var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), sourceVariant(mappings));
-                var classes = pending("Classes", classesTask, name, () -> classVariants(mappings, mcpSide));
-                var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"));
-                var pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"));
+                var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(mappings));
+                var classes = pending("Classes", classesTask, name, false, () -> classVariants(mappings, mcpSide));
+                var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"), false);
+                var pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"), false);
 
                 pending.addAll(List.of(
                     sources, classes, metadata, pom
@@ -150,8 +150,8 @@ public final class MCPConfigRepo extends Repo {
         var extraTask = mcpSide.getTasks().getExtra();
         var pomTask = pomExtra(build, side + "-extra", version);
 
-        var extra = pending(displayName + " Extra", extraTask, name);
-        var pom = pending(displayName + " Maven POM", pomTask, name.withExtension("pom"));
+        var extra = pending(displayName + " Extra", extraTask, name, false);
+        var pom = pending(displayName + " Maven POM", pomTask, name.withExtension("pom"), false);
 
         return List.of(extra, pom);
     }

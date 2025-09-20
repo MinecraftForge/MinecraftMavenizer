@@ -140,14 +140,14 @@ public final class ForgeRepo extends Repo {
         var extraCoords = Artifact.from(Constants.MC_GROUP, Constants.MC_CLIENT + "-extra", patcher.getMCP().getName().getVersion());
         var mappingCoords = mappings.getArtifact(joined);
 
-        var mapzip = pending("Mappings Zip", mappings.getCsvZip(joined), mappingCoords);
-        var mappom = pending("Mappings POM", simplePom(build, mappingCoords), mappingCoords.withExtension("pom"));
+        var mapzip = pending("Mappings Zip", mappings.getCsvZip(joined), mappingCoords, false);
+        var mappom = pending("Mappings POM", simplePom(build, mappingCoords), mappingCoords.withExtension("pom"), false);
 
-        var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), sourceVariant(mappings));
-        var classes = pending("Classes", classesTask, name, () -> classVariants(mappings, patcher, extraCoords, mappingCoords));
-        var metadata = pending("Metadata", metadata(build, patcher), name.withClassifier("metadata").withExtension("zip"));
+        var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(mappings));
+        var classes = pending("Classes", classesTask, name, false, () -> classVariants(mappings, patcher, extraCoords, mappingCoords));
+        var metadata = pending("Metadata", metadata(build, patcher), name.withClassifier("metadata").withExtension("zip"), false);
 
-        var pom = pending("Maven POM", pom(build, patcher, version, extraCoords, mappingCoords), name.withExtension("pom"));
+        var pom = pending("Maven POM", pom(build, patcher, version, extraCoords, mappingCoords), name.withExtension("pom"), false);
 
         var extraOutput = this.mcpconfig.processExtra(Constants.MC_GROUP + ':' + Constants.MC_CLIENT, patcher.getMCP().getName().getVersion());
         return Stream.concat(

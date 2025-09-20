@@ -75,6 +75,9 @@ class MavenTask {
             .availableUnless(mappingsO)
             .withRequiredArg();
 
+        var globalAuxiliaryVariantsO = parser.accepts("global-auxiliary-variants",
+            "Declares sources and javadoc jars as global variants, no matter the mapping version. This is used to work around gradle/gradle#35065");
+
         var shorthandOptions = new HashMap<String, OptionSpecBuilder>();
         var artifacts = Map.of(
             "forge",  Constants.FORGE_ARTIFACT,
@@ -139,7 +142,7 @@ class MavenTask {
             ? new ParchmentMappings(options.valueOf(parchmentO))
             : Mappings.of(options.valueOf(mappingsO));
 
-        var mcmaven = new MinecraftMaven(output, cache, jdkCache, mappings);
+        var mcmaven = new MinecraftMaven(output, cache, jdkCache, mappings, options.has(globalAuxiliaryVariantsO));
         mcmaven.run(artifact);
     }
 }

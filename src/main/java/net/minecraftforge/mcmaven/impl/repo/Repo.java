@@ -47,16 +47,16 @@ public abstract class Repo {
 
     public abstract List<PendingArtifact> process(Artifact artifact, Mappings mappings);
 
-    protected static PendingArtifact pending(String message, Task task, Artifact artifact) {
-        return pending(message, task, artifact, (Task)null);
+    protected static PendingArtifact pending(String message, Task task, Artifact artifact, boolean auxiliary) {
+        return pending(message, task, artifact, auxiliary, (Task)null);
     }
 
-    protected static PendingArtifact pending(String message, Task task, Artifact artifact, Supplier<GradleModule.Variant[]> variants) {
-        return pending(message, task, artifact, variantTask(task, variants));
+    protected static PendingArtifact pending(String message, Task task, Artifact artifact, boolean auxiliary, Supplier<GradleModule.Variant[]> variants) {
+        return pending(message, task, artifact, auxiliary, variantTask(task, variants));
     }
 
-    protected static PendingArtifact pending(String message, Task task, Artifact artifact, @Nullable Task variants) {
-        return new PendingArtifact(message, task, artifact, variants);
+    protected static PendingArtifact pending(String message, Task task, Artifact artifact, boolean auxiliary, @Nullable Task variants) {
+        return new PendingArtifact(message, task, artifact, auxiliary, variants);
     }
 
     // Sources has no dependencies, so just need to specify the attributes
@@ -184,12 +184,14 @@ public abstract class Repo {
         private final String message;
         private final Task task;
         private final Artifact artifact;
+        private final boolean auxiliary;
         private final @Nullable Task variants;
 
-        private PendingArtifact(String message, Task task, Artifact artifact, @Nullable Task variants) {
+        private PendingArtifact(String message, Task task, Artifact artifact, boolean auxiliary, @Nullable Task variants) {
             this.message = message;
             this.task = task;
             this.artifact = artifact;
+            this.auxiliary = auxiliary;
             this.variants = variants;
         }
 
@@ -216,6 +218,10 @@ public abstract class Repo {
 
         public Artifact getArtifact() {
             return artifact;
+        }
+
+        public boolean isAuxiliary() {
+            return auxiliary;
         }
 
         public @Nullable Task getVariants() {

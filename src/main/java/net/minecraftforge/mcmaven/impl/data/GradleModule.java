@@ -55,6 +55,7 @@ public class GradleModule {
         if (variants == null)
             variants = new ArrayList<>();
 
+        variants.removeIf(v -> Objects.equals(v.name, variant.name));
         variants.add(variant);
         return variant;
     }
