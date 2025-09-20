@@ -281,6 +281,7 @@ public class ParchmentMappings extends Mappings {
     }
 
     private static void add(Map<String, Info> map, String orig, String mapped, ParchmentData.Element element) {
+        mapped = mapped != null && !mapped.isBlank() ? mapped : orig;
         var desc = element == null ? null : getJavadocs(element.javadoc);
         if (!orig.equals(mapped) || desc != null)
             map.put(orig, new Info(mapped, desc));
