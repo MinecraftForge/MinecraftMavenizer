@@ -161,7 +161,7 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings, boolea
 
             if (pending.getVariants() != null) {
                 var source = pending.getVariants().execute();
-                var cache = HashStore.fromFile(target)
+                var cache = HashStore.fromFile(varTarget)
                     .add("source", source);
 
                 if (!varTarget.exists() || !cache.isSame()) {
