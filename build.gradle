@@ -55,7 +55,8 @@ license {
 tasks.named('jar', Jar) {
     manifest {
         attributes([
-            'Main-Class': 'net.minecraftforge.mcmaven.cli.Main'
+            'Main-Class': 'net.minecraftforge.mcmaven.cli.Main',
+            'Automatic-Module-Name': 'net.minecraftforge.mavenizer'
         ])
         attributes([
             'Specification-Title'   : projectDisplayName,
