@@ -5,22 +5,27 @@
 package net.minecraftforge.mcmaven.cli;
 
 import java.io.File;
-import java.util.Set;
+import java.io.IOException;
+import java.nio.file.Files;
 
 import joptsimple.OptionParser;
 import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
+import net.minecraftforge.mcmaven.impl.data.MCPSetupFiles;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.mappings.ParchmentMappings;
 import net.minecraftforge.mcmaven.impl.repo.forge.Patcher;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPTaskFactory;
 import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
+import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.util.logging.Log;
+import org.jetbrains.annotations.Nullable;
 
 // TODO [Mavenizer][MCPTask] Cleanup. Works well but is a mess.
 public class MCPTask {
@@ -49,8 +54,13 @@ public class MCPTask {
 
         // mcp artifact output
         var outputO = parser.accepts("output",
-            "Root directory to generate the maven repository")
+            "File to output the final jar")
             .withRequiredArg().ofType(File.class).defaultsTo(new File("output.jar"));
+
+        // mcp artifact output
+        var outputFilesO = parser.accepts("output-files",
+            "File to output a JSON containing paths to extra files")
+            .withRequiredArg().ofType(File.class).defaultsTo(new File("files.json"));
 
         var artifactO = parser.accepts("artifact",
             "MCPConfig artifact coordinates")
@@ -96,6 +106,7 @@ public class MCPTask {
         }
 
         var output = options.valueOf(outputO);
+        var outputFiles = options.valueOf(outputFilesO);
         var cacheRoot = options.valueOf(cacheO);
         var jdkCacheRoot = !options.has(cacheO) || options.has(jdkCacheO)
             ? options.valueOf(jdkCacheO)
@@ -153,6 +164,8 @@ public class MCPTask {
             if (!output.exists() || !cache.isSame()) {
                 try {
                     org.apache.commons.io.FileUtils.copyFile(raw, output);
+                    if (outputFiles != null)
+                        writeFiles(side.getTasks(), outputFiles);
                     cache.save();
                 } catch (Throwable t) {
                     throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
@@ -217,10 +230,31 @@ public class MCPTask {
         if (!output.exists() || !cache.isSame()) {
             try {
                 org.apache.commons.io.FileUtils.copyFile(sources, output);
+                if (outputFiles != null)
+                    writeFiles(side.getTasks(), outputFiles);
                 cache.save();
             } catch (Throwable t) {
                 throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
             }
+        }
+    }
+
+    // TODO [Mavenizer][Extra MCPTask Files] do this better
+    private static void writeFiles(MCPTaskFactory mcpTaskFactory, File output) {
+        var files = new MCPSetupFiles();
+        files.versionManifest = mcpTaskFactory.findStep("downloadManifest").execute();
+        files.versionJson = mcpTaskFactory.findStep("downloadJson").execute();
+        files.clientRaw = mcpTaskFactory.findStep("downloadClient").execute();
+        files.serverRaw = mcpTaskFactory.findStep("downloadServer").execute();
+        files.serverExtracted = mcpTaskFactory.findStep("extractServer").execute();
+        files.clientMappings = mcpTaskFactory.findStep("downloadClientMappings").execute();
+        files.serverMappings = mcpTaskFactory.findStep("downloadServerMappings").execute();
+        files.librariesList = mcpTaskFactory.findStep("listLibraries").execute();
+
+        try {
+            JsonData.toJson(files, output);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to write extra files data: " + output.getPath(), e);
         }
     }
 }

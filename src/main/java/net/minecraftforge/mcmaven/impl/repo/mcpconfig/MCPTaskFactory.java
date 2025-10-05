@@ -239,7 +239,7 @@ public class MCPTaskFactory {
         return this.side.getMCP().getData();
     }
 
-    private Task findStep(String name) {
+    public Task findStep(String name) {
         if (name.startsWith("{") && name.endsWith("Output}"))
             name = name.substring(1, name.length() - 7);
 
