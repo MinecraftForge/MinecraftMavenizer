@@ -1,21 +1,33 @@
 plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0'
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
 rootProject.name = 'minecraft-mavenizer'
 
-dependencyResolutionManagement {
-    repositories {
-        maven { url = 'https://maven.minecraftforge.net/' }
-        mavenCentral()
+// Applying plugins causes them to not have any IDE support when also applied to any build.gradle files
+// The workaround for now is to use this listener here so that it can stay in settings.gradle
+// See: https://youtrack.jetbrains.com/issue/IDEA-332061/Gradle-Missing-Code-Completion-Suggestions-for-Settings-Plugins-in-Groovy-DSL
+gradle.beforeProject { Project project ->
+    project.pluginManager.withPlugin('net.minecraftforge.gradleutils') {
+        project.repositories {
+            mavenCentral()
+            maven project.gradleutils.forgeMaven
+            //mavenLocal()
+        }
     }
+}
 
+dependencyResolutionManagement {
     //@formatter:off
     versionCatalogs.register('libs') {
-        plugin 'licenser',    'net.minecraftforge.licenser'        version '1.2.0'
-        plugin 'gradleutils', 'net.minecraftforge.gradleutils'     version '2.6.0'
-        plugin 'shadow',      'com.gradleup.shadow'                version '9.0.0-beta13'
-        plugin 'modules',     'org.gradlex.extra-java-module-info' version '1.12'
+        plugin 'licenser',    'net.minecraftforge.licenser'    version '1.2.0'
+        plugin 'gradleutils', 'net.minecraftforge.gradleutils' version '3.3.18'
+        plugin 'gitversion',  'net.minecraftforge.gitversion'  version '3.1.1'
+        plugin 'changelog',   'net.minecraftforge.changelog'   version '3.1.2'
+        plugin 'shadow',      'com.gradleup.shadow'            version '9.2.2'
+
+        // Static Analysis
+        library 'nulls', 'org.jetbrains', 'annotations' version '26.0.2'
 
         library 'gson',     'com.google.code.gson', 'gson'             version '2.10.1'
         library 'jopt',     'net.sf.jopt-simple',   'jopt-simple'      version '6.0-alpha-3'
@@ -33,9 +45,6 @@ dependencyResolutionManagement {
         library 'utils-data',     'net.minecraftforge', 'json-data-utils' version '0.2.3'
         library 'utils-logging',  'net.minecraftforge', 'log-utils'       version '0.3.1'
         bundle 'utils', ['utils-download', 'utils-files', 'utils-hash', 'utils-data', 'utils-logging']
-
-        // Static Analysis
-        library 'nulls', 'org.jetbrains', 'annotations' version '26.0.2'
     }
     //@formatter:on
 }

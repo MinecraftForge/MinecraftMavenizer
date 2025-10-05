@@ -3,25 +3,28 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 plugins {
     id 'java'
     id 'idea'
+    id 'eclipse'
     id 'maven-publish'
-    alias libs.plugins.licenser
     alias libs.plugins.gradleutils
+    alias libs.plugins.gitversion
+    alias libs.plugins.changelog
+    alias libs.plugins.licenser
     alias libs.plugins.shadow
-    //alias libs.plugins.modules
 }
 
-final projectDisplayName = 'Minecraft Mavenizer'
-final projectArtifactId = base.archivesName = 'minecraft-mavenizer'
-final projectVendor = 'Forge Development LLC'
+gradleutils.displayName = 'Minecraft Mavenizer'
 description = 'A pure-blooded Java tool to generate a maven repository for Minecraft artifacts.'
 group = 'net.minecraftforge'
 version = gitversion.tagOffset
 
 println "Version: $version"
 
+// TODO [Mavenizer] Update to Java 25 once ForgeGradle and ForgeDev target Gradle 9.1.0
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 dependencies {
+    compileOnly libs.nulls
+
     implementation libs.jopt
     implementation libs.gson
     implementation libs.jver
@@ -32,19 +35,7 @@ dependencies {
     implementation libs.commonsio
 
     implementation libs.bundles.utils
-
-    // Static Analysis
-    compileOnly libs.nulls
 }
-
-/* Can't do modules yet with JavaProvisioner having JavaProbe in the root package.
-extraJavaModuleInfo {
-    failOnMissingModuleInfo = false
-    //skipLocalJars = true
-
-    automaticModule(libs.diff, 'io.codechicken.diffpatch')
-}
-*/
 
 license {
     header = rootProject.file('LICENSE-header.txt')
@@ -55,17 +46,11 @@ license {
 tasks.named('jar', Jar) {
     manifest {
         attributes([
-            'Main-Class': 'net.minecraftforge.mcmaven.cli.Main',
+            'Main-Class'           : 'net.minecraftforge.mcmaven.cli.Main',
             'Automatic-Module-Name': 'net.minecraftforge.mavenizer'
         ])
-        attributes([
-            'Specification-Title'   : projectDisplayName,
-            'Specification-Vendor'  : projectVendor,
-            'Specification-Version' : gitversion.info.tag,
-            'Implementation-Title'  : projectDisplayName,
-            'Implementation-Vendor' : projectVendor,
-            'Implementation-Version': project.version
-        ], 'net/minecraftforge/mcmaven/cli/')
+
+        gradleutils.manifestDefaults(it, 'net/minecraftforge/mcmaven/cli/')
     }
 
     archiveClassifier = 'slim'
@@ -75,28 +60,26 @@ tasks.named('shadowJar', ShadowJar) {
     archiveClassifier = ''
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-    options.compilerArgs.addAll(['--module-version', project.version]);
-}
-
 changelog {
     fromBase()
-    publishAll = false
 }
 
 publishing {
+    repositories {
+        maven gradleutils.publishingForgeMaven
+    }
+
     publications.register('mavenJava', MavenPublication) {
         from components.shadow
 
-        artifactId = projectArtifactId
-        changelog.publish it
+        changelog.publish(it)
+        gradleutils.promote(it)
 
         pom { pom ->
-            name = projectDisplayName
+            name = gradleutils.displayName
             description = project.description
 
-            gradleutils.pom.setGitHubDetails pom
+            gradleutils.pom.addRemoteDetails(pom)
 
             licenses {
                 license gradleutils.pom.licenses.LGPLv2_1
@@ -108,10 +91,4 @@ publishing {
             }
         }
     }
-
-    repositories {
-        maven gradleutils.publishingForgeMaven
-    }
 }
-
-idea.module { downloadSources = downloadJavadoc = true }
