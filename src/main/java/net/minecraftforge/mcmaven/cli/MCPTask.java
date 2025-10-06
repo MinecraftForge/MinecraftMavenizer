@@ -218,7 +218,7 @@ public class MCPTask {
                     ? new ParchmentMappings(options.valueOf(parchmentO))
                     : new Mappings("official", null).withMCVersion(MinecraftMaven.mcpToMcVersion(artifact.getVersion()));
 
-                var renameTask = new RenameTask(side.getBuildFolder(), pipeline, side, sourcesTask, mappings);
+                var renameTask = new RenameTask(side.getBuildFolder(), pipeline, side, sourcesTask, mappings, false);
                 sources = renameTask.execute();
             } finally {
                 Log.pop(indent);

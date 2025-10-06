@@ -37,12 +37,14 @@ import java.util.zip.ZipFile;
 // TODO [Mavenizer][MCPNames] This is also in ForgeDev! Consolidate this!
 // TODO [Mavenizer][MCPNames] GARBAGE GARBAGE GARBAGE, CLEAN UP OR RE-IMPLEMENT
 record MCPNames(String hash, Map<String, String> names, Map<String, String> docs) {
+    // We use \n here because we want to normalize line endings no matter the operating system we are running on.
+    private static final String LINE_SEPERATOR = "\n"; //System.lineSeparator();
     //@formatter:off
     private static final Pattern
         SRG_FINDER                  = Pattern.compile("[fF]unc_\\d+_[a-zA-Z_]+|m_\\d+_|[fF]ield_\\d+_[a-zA-Z_]+|f_\\d+_|p_\\w+_\\d+_|p_\\d+_"),
-        CONSTRUCTOR_JAVADOC_PATTERN = Pattern.compile("^(?<indent>(?: {3})+|\\t+)(public |private|protected |)(?<generic><[\\w\\W]*>\\s+)?(?<name>[\\w.]+)\\((?<parameters>.*)\\)\\s+(?:throws[\\w.,\\s]+)?\\{"),
-        METHOD_JAVADOC_PATTERN      = Pattern.compile("^(?<indent>(?: {3})+|\\t+)(?!return)(?:\\w+\\s+)*(?<generic><[\\w\\W]*>\\s+)?(?<return>\\w+[\\w$.]*(?:<[\\w\\W]*>)?[\\[\\]]*)\\s+(?<name>(?:func_|m_)[0-9]+_[a-zA-Z_]*)\\("),
-        FIELD_JAVADOC_PATTERN       = Pattern.compile("^(?<indent>(?: {3})+|\\t+)(?!return)(?:\\w+\\s+)*\\w+[\\w$.]*(?:<[\\w\\W]*>)?[\\[\\]]*\\s+(?<name>(?:field_|f_)[0-9]+_[a-zA-Z_]*) *[=;]"),
+        CONSTRUCTOR_JAVADOC_PATTERN = Pattern.compile("^(?<indent> *|\\t+)(public |private|protected |)(?<generic><[\\w\\W]*>\\s+)?(?<name>[\\w.]+)\\((?<parameters>.*)\\)\\s+(?:throws[\\w.,\\s]+)?\\{"),
+        METHOD_JAVADOC_PATTERN      = Pattern.compile("^(?<indent> *|\\t+)(?!return)(?:\\w+\\s+)*(?<generic><[\\w\\W]*>\\s+)?(?<return>\\w+[\\w$.]*(?:<[\\w\\W]*>)?[\\[\\]]*)\\s+(?<name>(?:func_|m_)[0-9]+_[a-zA-Z_]*)\\("),
+        FIELD_JAVADOC_PATTERN       = Pattern.compile("^(?<indent> *|\\t+)(?!return)(?:\\w+\\s+)*\\w+[\\w$.]*(?:<[\\w\\W]*>)?[\\[\\]]*\\s+(?<name>(?:field_|f_)[0-9]+_[a-zA-Z_]*) *[=;]"),
         CLASS_JAVADOC_PATTERN       = Pattern.compile("^(?<indent> *|\\t*)([\\w|@]*\\s)*(class|interface|@interface|enum) (?<name>[\\w]+)"),
         CLOSING_CURLY_BRACE         = Pattern.compile("^(?<indent> *|\\t*)}"),
         PACKAGE_DECL                = Pattern.compile("^[\\s]*package(\\s)*(?<name>[\\w|.]+);$"),
@@ -67,8 +69,10 @@ record MCPNames(String hash, Map<String, String> names, Map<String, String> docs
                         names.put(searge, row.getField("name"));
                         if (header.contains("desc")) {
                             String desc = row.getField("desc");
-                            if (!desc.isBlank())
+                            if (!desc.isBlank()) {
+                                desc = desc.replace("\\n",  "\n");
                                 docs.put(searge, desc);
+                            }
                         }
                     }
                 }
@@ -134,7 +138,7 @@ record MCPNames(String hash, Map<String, String> names, Map<String, String> docs
             }
             lines.add(replaceInLine(line, blacklist));
         }
-        return String.join(System.lineSeparator(), lines);
+        return String.join(LINE_SEPERATOR, lines);
     }
 
     /**
@@ -279,18 +283,18 @@ record MCPNames(String hash, Map<String, String> names, Map<String, String> docs
             if (list.size() > 1 || multiline) {
                 builder.append(indent);
                 builder.append("/**");
-                builder.append(System.lineSeparator());
+                builder.append(LINE_SEPERATOR);
 
                 for (String line : list) {
                     builder.append(indent);
                     builder.append(" * ");
                     builder.append(line);
-                    builder.append(System.lineSeparator());
+                    builder.append(LINE_SEPERATOR);
                 }
 
                 builder.append(indent);
                 builder.append(" */");
-                //builder.append(System.lineSeparator());
+                //builder.append(LINE_SEPERATOR);
 
             }
             // one line
@@ -299,7 +303,7 @@ record MCPNames(String hash, Map<String, String> names, Map<String, String> docs
                 builder.append("/** ");
                 builder.append(javadoc);
                 builder.append(" */");
-                //builder.append(System.lineSeparator());
+                //builder.append(LINE_SEPERATOR);
             }
 
             return builder.toString().replace(indent, indent);

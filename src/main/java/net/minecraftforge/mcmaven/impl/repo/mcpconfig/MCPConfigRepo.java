@@ -117,7 +117,7 @@ public final class MCPConfigRepo extends Repo {
             default -> {
                 var pending = new ArrayList<PendingArtifact>();
 
-                var sourcesTask = new RenameTask(build, name, mcpSide, mcpSide.getSources(), mappings);
+                var sourcesTask = new RenameTask(build, name.getName(), mcpSide, mcpSide.getSources(), mappings, true);
                 var recompile = new RecompileTask(build, name, mcpSide.getMCP(), mcpSide::getClasspath, sourcesTask, mappings);
                 var classesTask = mergeExtra(build, side, recompile, mcpSide.getTasks().getExtra(), mappings);
 

@@ -31,6 +31,7 @@ import java.util.zip.ZipOutputStream;
 public final class RenameTask implements Task {
     private final String name;
     private final MCPSide side;
+    private final boolean javadocs;
     private final Task task;
 
     /**
@@ -39,21 +40,12 @@ public final class RenameTask implements Task {
      * @param build   The directory where the output will be stored
      * @param name    The development artifact, only used for the task name
      * @param sources The task that creates the unnamed sources
+     * @param javadocs Wither to inject javadocs and rename lambda parameters, false is used for ForgeDev as we remap to SRG patches when making userdev
      */
-    public RenameTask(File build, Artifact name, MCPSide side, Task sources, Mappings mappings) {
-        this(build, name.getName(), side, sources, mappings);
-    }
-
-    /**
-     * Creates a new renamer for the given patcher.
-     *
-     * @param build   The directory where the output will be stored
-     * @param name    The development artifact, only used for the task name
-     * @param sources The task that creates the unnamed sources
-     */
-    public RenameTask(File build, String name, MCPSide side, Task sources, Mappings mappings) {
+    public RenameTask(File build, String name, MCPSide side, Task sources, Mappings mappings, boolean javadocs) {
         this.name = name;
         this.side = side;
+        this.javadocs = javadocs;
         this.task = this.remapSources(sources, mappings.getFolder(build), mappings);
     }
 
@@ -73,21 +65,22 @@ public final class RenameTask implements Task {
     }
 
     private Task remapSources(Task input, File outputDir, Mappings provider) {
-        var output = new File(outputDir, "remapped.jar");
+        var output = new File(outputDir, !this.javadocs ? "remapped.jar" : "remapped-javadoc.jar");
         var mappings = provider.getCsvZip(side);
-        return Task.named("remap[" + this.name + "][" + provider + ']',
+        return Task.named("remap[" + this.name + "][" + provider + ']' + (!this.javadocs ? "" : "[javadoc]"),
             Task.deps(input, mappings),
-            () -> remapSourcesImpl(input, mappings, output)
+            () -> remapSourcesImpl(input, mappings, output, javadocs)
         );
     }
 
-    private static File remapSourcesImpl(Task inputTask, Task mappingsTask, File output) {
+    private static File remapSourcesImpl(Task inputTask, Task mappingsTask, File output, boolean javadocs) {
         var input = inputTask.execute();
         var mappings = mappingsTask.execute();
 
         var cache = HashStore.fromFile(output);
         cache.add("input", input);
         cache.add("mappings", mappings);
+        cache.add("javadocs", javadocs ? "true" : "false");
 
         if (output.exists() && cache.isSame())
             return output;
@@ -96,7 +89,6 @@ public final class RenameTask implements Task {
 
         try {
             var names = MCPNames.load(mappings);
-            names.rename(new FileInputStream(input), true);
 
             // TODO: [MCMavenizer][Renamer] This garbage was copy-pasted from FG.
             // I changed the while loop to a for loop, though. I guess it is fine?
@@ -107,7 +99,7 @@ public final class RenameTask implements Task {
                     zout.putNextEntry(FileUtils.getStableEntry(entry.getName()));
 
                     if (entry.getName().endsWith(".java")) {
-                        var mapped = names.rename(zin, false);
+                        var mapped = names.rename(zin, javadocs, javadocs);
                         IOUtils.write(mapped, zout, StandardCharsets.UTF_8);
                     } else {
                         IOUtils.copy(zin, zout);

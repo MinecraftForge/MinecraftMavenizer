@@ -133,7 +133,7 @@ public final class ForgeRepo extends Repo {
 
         var patcher = new Patcher(build, this, userdev);
         var joined = patcher.getMCP().getSide(MCPSide.JOINED);
-        var sourcesTask = new RenameTask(build, userdev, joined, patcher.get(), mappings);
+        var sourcesTask = new RenameTask(build, userdev.getName(), joined, patcher.get(), mappings, true);
         var recompile = new RecompileTask(build, name, patcher.getMCP(), patcher::getClasspath, sourcesTask, mappings);
         var classesTask = new InjectTask(build, this.cache, name, patcher, recompile, mappings);
 
