@@ -109,7 +109,8 @@ public class ParchmentMappings extends Mappings {
             .add("srg", srg)
             .add("client", client)
             .add("server", server)
-            .add("data", data);
+            .add("data", data)
+            .add("codever", "1"); // 1 - Fixed class names being in internals names, instead of FG6's pseudo source names (pkg.Outer$Inner)
 
 
         if (output.exists() && cache.isSame())
@@ -284,7 +285,7 @@ public class ParchmentMappings extends Mappings {
         mapped = mapped != null && !mapped.isBlank() ? mapped : orig;
         var desc = element == null ? null : getJavadocs(element.javadoc);
         if (!orig.equals(mapped) || desc != null)
-            map.put(orig, new Info(mapped, desc));
+            map.put(orig.replace('/', '.'), new Info(mapped.replace('/', '.'), desc));
     }
 
     private static String getJavadocs(List<String> javadoc) {
