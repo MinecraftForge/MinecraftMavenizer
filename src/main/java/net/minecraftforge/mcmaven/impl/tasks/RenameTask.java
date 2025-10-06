@@ -7,11 +7,11 @@ package net.minecraftforge.mcmaven.impl.tasks;
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
-import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.Task;
+import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.hash.HashUtils;
 import org.apache.commons.io.IOUtils;
 
@@ -20,6 +20,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
@@ -67,20 +69,23 @@ public final class RenameTask implements Task {
     private Task remapSources(Task input, File outputDir, Mappings provider) {
         var output = new File(outputDir, !this.javadocs ? "remapped.jar" : "remapped-javadoc.jar");
         var mappings = provider.getCsvZip(side);
+        var srg = this.javadocs ? side.getTasks().getMappings() : null;
         return Task.named("remap[" + this.name + "][" + provider + ']' + (!this.javadocs ? "" : "[javadoc]"),
-            Task.deps(input, mappings),
-            () -> remapSourcesImpl(input, mappings, output, javadocs)
+            Task.deps(input, mappings, srg),
+            () -> remapSourcesImpl(input, mappings, output, srg)
         );
     }
 
-    private static File remapSourcesImpl(Task inputTask, Task mappingsTask, File output, boolean javadocs) {
+    private static File remapSourcesImpl(Task inputTask, Task mappingsTask, File output, Task srgTask) {
         var input = inputTask.execute();
         var mappings = mappingsTask.execute();
+        var srg = srgTask == null ? null : srgTask.execute();
 
         var cache = HashStore.fromFile(output);
         cache.add("input", input);
         cache.add("mappings", mappings);
-        cache.add("javadocs", javadocs ? "true" : "false");
+        if (srg != null)
+            cache.add("whitelist", srg);
 
         if (output.exists() && cache.isSame())
             return output;
@@ -89,6 +94,16 @@ public final class RenameTask implements Task {
 
         try {
             var names = MCPNames.load(mappings);
+
+            Set<String> vanillaClasses = null;
+            if (srg != null) {
+                vanillaClasses = new HashSet<>();
+                var map = IMappingFile.load(srg);
+                for (var cls : map.getClasses()) {
+                    if (cls.getMapped().indexOf('$') == -1) // Outer classes only
+                        vanillaClasses.add(cls.getMapped() + ".java");
+                }
+            }
 
             // TODO: [MCMavenizer][Renamer] This garbage was copy-pasted from FG.
             // I changed the while loop to a for loop, though. I guess it is fine?
@@ -99,6 +114,8 @@ public final class RenameTask implements Task {
                     zout.putNextEntry(FileUtils.getStableEntry(entry.getName()));
 
                     if (entry.getName().endsWith(".java")) {
+                        // We only care about injecting javadocs into decompiled classes, patcher classes should have their own docs
+                        var javadocs = vanillaClasses != null && vanillaClasses.contains(entry.getName());
                         var mapped = names.rename(zin, javadocs, javadocs);
                         IOUtils.write(mapped, zout, StandardCharsets.UTF_8);
                     } else {
