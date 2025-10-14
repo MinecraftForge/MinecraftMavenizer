@@ -11,6 +11,7 @@ import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.hash.HashUtils;
 import net.minecraftforge.util.logging.Log;
+import org.jetbrains.annotations.ApiStatus;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
@@ -22,7 +23,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 // TODO: [MCMavenizer][MavenCache] Handle download failures properly
 /** Represents the maven cache for this tool. */
@@ -37,6 +40,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
     private final HashFunction[] knownHashes;
     private final File cache;
     private final String repo;
+    private final List<MavenCache> foreignRepositories;
 
     /**
      * Initializes a new maven cache with the given name, repository, and cache directory.
@@ -49,9 +53,24 @@ public sealed class MavenCache permits MinecraftMavenCache {
         this(name, repo, root, DEFAULT_HASHES);
     }
 
+    @ApiStatus.Experimental
+    public MavenCache(String name, String repo, File root, Map<String, String> foreignRepositories) {
+        this(name, repo, root, foreignRepositories, DEFAULT_HASHES);
+    }
+
     public MavenCache(String name, String repo, File root, HashFunction... knownHashes) {
+        this(name, repo, root, Map.of(), knownHashes);
+    }
+
+    public MavenCache(String name, String repo, File root, Map<String, String> foreignRepositories, HashFunction... knownHashes) {
         this.cache = new File(root, "maven/" + name);
         this.repo = repo;
+        this.foreignRepositories = new ArrayList<>(foreignRepositories.size());
+        for (var entry : foreignRepositories.entrySet()) {
+            var n = entry.getKey();
+            var r = entry.getValue();
+            this.foreignRepositories.add(new MavenCache(n, r, root));
+        }
         this.knownHashes = knownHashes;
     }
 
@@ -68,8 +87,22 @@ public sealed class MavenCache permits MinecraftMavenCache {
      * @throws IOException If an error occurs while downloading the file
      */
     @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
-    public File download(Artifact artifact) {
-        return download(false, artifact.getPath());
+    public final File download(Artifact artifact) {
+        try {
+            return download(false, artifact.getPath());
+        } catch (Exception e) {
+            if (!this.foreignRepositories.isEmpty()) {
+                for (var repo : this.foreignRepositories) {
+                    try {
+                        return repo.download(artifact);
+                    } catch (Exception s) {
+                        e.addSuppressed(s);
+                    }
+                }
+            }
+
+            return Util.sneak(e);
+        }
     }
 
     /**
@@ -83,7 +116,21 @@ public sealed class MavenCache permits MinecraftMavenCache {
      */
     @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
     public final File downloadMeta(Artifact artifact) {
-        return download(true, artifact.getGroup().replace('.', '/') + '/' + artifact.getName() + "/maven-metadata.xml");
+        try {
+            return download(true, artifact.getGroup().replace('.', '/') + '/' + artifact.getName() + "/maven-metadata.xml");
+        } catch (Exception e) {
+            if (!this.foreignRepositories.isEmpty()) {
+                for (var repo : this.foreignRepositories) {
+                    try {
+                        return repo.downloadMeta(artifact);
+                    } catch (Exception s) {
+                        e.addSuppressed(s);
+                    }
+                }
+            }
+
+            return Util.sneak(e);
+        }
     }
 
     /**
@@ -96,7 +143,21 @@ public sealed class MavenCache permits MinecraftMavenCache {
      */
     @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
     public final File downloadVersionMeta(Artifact artifact) {
-        return download(true, artifact.getFolder() + "/maven-metadata.xml");
+        try {
+            return download(true, artifact.getFolder() + "/maven-metadata.xml");
+        } catch (Exception e) {
+            if (!this.foreignRepositories.isEmpty()) {
+                for (var repo : this.foreignRepositories) {
+                    try {
+                        return repo.downloadVersionMeta(artifact);
+                    } catch (Exception s) {
+                        e.addSuppressed(s);
+                    }
+                }
+            }
+
+            return Util.sneak(e);
+        }
     }
 
     /**
@@ -108,8 +169,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
      *
      * @throws IOException If an error occurs while downloading the file
      */
-    @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
-    protected File download(boolean changing, String path) {
+    protected File download(boolean changing, String path) throws IOException {
         var target = new File(cache, path);
 
         if (target.exists()) {
@@ -183,15 +243,11 @@ public sealed class MavenCache permits MinecraftMavenCache {
             target.delete();
         }
 
-        try {
-            GlobalOptions.assertNotCacheOnly();
-            GlobalOptions.assertOnline();
-            downloadFile(target, path);
-            HashUtils.updateHash(target, knownHashes);
-            return target;
-        } catch (IOException e) {
-            return Util.sneak(e);
-        }
+        GlobalOptions.assertNotCacheOnly();
+        GlobalOptions.assertOnline();
+        downloadFile(target, path);
+        HashUtils.updateHash(target, knownHashes);
+        return target;
     }
 
     /**

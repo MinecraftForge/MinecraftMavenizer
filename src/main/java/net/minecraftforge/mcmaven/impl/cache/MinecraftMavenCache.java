@@ -43,7 +43,11 @@ public final class MinecraftMavenCache extends MavenCache {
      */
     @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
     public File download(MinecraftVersion.LibraryDownload lib) {
-        return this.download(false, lib.path);
+        try {
+            return this.download(false, lib.path);
+        } catch (Exception e) {
+            return Util.sneak(e);
+        }
     }
 
     @Override

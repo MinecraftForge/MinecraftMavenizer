@@ -75,6 +75,10 @@ class MavenTask {
             .availableUnless(mappingsO)
             .withRequiredArg();
 
+        var foreignRepositoryO = parser.accepts("repository",
+            "EXPERIMENTAL: URL of a foreign maven repository to use for dependencies. The format is \"name,url\". The name must not include any commas.")
+            .withRequiredArg().ofType(String.class);
+
         var globalAuxiliaryVariantsO = parser.accepts("global-auxiliary-variants",
             "Declares sources and javadoc jars as global variants, no matter the mapping version. This is used to work around gradle/gradle#35065");
 
@@ -142,7 +146,13 @@ class MavenTask {
             ? new ParchmentMappings(options.valueOf(parchmentO))
             : Mappings.of(options.valueOf(mappingsO));
 
-        var mcmaven = new MinecraftMaven(output, cache, jdkCache, mappings, options.has(globalAuxiliaryVariantsO));
+        var foreignRepositories = new HashMap<String, String>();
+        for (var s : options.valuesOf(foreignRepositoryO)) {
+            var split = s.split(",", 2);
+            foreignRepositories.put(split[0], split[1]);
+        }
+
+        var mcmaven = new MinecraftMaven(output, cache, jdkCache, mappings, foreignRepositories, options.has(globalAuxiliaryVariantsO));
         mcmaven.run(artifact);
     }
 }

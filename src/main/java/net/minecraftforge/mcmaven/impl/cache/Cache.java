@@ -7,6 +7,7 @@ package net.minecraftforge.mcmaven.impl.cache;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 
 import java.io.File;
+import java.util.Map;
 
 /** Represents the cache for this tool. */
 public record Cache(File root, JDKCache jdks, MavenCache maven, MinecraftMavenCache minecraft) {
@@ -17,6 +18,10 @@ public record Cache(File root, JDKCache jdks, MavenCache maven, MinecraftMavenCa
      * @param jdkCache The JDK cache directory.
      */
     public Cache(File root, File jdkCache) {
-        this(root, new JDKCache(jdkCache), new MavenCache(Constants.FORGE_NAME, Constants.FORGE_MAVEN, root), new MinecraftMavenCache(root));
+        this(root, jdkCache, Map.of());
+    }
+
+    public Cache(File root, File jdkCache, Map<String, String> foreignRepositories) {
+        this(root, new JDKCache(jdkCache), new MavenCache(Constants.FORGE_NAME, Constants.FORGE_MAVEN, root, foreignRepositories), new MinecraftMavenCache(root));
     }
 }

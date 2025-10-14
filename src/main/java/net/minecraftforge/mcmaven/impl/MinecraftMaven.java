@@ -24,15 +24,16 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 // TODO [MCMavenizer][Deobf] ADD DEOBF
 //  use single detached configuration to resolve individual configurations
 //  pass in downloaded files to mcmaven (absolute path)
-public record MinecraftMaven(File output, Cache cache, Mappings mappings, boolean globalAuxiliaryVariants) {
+public record MinecraftMaven(File output, Cache cache, Mappings mappings, Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants) {
     private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.14.4"); // Only 1.14.4+ has official mappings, we can support more when we add more mappings
 
-    public MinecraftMaven(File output, File cacheRoot, File jdkCacheRoot, Mappings mappings, boolean globalAuxiliaryVariants) {
-        this(output, new Cache(cacheRoot, jdkCacheRoot), mappings, globalAuxiliaryVariants);
+    public MinecraftMaven(File output, File cacheRoot, File jdkCacheRoot, Mappings mappings, Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants) {
+        this(output, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants);
     }
 
     public MinecraftMaven {
@@ -42,6 +43,8 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings, boolea
         Log.info("  Offline:           " + GlobalOptions.isOffline());
         Log.info("  Cache Only:        " + GlobalOptions.isCacheOnly());
         Log.info("  Mappings:          " + mappings);
+        if (!foreignRepositories.isEmpty())
+            Log.info("  Foreign Repos:     [" + String.join(", ", foreignRepositories.values()) + ']');
         Log.info("  GradleVariantHack: " + globalAuxiliaryVariants);
         Log.info();
     }

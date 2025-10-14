@@ -58,6 +58,10 @@ tasks.named('jar', Jar) {
 
 tasks.named('shadowJar', ShadowJar) {
     archiveClassifier = ''
+
+    minimize {
+        exclude(dependency(libs.jver))
+    }
 }
 
 changelog {

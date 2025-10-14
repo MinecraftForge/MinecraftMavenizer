@@ -17,34 +17,32 @@ gradle.beforeProject { Project project ->
     }
 }
 
-dependencyResolutionManagement {
-    //@formatter:off
-    versionCatalogs.register('libs') {
-        plugin 'licenser',    'net.minecraftforge.licenser'    version '1.2.0'
-        plugin 'gradleutils', 'net.minecraftforge.gradleutils' version '3.3.18'
-        plugin 'gitversion',  'net.minecraftforge.gitversion'  version '3.1.1'
-        plugin 'changelog',   'net.minecraftforge.changelog'   version '3.1.2'
-        plugin 'shadow',      'com.gradleup.shadow'            version '9.2.2'
+//formatter:off
+dependencyResolutionManagement.versionCatalogs.register('libs') {
+    plugin 'licenser',    'net.minecraftforge.licenser'    version '1.2.0'
+    plugin 'gradleutils', 'net.minecraftforge.gradleutils' version '3.3.18'
+    plugin 'gitversion',  'net.minecraftforge.gitversion'  version '3.1.1'
+    plugin 'changelog',   'net.minecraftforge.changelog'   version '3.1.2'
+    plugin 'shadow',      'com.gradleup.shadow'            version '9.2.2'
 
-        // Static Analysis
-        library 'nulls', 'org.jetbrains', 'annotations' version '26.0.2'
+    // Static Analysis
+    library 'nulls', 'org.jetbrains', 'annotations' version '26.0.2'
 
-        library 'gson',     'com.google.code.gson', 'gson'             version '2.10.1'
-        library 'jopt',     'net.sf.jopt-simple',   'jopt-simple'      version '6.0-alpha-3'
-        library 'jver',     'net.minecraftforge',   'java-provisioner' version '1.0.8'
-        library 'srgutils', 'net.minecraftforge',   'srgutils'         version '0.5.14'
-        library 'diff',     'io.codechicken',       'DiffPatch'        version '2.0.0.36' // Fuzzy patching
+    library 'gson',     'com.google.code.gson', 'gson'             version '2.10.1'
+    library 'jopt',     'net.sf.jopt-simple',   'jopt-simple'      version '6.0-alpha-3'
+    library 'jver',     'net.minecraftforge',   'java-provisioner' version '1.0.8'
+    library 'srgutils', 'net.minecraftforge',   'srgutils'         version '0.5.14'
+    library 'diff',     'io.codechicken',       'DiffPatch'        version '2.0.0.36' // Fuzzy patching
 
-        library 'fastcsv',   'de.siegmar', 'fastcsv'    version '3.4.0'
-        library 'commonsio', 'commons-io', 'commons-io' version '2.18.0'
+    library 'fastcsv',   'de.siegmar', 'fastcsv'    version '3.4.0'
+    library 'commonsio', 'commons-io', 'commons-io' version '2.18.0'
 
-        // Utilities
-        library 'utils-download', 'net.minecraftforge', 'download-utils'  version '0.3.1'
-        library 'utils-files',    'net.minecraftforge', 'file-utils'      version '0.3.1'
-        library 'utils-hash',     'net.minecraftforge', 'hash-utils'      version '0.1.9'
-        library 'utils-data',     'net.minecraftforge', 'json-data-utils' version '0.2.3'
-        library 'utils-logging',  'net.minecraftforge', 'log-utils'       version '0.3.1'
-        bundle 'utils', ['utils-download', 'utils-files', 'utils-hash', 'utils-data', 'utils-logging']
-    }
-    //@formatter:on
+    // Utilities
+    library 'utils-download', 'net.minecraftforge', 'download-utils'  version '0.3.1'
+    library 'utils-files',    'net.minecraftforge', 'file-utils'      version '0.3.1'
+    library 'utils-hash',     'net.minecraftforge', 'hash-utils'      version '0.1.9'
+    library 'utils-data',     'net.minecraftforge', 'json-data-utils' version '0.2.3'
+    library 'utils-logging',  'net.minecraftforge', 'log-utils'       version '0.3.1'
+    bundle 'utils', ['utils-download', 'utils-files', 'utils-hash', 'utils-data', 'utils-logging']
 }
+//formatter:on
