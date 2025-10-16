@@ -16,6 +16,8 @@ import net.minecraftforge.java_provisioner.api.IJavaInstall;
 import net.minecraftforge.java_provisioner.api.IJavaLocator;
 import net.minecraftforge.mcmaven.impl.GlobalOptions;
 import net.minecraftforge.util.logging.Log;
+import net.minecraftforge.util.logging.Log.Level;
+
 import org.jetbrains.annotations.Nullable;
 
 /** Represents the JDK cache for this tool. */
@@ -56,9 +58,16 @@ public final class JDKCache {
 
         try {
             var downloaded = disco.provision(version); // Implementation detail, we only download jdks, so no need to check here
-            if (downloaded == null) return null;
+            if (downloaded == null) {
+                Log.error("Failed to find JDK for " + version);
+                for (var line : disco.logOutput())
+                    Log.error("  " + line);
+                return null;
+            }
             ret = downloaded.home();
         } catch (Exception e) {
+            Log.error("Failed to provision JDK " + version);
+            e.printStackTrace(Log.getLog(Level.ERROR));
             return null;
         }
 
