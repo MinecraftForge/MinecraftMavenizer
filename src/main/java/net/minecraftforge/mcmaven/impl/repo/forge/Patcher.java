@@ -13,7 +13,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.Stack;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -27,7 +26,7 @@ import io.codechicken.diffpatch.util.PatchMode;
 import io.codechicken.diffpatch.util.Input.MultiInput;
 import io.codechicken.diffpatch.util.Output.MultiOutput;
 import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
@@ -42,7 +41,7 @@ import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
-import net.minecraftforge.util.logging.Log;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 import org.jetbrains.annotations.Nullable;
 
 // TODO: [MCMavenizer] This class needs to be split off into some sort of abstract class so that other patching processes can be implemented.
@@ -336,7 +335,7 @@ public class Patcher implements Supplier<Task> {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         if (output.exists())
             output.delete();
@@ -384,7 +383,7 @@ public class Patcher implements Supplier<Task> {
         if (target.exists() && cache.isSame())
             return target;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         try (var zip = new ZipFile(this.data)) {
             var entry = zip.getEntry(value);
@@ -421,7 +420,7 @@ public class Patcher implements Supplier<Task> {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         var args = List.of(
             "--inJar", input.getAbsolutePath(),
@@ -429,9 +428,12 @@ public class Patcher implements Supplier<Task> {
             "--outJar", output.getAbsolutePath()
         );
 
-        var jdk = dlCache.jdks().get(Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
-        if (jdk == null)
-            throw new IllegalStateException("Failed to find JDK for version " + Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
+        File jdk;
+        try {
+            jdk = dlCache.jdks().get(Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to find JDK for version " + Constants.ACCESS_TRANSFORMER_JAVA_VERSION, e);
+        }
 
         var ret = ProcessUtils.runJar(jdk, globalBase, log, tool, Collections.emptyList(), args);
         if (ret.exitCode != 0)
@@ -454,7 +456,7 @@ public class Patcher implements Supplier<Task> {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         var args = new ArrayList<String>();
         args.add("--strip");
@@ -465,9 +467,12 @@ public class Patcher implements Supplier<Task> {
         args.add("--output");
         args.add(output.getAbsolutePath());
 
-        var jdk = dlCache.jdks().get(Constants.SIDE_STRIPPER_JAVA_VERSION);
-        if (jdk == null)
-            throw new IllegalStateException("Failed to find JDK for version " + Constants.SIDE_STRIPPER_JAVA_VERSION);
+        File jdk;
+        try {
+            jdk = dlCache.jdks().get(Constants.SIDE_STRIPPER_JAVA_VERSION);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to find JDK for version " + Constants.SIDE_STRIPPER_JAVA_VERSION, e);
+        }
 
         var ret = ProcessUtils.runJar(jdk, globalBase, log, tool, Collections.emptyList(), args);
         if (ret.exitCode != 0)
@@ -528,7 +533,7 @@ public class Patcher implements Supplier<Task> {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         var args = new ArrayList<String>();
         for (var arg : data.getArgs())
@@ -536,10 +541,12 @@ public class Patcher implements Supplier<Task> {
 
         int java_version = data.getJavaVersion(this.getMCP().getConfig());
         var jdks = this.getMCP().getCache().jdks();
-        var jdk = jdks.get(java_version);
-        if (jdk == null)
-            throw new IllegalStateException("Failed to find JDK for version " + java_version);
-
+        File jdk;
+        try {
+            jdk = jdks.get(java_version);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to find JDK for version " + java_version, e);
+        }
 
         var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, data.getJvmArgs(), args);
         if (ret.exitCode != 0)
@@ -568,10 +575,10 @@ public class Patcher implements Supplier<Task> {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         var builder = PatchOperation.builder()
-            .logTo(Log::error)
+            .logTo(LOGGER::error)
             .baseInput(MultiInput.archive(ArchiveFormat.ZIP, input.toPath()))
             .patchesInput(MultiInput.archive(ArchiveFormat.ZIP, this.data.toPath()))
             .patchedOutput(MultiOutput.archive(ArchiveFormat.ZIP, output.toPath()))
@@ -592,9 +599,9 @@ public class Patcher implements Supplier<Task> {
             boolean success = result.exit == 0;
             if (!success) {
                 if (result.summary != null)
-                    result.summary.print(Log.ERROR, true);
+                    result.summary.print(LOGGER.getError(), true);
                 else
-                    Log.error("Failed to apply patches, no summary available");
+                    LOGGER.error("Failed to apply patches, no summary available");
 
                 throw except("Failed to apply patches, rejects saved to: " + rejects.getAbsolutePath());
             }
@@ -628,7 +635,7 @@ public class Patcher implements Supplier<Task> {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         try {
             FileUtils.mergeJars(output, false,

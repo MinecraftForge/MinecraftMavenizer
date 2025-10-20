@@ -17,7 +17,7 @@ import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.util.hash.HashUtils;
-import net.minecraftforge.util.logging.Log;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -37,22 +37,22 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings, Map<St
     }
 
     public MinecraftMaven {
-        Log.info("  Output:            " + output.getAbsolutePath());
-        Log.info("  Cache:             " + cache.root().getAbsolutePath());
-        Log.info("  JDK Cache:         " + cache.jdks().root().getAbsolutePath());
-        Log.info("  Offline:           " + GlobalOptions.isOffline());
-        Log.info("  Cache Only:        " + GlobalOptions.isCacheOnly());
-        Log.info("  Mappings:          " + mappings);
+        LOGGER.info("  Output:            " + output.getAbsolutePath());
+        LOGGER.info("  Cache:             " + cache.root().getAbsolutePath());
+        LOGGER.info("  JDK Cache:         " + cache.jdks().root().getAbsolutePath());
+        LOGGER.info("  Offline:           " + Mavenizer.isOffline());
+        LOGGER.info("  Cache Only:        " + Mavenizer.isCacheOnly());
+        LOGGER.info("  Mappings:          " + mappings);
         if (!foreignRepositories.isEmpty())
-            Log.info("  Foreign Repos:     [" + String.join(", ", foreignRepositories.values()) + ']');
-        Log.info("  GradleVariantHack: " + globalAuxiliaryVariants);
-        Log.info();
+            LOGGER.info("  Foreign Repos:     [" + String.join(", ", foreignRepositories.values()) + ']');
+        LOGGER.info("  GradleVariantHack: " + globalAuxiliaryVariants);
+        LOGGER.info();
     }
 
     public void run(Artifact artifact) {
         var module = artifact.getGroup() + ':' + artifact.getName();
         var version = artifact.getVersion();
-        Log.info("Processing Minecraft dependency: %s:%s".formatted(module, version));
+        LOGGER.info("Processing Minecraft dependency: %s:%s".formatted(module, version));
         var mcprepo = new MCPConfigRepo(this.cache);
 
         if (Constants.FORGE_GROUP.equals(artifact.getGroup()) && Constants.FORGE_NAME.equals(artifact.getName())) {

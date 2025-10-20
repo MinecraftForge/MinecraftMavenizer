@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
@@ -40,10 +40,10 @@ public class MinecraftTasks {
 
     private File downloadLauncherManifest() {
         var target = new File(this.cache, "launcher_manifest.json");
-        if (!target.exists() || (!GlobalOptions.isCacheOnly() && target.lastModified() < System.currentTimeMillis() - Constants.CACHE_TIMEOUT)) {
+        if (!target.exists() || (!Mavenizer.isCacheOnly() && target.lastModified() < System.currentTimeMillis() - Constants.CACHE_TIMEOUT)) {
             try {
-                GlobalOptions.assertNotCacheOnly();
-                GlobalOptions.assertOnline();
+                Mavenizer.assertNotCacheOnly();
+                Mavenizer.assertOnline();
                 DownloadUtils.downloadFile(target, Constants.LAUNCHER_MANIFEST);
             } catch (IOException e) {
                 Util.sneak(e);
@@ -63,8 +63,8 @@ public class MinecraftTasks {
         if (target.exists() && cache.isSame())
             return target;
 
-        GlobalOptions.assertNotCacheOnly();
-        GlobalOptions.assertOnline();
+        Mavenizer.assertNotCacheOnly();
+        Mavenizer.assertOnline();
 
         var manifest = JsonData.launcherManifest(manifestF);
         var url = manifest.getUrl(this.version);
@@ -72,7 +72,7 @@ public class MinecraftTasks {
             throw new IllegalStateException("Failed to find url for " + this.version + " version.json");
 
         try {
-            DownloadUtils.downloadFile(false, target, url.toExternalForm());
+            DownloadUtils.downloadFile(target, url.toExternalForm());
         } catch (IOException e) {
             throw new IllegalStateException("Failed to download " + url, e);
         }
@@ -99,8 +99,8 @@ public class MinecraftTasks {
         if (target.exists() && cache.isSame())
             return target;
 
-        GlobalOptions.assertNotCacheOnly();
-        GlobalOptions.assertOnline();
+        Mavenizer.assertNotCacheOnly();
+        Mavenizer.assertOnline();
 
         var manifest = JsonData.minecraftVersion(manifestF);
         var dl = manifest.getDownload(key);

@@ -20,7 +20,9 @@ import net.minecraftforge.srgutils.IRenamer;
 import net.minecraftforge.srgutils.IMappingFile.IField;
 import net.minecraftforge.srgutils.IMappingFile.IMethod;
 import net.minecraftforge.srgutils.IMappingFile.IParameter;
-import net.minecraftforge.util.logging.Log;
+import net.minecraftforge.util.logging.Logger;
+
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 // TODO [Mavenizer][MCPDataTask] This is a copy of FG6's ExtractMCPData task.
 // its not the best, but I dont want to re-wrok INSTALLER_TOOLS to put the tsrg in the mappings zip
@@ -28,14 +30,14 @@ public class MCPDataTask {
     public static void run(String[] args) throws Exception {
         int ret = runI(args);
         if (ret != 0) {
-            Log.release();
+            LOGGER.release();
             //System.exit(ret);
         }
     }
 
     private static int runI(String[] args) throws Exception {
         // TODO [MCMavenizer] Make this into a --log [level] option
-        Log.enabled = Log.Level.INFO;
+        LOGGER.setEnabled(Logger.Level.INFO);
 
         var parser = new OptionParser();
         parser.allowsUnrecognizedOptions();
@@ -87,7 +89,7 @@ public class MCPDataTask {
 
         var options = parser.parse(args);
         if (options.has(helpO)) {
-            parser.printHelpOn(Log.INFO);
+            parser.printHelpOn(LOGGER.getInfo());
             return -1;
         }
 
@@ -103,7 +105,7 @@ public class MCPDataTask {
             null;
 
         if (artifact == null) {
-            Log.error("Missing mcp --version or --artifact");
+            LOGGER.error("Missing mcp --version or --artifact");
             return -2;
         }
 
@@ -118,19 +120,19 @@ public class MCPDataTask {
 
         var key = options.valueOf(keyO);
         if (key == null) {
-            Log.error("Missing --key option");
+            LOGGER.error("Missing --key option");
             return -3;
         }
 
         var repo = new MCPConfigRepo(new Cache(cacheRoot, jdkCacheRoot));
-        Log.info("  Output:     " + output.getAbsolutePath());
-        Log.info("  Cache:      " + cacheRoot.getAbsolutePath());
-        Log.info("  JDK Cache:  " + jdkCacheRoot.getAbsolutePath());
-        Log.info("  Artifact:   " + artifact);
-        Log.info("  Key:        " + key);
+        LOGGER.info("  Output:     " + output.getAbsolutePath());
+        LOGGER.info("  Cache:      " + cacheRoot.getAbsolutePath());
+        LOGGER.info("  JDK Cache:  " + jdkCacheRoot.getAbsolutePath());
+        LOGGER.info("  Artifact:   " + artifact);
+        LOGGER.info("  Key:        " + key);
         if (mappings != null)
-            Log.info("  Mappings:   " + mappings);
-        Log.info();
+            LOGGER.info("  Mappings:   " + mappings);
+        LOGGER.info();
 
         var mcp = repo.get(artifact);
         var side = mcp.getSide("joined");
@@ -141,14 +143,14 @@ public class MCPDataTask {
             path = "config/static_methods.txt";
 
         if (path == null) {
-            Log.error("Could not find data entry for '%s'".formatted(key));
+            LOGGER.error("Could not find data entry for '%s'".formatted(key));
             return -4;
         }
 
         try (ZipFile zip = new ZipFile(mcp.getData())) {
             var entry = zip.getEntry(path);
             if (entry == null) {
-                Log.error("Invalid config zip, missing file: " + path);
+                LOGGER.error("Invalid config zip, missing file: " + path);
                 return -5;
             }
 

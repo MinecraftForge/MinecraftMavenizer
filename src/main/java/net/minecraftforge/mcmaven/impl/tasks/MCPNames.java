@@ -6,7 +6,7 @@ package net.minecraftforge.mcmaven.impl.tasks;
 
 import de.siegmar.fastcsv.reader.CsvReader;
 import net.minecraftforge.util.hash.HashFunction;
-import net.minecraftforge.util.logging.Log;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.Nullable;
@@ -215,7 +215,7 @@ record MCPNames(String hash, Map<String, String> names, Map<String, String> docs
                 if (len == value.getRight()) {
                     innerClasses.pop();
                 } else if (len < value.getRight()) {
-                    Log.error("Failed to properly track class blocks around class " + value.getLeft() + ":" + (lines.size() + 1));
+                    LOGGER.error("Failed to properly track class blocks around class " + value.getLeft() + ":" + (lines.size() + 1));
                     return false;
                 }
             }

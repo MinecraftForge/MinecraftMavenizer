@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.repo;
 
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
@@ -17,17 +17,21 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
-import net.minecraftforge.util.logging.Log;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -73,6 +77,13 @@ public abstract class Repo {
         };
     }
 
+    protected Supplier<GradleModule.Variant[]> metadataVariant() {
+        return () -> new GradleModule.Variant[] {
+            GradleModule.Variant.of("metadata")
+                .attribute("org.gradle.usage", "metadata")
+        };
+    }
+
     protected static Task variantTask(Task parent, Supplier<GradleModule.Variant[]> supplier) {
         return Task.named(parent.name() + "[variants]", Task.deps(parent), () -> {
             var variants = supplier.get();
@@ -105,15 +116,23 @@ public abstract class Repo {
         var natives = new HashMap<GradleAttributes.OperatingSystemFamily, List<Artifact>>();
 
         for (var artifact : side.getMCLibraries()) {
-            var variant = GradleAttributes.OperatingSystemFamily.from(artifact.getOs());
-            if (variant == null)
+            var osVariants = EnumSet.noneOf(GradleAttributes.OperatingSystemFamily.class);
+            for (var os : artifact.getOs()) {
+                var variant = GradleAttributes.OperatingSystemFamily.from(os);
+                if (variant != null)
+                    osVariants.add(variant);
+            }
+
+            if (osVariants.isEmpty()) {
                 all.add(artifact);
-            else
-                natives.computeIfAbsent(variant, k -> new ArrayList<>()).add(artifact);
+            } else {
+                for (var variant : osVariants) {
+                    natives.computeIfAbsent(variant, k -> new ArrayList<>()).add(artifact);
+                }
+            }
         }
 
-        for (var artifact : side.getMCPConfigLibraries())
-            all.add(artifact);
+        all.addAll(side.getMCPConfigLibraries());
 
         for (var extra : extraDeps) {
             if (extra != null)
@@ -164,7 +183,7 @@ public abstract class Repo {
             if (output.exists() && cache.isSame())
                 return output;
 
-            GlobalOptions.assertNotCacheOnly();
+            Mavenizer.assertNotCacheOnly();
 
             var builder = new POMBuilder(artifact.getGroup(), artifact.getName(), artifact.getVersion());
 
@@ -201,14 +220,14 @@ public abstract class Repo {
                 return this.task.execute();
 
             try {
-                Log.info(this.message);
-                Log.push();
+                LOGGER.info(this.message);
+                LOGGER.push();
                 return this.task.execute();
             } finally {
                 if (this.variants != null)
                     this.variants.execute();
 
-                Log.pop();
+                LOGGER.pop();
             }
         }
 

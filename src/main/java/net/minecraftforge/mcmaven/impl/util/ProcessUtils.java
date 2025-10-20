@@ -4,9 +4,9 @@
  */
 package net.minecraftforge.mcmaven.impl.util;
 
-import net.minecraftforge.java_provisioner.util.OS;
+import net.minecraftforge.util.os.OS;
 import net.minecraftforge.util.file.FileUtils;
-import net.minecraftforge.util.logging.Log;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 import org.apache.commons.io.IOUtils;
 
 import java.io.BufferedReader;
@@ -114,7 +114,7 @@ public final class ProcessUtils {
      * @return The exit code of the process
      */
     public static int runCommand(File workDir, Consumer<String> lines, String... args) {
-        Log.debug("Running Command: " + String.join(" ", args));
+        LOGGER.debug("Running Command: " + String.join(" ", args));
 
         Process process;
         try {
@@ -189,9 +189,9 @@ public final class ProcessUtils {
                 classpath += File.pathSeparator + classes.getAbsolutePath();
 
             var main = getMainClass(tool);
-            var launcher = new File(javaHome, "bin/java" + OS.CURRENT.exe());
+            var launcher = new File(javaHome, "bin/java" + OS.current().exe());
             Consumer<String> lines = line -> {
-                Log.quiet(line);
+                LOGGER.quiet(line);
                 log.println(line);
             };
             lines.accept("Java:      " + launcher.getAbsolutePath());
@@ -284,10 +284,10 @@ public final class ProcessUtils {
 
         var process = ProcessUtils.runJavac(javaHome, workDir, new File(outputJar.getAbsolutePath() + ".log"), args);
         if (process.exitCode != 0) {
-            Log.error("Javac failed to execute! Exit code " + process.exitCode);
-            Log.error("--- BEGIN JAVAC LOG ---");
-            process.lines.forEach(Log::error);
-            Log.error("--- END JAVAC LOG ---");
+            LOGGER.error("Javac failed to execute! Exit code " + process.exitCode);
+            LOGGER.error("--- BEGIN JAVAC LOG ---");
+            process.lines.forEach(LOGGER::error);
+            LOGGER.error("--- END JAVAC LOG ---");
             throw new RuntimeException("Javac failed to execute! Exit code " + process.exitCode);
         }
 
@@ -335,9 +335,9 @@ public final class ProcessUtils {
 
             var argsString = "@" + argsFile.getAbsolutePath().replace('\\', '/');
 
-            var launcher = new File(javaHome, "bin/javac" + OS.CURRENT.exe());
+            var launcher = new File(javaHome, "bin/javac" + OS.current().exe());
             Consumer<String> lines = line -> {
-                Log.quiet(line);
+                LOGGER.quiet(line);
                 log.println(line);
             };
             lines.accept("Java Compiler: " + launcher.getAbsolutePath());

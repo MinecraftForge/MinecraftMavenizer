@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.tasks;
 
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
@@ -14,7 +14,6 @@ import net.minecraftforge.util.hash.HashStore;
 
 import java.io.File;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -72,11 +71,13 @@ public final class RecompileTask implements Task {
         if (outputJar.exists() && cache.isSame())
             return outputJar;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
-        var jdk = this.mcp.getCache().jdks().get(javaTarget);
-        if (jdk == null) {
-            throw new IllegalStateException("JDK not found: " + javaTarget);
+        File jdk;
+        try {
+            jdk = this.mcp.getCache().jdks().get(javaTarget);
+        } catch (Exception e) {
+            throw new IllegalStateException("JDK not found: " + javaTarget, e);
         }
 
         ProcessUtils.recompileJar(jdk, this.classpath.get(), sourcesJar, outputJar, this.build);

@@ -4,9 +4,11 @@
  */
 package net.minecraftforge.mcmaven.impl;
 
-import net.minecraftforge.util.logging.Log;
+import net.minecraftforge.util.logging.Logger;
 
-public final class GlobalOptions {
+public final class Mavenizer {
+    public static final Logger LOGGER = Logger.create();
+
     private static boolean offline = false;
 
     private static boolean cacheOnly = false;
@@ -37,10 +39,11 @@ public final class GlobalOptions {
         if (cacheOnly) {
             throw new IllegalArgumentException("Cache is out of date! Please run without --cache-only");
         } else if (!cacheMiss) {
+            LOGGER.warn("Cache miss!", new Exception("Cache miss!"));
             cacheMiss = true;
-            Log.release();
+            LOGGER.release();
         }
     }
 
-    private GlobalOptions() { }
+    private Mavenizer() { }
 }

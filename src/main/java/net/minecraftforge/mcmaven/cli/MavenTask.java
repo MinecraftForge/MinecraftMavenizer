@@ -10,18 +10,20 @@ import java.util.Map;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSpecBuilder;
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.mappings.ParchmentMappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.util.logging.Log;
+import net.minecraftforge.util.logging.Logger;
+
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 class MavenTask {
     static void run(String[] args) throws Exception {
         // TODO [MCMavenizer] Make this into a --log [level] option
-        Log.enabled = Log.Level.INFO;
+        LOGGER.setEnabled(Logger.Level.INFO);
 
         var parser = new OptionParser();
         parser.allowsUnrecognizedOptions();
@@ -111,16 +113,16 @@ class MavenTask {
 
         var options = parser.parse(args);
         if (options.has(helpO)) {
-            parser.printHelpOn(Log.INFO);
-            Log.release();
+            parser.printHelpOn(LOGGER.getInfo());
+            LOGGER.release();
             return;
         }
 
         // global options
         if (options.has(offlineO))
-            GlobalOptions.setOffline();
+            Mavenizer.setOffline();
         if (options.has(cacheOnlyO))
-            GlobalOptions.setCacheOnly();
+            Mavenizer.setCacheOnly();
 
         var output = options.valueOf(outputO);
         var cache = options.valueOf(cacheO);

@@ -24,14 +24,16 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashStore;
-import net.minecraftforge.util.logging.Log;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
+
+import net.minecraftforge.util.logging.Logger;
 import org.jetbrains.annotations.Nullable;
 
 // TODO [Mavenizer][MCPTask] Cleanup. Works well but is a mess.
 public class MCPTask {
     public static void run(String[] args) throws Exception {
         // TODO [MCMavenizer] Make this into a --log [level] option
-        Log.enabled = Log.Level.INFO;
+        LOGGER.setEnabled(Logger.Level.INFO);
 
         var parser = new OptionParser();
         parser.allowsUnrecognizedOptions();
@@ -100,8 +102,8 @@ public class MCPTask {
 
         var options = parser.parse(args);
         if (options.has(helpO)) {
-            parser.printHelpOn(Log.INFO);
-            Log.release();
+            parser.printHelpOn(LOGGER.getInfo());
+            LOGGER.release();
             return;
         }
 
@@ -122,24 +124,24 @@ public class MCPTask {
         var sas = options.has(sasO) ? options.valueOf(sasO) : null;
 
         if (artifact == null) {
-            Log.error("Missing mcp --version or --artifact");
-            Log.release();
+            LOGGER.error("Missing mcp --version or --artifact");
+            LOGGER.release();
             return;
         }
 
         var repo = new MCPConfigRepo(new Cache(cacheRoot, jdkCacheRoot));
-        Log.info("  Output:     " + output.getAbsolutePath());
-        Log.info("  Cache:      " + cacheRoot.getAbsolutePath());
-        Log.info("  JDK Cache:  " + jdkCacheRoot.getAbsolutePath());
-        Log.info("  Artifact:   " + artifact);
-        Log.info("  Pipeline:   " + pipeline);
+        LOGGER.info("  Output:     " + output.getAbsolutePath());
+        LOGGER.info("  Cache:      " + cacheRoot.getAbsolutePath());
+        LOGGER.info("  JDK Cache:  " + jdkCacheRoot.getAbsolutePath());
+        LOGGER.info("  Artifact:   " + artifact);
+        LOGGER.info("  Pipeline:   " + pipeline);
         if (options.has(rawO)) {
-            Log.info("  Raw Names:  " + (options.has(seargeO) ? "Searge" : "Notch"));
+            LOGGER.info("  Raw Names:  " + (options.has(seargeO) ? "Searge" : "Notch"));
         } else {
-            Log.info("  Access:     " + (ats == null ? null : ats.getAbsolutePath()));
-            Log.info("  SAS:        " + (sas == null ? null : sas.getAbsolutePath()));
+            LOGGER.info("  Access:     " + (ats == null ? null : ats.getAbsolutePath()));
+            LOGGER.info("  SAS:        " + (sas == null ? null : sas.getAbsolutePath()));
         }
-        Log.info();
+        LOGGER.info();
 
         var mcp = repo.get(artifact);
         var side = mcp.getSide(pipeline);
@@ -152,13 +154,13 @@ public class MCPTask {
             Task rawTask = searge ? side.getTasks().getSrgJar() : side.getTasks().getRawJar();
             File raw;
 
-            Log.info("Creating Raw Jar");
-            var indent = Log.push();
+            LOGGER.info("Creating Raw Jar");
+            var indent = LOGGER.push();
             try {
                 raw = rawTask.execute();
                 cache.add("raw", raw);
             } finally {
-                Log.pop(indent);
+                LOGGER.pop(indent);
             }
 
             if (!output.exists() || !cache.isSame()) {
@@ -198,12 +200,12 @@ public class MCPTask {
 
         File sources = null;
         {
-            Log.info("Creating MCP Source Jar");
-            var indent = Log.push();
+            LOGGER.info("Creating MCP Source Jar");
+            var indent = LOGGER.push();
             try {
                 sources = sourcesTask.execute();
             } finally {
-                Log.pop(indent);
+                LOGGER.pop(indent);
             }
         }
 
@@ -211,8 +213,8 @@ public class MCPTask {
             .add("sources", sources);
 
         if (options.has(mappingsO)) {
-            Log.info("Renaming MCP Source Jar");
-            var indent = Log.push();
+            LOGGER.info("Renaming MCP Source Jar");
+            var indent = LOGGER.push();
             try {
                 var mappings = options.has(parchmentO)
                     ? new ParchmentMappings(options.valueOf(parchmentO))
@@ -221,7 +223,7 @@ public class MCPTask {
                 var renameTask = new RenameTask(side.getBuildFolder(), pipeline, side, sourcesTask, mappings, false);
                 sources = renameTask.execute();
             } finally {
-                Log.pop(indent);
+                LOGGER.pop(indent);
             }
 
             cache.add("renamed", sources);
@@ -242,14 +244,14 @@ public class MCPTask {
     // TODO [Mavenizer][Extra MCPTask Files] do this better
     private static void writeFiles(MCPTaskFactory mcpTaskFactory, File output) {
         var files = new MCPSetupFiles();
-        files.versionManifest = mcpTaskFactory.findStep("downloadManifest").execute();
-        files.versionJson = mcpTaskFactory.findStep("downloadJson").execute();
-        files.clientRaw = mcpTaskFactory.findStep("downloadClient").execute();
-        files.serverRaw = mcpTaskFactory.findStep("downloadServer").execute();
-        files.serverExtracted = mcpTaskFactory.findStep("extractServer").execute();
-        files.clientMappings = mcpTaskFactory.findStep("downloadClientMappings").execute();
-        files.serverMappings = mcpTaskFactory.findStep("downloadServerMappings").execute();
-        files.librariesList = mcpTaskFactory.findStep("listLibraries").execute();
+        files.versionManifest = mcpTaskFactory.findStep("downloadManifest").execute().getAbsolutePath();
+        files.versionJson = mcpTaskFactory.findStep("downloadJson").execute().getAbsolutePath();
+        files.clientRaw = mcpTaskFactory.findStep("downloadClient").execute().getAbsolutePath();
+        files.serverRaw = mcpTaskFactory.findStep("downloadServer").execute().getAbsolutePath();
+        files.serverExtracted = mcpTaskFactory.findStep("extractServer").execute().getAbsolutePath();
+        files.clientMappings = mcpTaskFactory.downloadClientMappings().execute().getAbsolutePath();
+        files.serverMappings = mcpTaskFactory.downloadServerMappings().execute().getAbsolutePath();
+        files.librariesList = mcpTaskFactory.findStep("listLibraries").execute().getAbsolutePath();
 
         try {
             JsonData.toJson(files, output);

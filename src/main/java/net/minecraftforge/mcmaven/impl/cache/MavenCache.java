@@ -4,13 +4,13 @@
  */
 package net.minecraftforge.mcmaven.impl.cache;
 
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.hash.HashUtils;
-import net.minecraftforge.util.logging.Log;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 import org.jetbrains.annotations.ApiStatus;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
@@ -23,7 +23,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -213,18 +212,18 @@ public sealed class MavenCache permits MinecraftMavenCache {
 
             if (!invalidHash && changing) {
                 for (var func : knownHashes) {
-                    if (GlobalOptions.isOffline()) continue;
+                    if (Mavenizer.isOffline()) continue;
 
-                    var rhash = DownloadUtils.tryDownloadString(true, repo + path + '.' + func.extension());
+                    var rhash = DownloadUtils.tryDownloadString(repo + path + '.' + func.extension());
                     if (rhash == null)
                         continue;
 
                     try {
                         var chash = func.hash(target);
                         if (!chash.equals(rhash)) {
-                            Log.error("Outdated cached file: " + target.getAbsolutePath());
-                            Log.error("Expected: " + rhash);
-                            Log.error("Actual:   " + chash);
+                            LOGGER.error("Outdated cached file: " + target.getAbsolutePath());
+                            LOGGER.error("Expected: " + rhash);
+                            LOGGER.error("Actual:   " + chash);
                             invalidHash = true;
                         }
                     } catch (IOException e) {
@@ -239,12 +238,12 @@ public sealed class MavenCache permits MinecraftMavenCache {
             if (!invalidHash)
                 return target;
 
-            GlobalOptions.assertNotCacheOnly();
+            Mavenizer.assertNotCacheOnly();
             target.delete();
         }
 
-        GlobalOptions.assertNotCacheOnly();
-        GlobalOptions.assertOnline();
+        Mavenizer.assertNotCacheOnly();
+        Mavenizer.assertOnline();
         downloadFile(target, path);
         HashUtils.updateHash(target, knownHashes);
         return target;

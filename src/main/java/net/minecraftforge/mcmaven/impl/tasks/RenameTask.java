@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.tasks;
 
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.util.file.FileUtils;
@@ -90,7 +90,7 @@ public final class RenameTask implements Task {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         try {
             var names = MCPNames.load(mappings);

@@ -5,7 +5,7 @@
 package net.minecraftforge.mcmaven.impl.util;
 
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
-import net.minecraftforge.util.data.OS;
+import net.minecraftforge.util.os.OS;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Locale;
@@ -24,12 +24,13 @@ public interface GradleAttributes {
             return this.name().toLowerCase(Locale.ROOT);
         }
 
-        public static @Nullable OperatingSystemFamily from(OS os) {
+        public static @Nullable OperatingSystemFamily from(@Nullable OS os) {
             return switch (os) {
                 case WINDOWS -> WINDOWS;
                 case MACOS -> MACOS;
-                case LINUX, ALPINE, MUSL -> LINUX;
-                case null, default -> null;
+                case null -> null;
+                case UNKNOWN -> null;
+                default -> LINUX;
             };
         }
     }

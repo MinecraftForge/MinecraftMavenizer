@@ -14,6 +14,7 @@ import net.minecraftforge.util.data.json.MinecraftVersion;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Util;
+import net.minecraftforge.util.os.OS;
 
 /** Represents the Minecraft maven cache for this tool. */
 public final class MinecraftMavenCache extends MavenCache {
@@ -22,7 +23,7 @@ public final class MinecraftMavenCache extends MavenCache {
         HashFunction.SHA1
     };
 
-    private static final File LOCAL_MCLIBS = new File(MCJsonUtils.getMCDir(), "libraries");
+    private static final File LOCAL_MCLIBS = new File(MCJsonUtils.getMCDir(OS.current()), "libraries");
 
     /**
      * Initializes a new maven cache with the given cache directory.

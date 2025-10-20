@@ -15,14 +15,14 @@ import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
-import net.minecraftforge.util.logging.Log;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
@@ -72,8 +72,8 @@ public final class ForgeRepo extends Repo {
             throw new IllegalArgumentException("Unknown or unsupported module: " + module);
 
         var fg = FGVersion.fromForge(version);
-        Log.info("Processing Minecraft Forge (userdev): " + version);
-        var indent = Log.push();
+        LOGGER.info("Processing Minecraft Forge (userdev): " + version);
+        var indent = LOGGER.push();
         try {
             if (fg == null)
                 throw new IllegalArgumentException("Python version unsupported!");
@@ -87,7 +87,7 @@ public final class ForgeRepo extends Repo {
 
             throw new IllegalArgumentException("Forge version %s is not supported yet".formatted(version));
         } finally {
-            Log.pop(indent);
+            LOGGER.pop(indent);
         }
     }
 
@@ -145,7 +145,7 @@ public final class ForgeRepo extends Repo {
 
         var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(mappings));
         var classes = pending("Classes", classesTask, name, false, () -> classVariants(mappings, patcher, extraCoords, mappingCoords));
-        var metadata = pending("Metadata", metadata(build, patcher), name.withClassifier("metadata").withExtension("zip"), false);
+        var metadata = pending("Metadata", metadata(build, patcher), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
 
         var pom = pending("Maven POM", pom(build, patcher, version, extraCoords, mappingCoords), name.withExtension("pom"), false);
 
@@ -174,13 +174,14 @@ public final class ForgeRepo extends Repo {
 
             var cache = HashStore
                 .fromFile(output)
-                .add("data", patcher.getDataHash())
                 .add(versionJson)
+                .add(versionProperties)
+                .add("data", patcher.getDataHash())
                 .addKnown("version", "1");
             if (output.exists() && cache.isSame())
                 return output;
 
-            GlobalOptions.assertNotCacheOnly();
+            Mavenizer.assertNotCacheOnly();
 
             try {
                 FileUtils.ensureParent(output);
@@ -232,7 +233,7 @@ public final class ForgeRepo extends Repo {
             if (output.exists() && cache.isSame())
                 return output;
 
-            GlobalOptions.assertNotCacheOnly();
+            Mavenizer.assertNotCacheOnly();
 
             var builder = new POMBuilder("net.minecraftforge", "forge", version).preferGradleModule().dependencies(dependencies -> {
                 if (clientExtra != null)

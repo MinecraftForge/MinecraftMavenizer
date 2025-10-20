@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.util;
 
-import net.minecraftforge.util.logging.Log;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import java.io.File;
 import java.time.Duration;
@@ -103,19 +103,19 @@ public interface Task {
                     }
                 }
 
-                Log.info(name);
-                var indent = Log.push();
+                LOGGER.info(name);
+                var indent = LOGGER.push();
                 var start = System.nanoTime();
                 try {
                     this.file = supplier.call();
 
                     var time = Duration.ofNanos(System.nanoTime() - start);
-                    Log.debug(String.format("-> took %d:%02d.%03d", time.toMinutesPart(), time.toSecondsPart(), time.toMillisPart()));
-                    Log.debug("-> " + this.file.getAbsolutePath());
+                    LOGGER.debug(String.format("-> took %d:%02d.%03d", time.toMinutesPart(), time.toSecondsPart(), time.toMillisPart()));
+                    LOGGER.debug("-> " + this.file.getAbsolutePath());
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to execute task `%s`".formatted(this.name()), e);
                 } finally {
-                    Log.pop(indent);
+                    LOGGER.pop(indent);
                 }
             }
 

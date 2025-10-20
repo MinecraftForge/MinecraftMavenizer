@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.repo.forge;
 
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
@@ -16,8 +16,6 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Set;
-import java.util.function.Supplier;
 
 /**
  * Takes a jar containing compiled class files, and injects extra data/resources from a patcher into it.
@@ -79,12 +77,13 @@ public final class InjectTask implements Task {
         if (outputJar.exists() && cache.isSame())
             return outputJar;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
         cache.clear().add("recompiled", recompiledJar);
 
         try {
-            var jars = new ArrayList<File>();
-            jars.addAll(universals);
+            var jars = new ArrayList<>(universals);
+            universals.forEach(cache::add);
+
             jars.add(recompiledJar);
 
             FileUtils.mergeJars(outputJar, true, (file, name) -> file == recompiledJar || !name.endsWith(".class"), jars.toArray(File[]::new));

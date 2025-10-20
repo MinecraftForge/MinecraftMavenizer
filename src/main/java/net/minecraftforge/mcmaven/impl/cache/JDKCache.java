@@ -12,20 +12,21 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
-import net.minecraftforge.java_provisioner.api.IJavaInstall;
-import net.minecraftforge.java_provisioner.api.IJavaLocator;
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
-import net.minecraftforge.util.logging.Log;
-import net.minecraftforge.util.logging.Log.Level;
+import net.minecraftforge.java_provisioner.api.JavaInstall;
+import net.minecraftforge.java_provisioner.api.JavaLocator;
+import net.minecraftforge.java_provisioner.api.JavaProvisioner;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
+import net.minecraftforge.util.logging.Logger;
 
-import org.jetbrains.annotations.Nullable;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 /** Represents the JDK cache for this tool. */
 public final class JDKCache {
     private boolean attemptedLocate = false;
+    private final List<Throwable> attemptedLocateErrors = new ArrayList<>();
     private final File root;
     private final Map<Integer, File> jdks = new HashMap<>();
-    private final IJavaLocator disco;
+    private final JavaProvisioner disco;
 
     /**
      * Initializes the JDK cache with the given cache directory.
@@ -34,7 +35,7 @@ public final class JDKCache {
      */
     public JDKCache(File cache) {
         this.root = cache;
-        this.disco = IJavaLocator.disco(cache, GlobalOptions.isOffline());
+        this.disco = JavaLocator.disco(cache, Mavenizer.isOffline());
     }
 
     public File root() {
@@ -48,7 +49,7 @@ public final class JDKCache {
      * @param version The version to get
      * @return The JDK, or {@code null} if it could not be found or downloaded
      */
-    public @Nullable File get(int version) {
+    public File get(int version) throws Exception {
         if (!attemptedLocate)
             attemptLocate();
 
@@ -57,26 +58,19 @@ public final class JDKCache {
         if (ret != null) return ret;
 
         try {
-            var downloaded = disco.provision(version); // Implementation detail, we only download jdks, so no need to check here
-            if (downloaded == null) {
-                Log.error("Failed to find JDK for " + version);
-                for (var line : disco.logOutput())
-                    Log.error("  " + line);
-                return null;
-            }
-            ret = downloaded.home();
+            ret = disco.provision(version).home(); // Implementation detail, we only download jdks, so no need to check here
         } catch (Exception e) {
-            Log.error("Failed to provision JDK " + version);
-            e.printStackTrace(Log.getLog(Level.ERROR));
-            return null;
+            LOGGER.error("Failed to provision JDK " + version);
+            e.printStackTrace(LOGGER.getLog(Logger.Level.ERROR));
+            throw e;
         }
 
         // not sure how this would ever hit. but just in case...
         var old = jdks.putIfAbsent(version, ret);
         if (old != null) {
-            Log.error("JDKCache: Downloaded JDK " + version + " is replacing an existing download! It was probably downloaded by another thread.");
-            Log.error("JDKCache: Old JDK: " + old);
-            // TODO Throw exception here
+            LOGGER.error("JDKCache: Downloaded JDK " + version + " is replacing an existing download! It was probably downloaded by another thread.");
+            LOGGER.error("JDKCache: Old JDK: " + old);
+            // TODO [Mavenizer][Provisioner] Properly account for parallel Mavenizer instances
         }
 
         return ret;
@@ -86,16 +80,19 @@ public final class JDKCache {
         if (attemptedLocate) return;
         attemptedLocate = true;
 
-        List<IJavaLocator> locators = new ArrayList<>();
-        locators.add(IJavaLocator.home());
-        locators.add(IJavaLocator.gradle());
+        List<JavaLocator> locators = new ArrayList<>();
+        locators.add(JavaLocator.home());
+        locators.add(JavaLocator.gradle());
         locators.add(this.disco);
 
-        List<IJavaInstall> installs = new ArrayList<>();
+        List<JavaInstall> installs = new ArrayList<>();
 
-        for (IJavaLocator locator : locators) {
-            List<IJavaInstall> found = locator.findAll();
-            installs.addAll(found);
+        for (JavaLocator locator : locators) {
+            try {
+                installs.addAll(locator.findAll());
+            } catch (Exception e) {
+                attemptedLocateErrors.add(e);
+            }
         }
 
         // Remove duplicates
@@ -103,7 +100,7 @@ public final class JDKCache {
         installs.removeIf(install -> !seen.add(install.home()));
 
         Collections.sort(installs);
-        for (IJavaInstall install : installs) {
+        for (JavaInstall install : installs) {
             if (!install.isJdk() || install.majorVersion() <= 0)
                 continue;
             this.jdks.putIfAbsent(install.majorVersion(), install.home());

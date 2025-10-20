@@ -6,7 +6,7 @@ package net.minecraftforge.mcmaven.cli;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSpecBuilder;
-import net.minecraftforge.util.logging.Log;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -16,22 +16,22 @@ public class Main {
     public static void main(String[] args) throws Exception {
         var start = System.nanoTime();
         try {
-            Log.capture();
-            Log.info(JarVersionInfo.of(DISPLAY_NAME, Main.class).implementation());
+            LOGGER.capture();
+            LOGGER.info(JarVersionInfo.of(DISPLAY_NAME, Main.class).implementation());
             run(args);
         } catch (Throwable e) {
-            Log.release();
+            LOGGER.release();
             throw e;
         }
 
         var time = Duration.ofNanos(System.nanoTime() - start);
-        if (Log.isCapturing()) {
-            Log.drop();
-            Log.INFO.print("Minecraft Maven is up-to-date");
+        if (LOGGER.isCapturing()) {
+            LOGGER.drop();
+            LOGGER.getInfo().print("Minecraft Maven is up-to-date");
         } else {
-            Log.INFO.print("Minecraft Maven has finished");
+            LOGGER.getInfo().print("Minecraft Maven has finished");
         }
-        Log.INFO.println(String.format(", took %d:%02d.%03d", time.toMinutesPart(), time.toSecondsPart(), time.toMillisPart()));
+        LOGGER.getInfo().printf(", took %d:%02d.%03d%n", time.toMinutesPart(), time.toSecondsPart(), time.toMillisPart());
     }
 
     private static void run(String[] args) throws Exception {
@@ -59,7 +59,7 @@ public class Main {
             }
         }
 
-        parser.printHelpOn(Log.INFO);
-        Log.release();
+        parser.printHelpOn(LOGGER.getInfo());
+        LOGGER.release();
     }
 }

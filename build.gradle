@@ -19,8 +19,7 @@ version = gitversion.tagOffset
 
 println "Version: $version"
 
-// TODO [Mavenizer] Update to Java 25 once ForgeGradle and ForgeDev target Gradle 9.1.0
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 dependencies {
     compileOnly libs.nulls

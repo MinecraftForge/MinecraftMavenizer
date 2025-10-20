@@ -4,12 +4,14 @@
  */
 package net.minecraftforge.mcmaven.impl.util;
 
-import net.minecraftforge.util.data.OS;
+import net.minecraftforge.util.os.OS;
+import net.minecraftforge.util.os.Arch;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -27,7 +29,7 @@ public class Artifact implements Comparable<Artifact>, Serializable {
     private final @Nullable String version;
     private final @Nullable String classifier;
     private final String ext;
-    private final OS os;
+    private final EnumSet<OS> os;
     private final Arch arch;
 
     // Cached after building the first time we're asked
@@ -106,7 +108,7 @@ public class Artifact implements Comparable<Artifact>, Serializable {
 
         this.version = pts.length > 2 ? pts[2] : null;
         this.classifier = pts.length > 3 ? pts[3] : null;
-        this.os = this.classifier != null ? findOS(this.classifier) : OS.UNKNOWN;
+        this.os = this.classifier != null ? findOS(this.classifier) : EnumSet.noneOf(OS.class);
         this.arch = this.classifier != null ? findArch(this.classifier) : Arch.UNKNOWN;
     }
 
@@ -116,21 +118,31 @@ public class Artifact implements Comparable<Artifact>, Serializable {
         this.version = version;
         this.classifier = classifier;
         this.ext = Objects.requireNonNullElse(ext, "jar");
-        this.os = os == OS.UNKNOWN && classifier != null ? findOS(classifier) : os;
+        this.os = classifier != null ? findOS(classifier) : os == OS.UNKNOWN ? EnumSet.noneOf(OS.class) : EnumSet.of(os);
         this.arch = arch == Arch.UNKNOWN && classifier != null ? findArch(classifier) : arch;
     }
 
-    private static OS findOS(String classifier) {
+    private Artifact(String group, String name, String version, @Nullable String classifier, @Nullable String ext, EnumSet<OS> os, Arch arch) {
+        this.group = group;
+        this.name = name;
+        this.version = version;
+        this.classifier = classifier;
+        this.ext = Objects.requireNonNullElse(ext, "jar");
+        this.os = os;
+        this.arch = arch == Arch.UNKNOWN && classifier != null ? findArch(classifier) : arch;
+    }
+
+    private static EnumSet<OS> findOS(String classifier) {
         for (var s : classifier.split("-")) {
             if (s.isBlank()) continue;
 
             var osCandidate = OS.byName(s);
             if (osCandidate != OS.UNKNOWN) {
-                return osCandidate;
+                return EnumSet.of(osCandidate);
             }
         }
 
-        return OS.UNKNOWN;
+        return EnumSet.noneOf(OS.class);
     }
 
     private static Arch findArch(String classifier) {
@@ -216,12 +228,12 @@ public class Artifact implements Comparable<Artifact>, Serializable {
     }
 
     /** @return The os of this artifact (defaults to {@link OS#UNKNOWN}) */
-    public OS getOs() {
+    public EnumSet<OS> getOs() {
         return os;
     }
 
     public boolean hasNoOs() {
-        return this.os == OS.UNKNOWN;
+        return this.os.isEmpty();
     }
 
     /** @return The arch of this artifact (defaults to {@link Arch#UNKNOWN}) */
@@ -271,6 +283,10 @@ public class Artifact implements Comparable<Artifact>, Serializable {
     }
 
     public Artifact withOS(OS os) {
+        return new Artifact(group, name, version, classifier, ext, os, arch);
+    }
+
+    public Artifact withOS(EnumSet<OS> os) {
         return new Artifact(group, name, version, classifier, ext, os, arch);
     }
 

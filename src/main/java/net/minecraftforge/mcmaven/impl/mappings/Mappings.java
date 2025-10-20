@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipFile;
 
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
@@ -151,7 +151,7 @@ public class Mappings {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         var args = List.of(
             "--task",
@@ -166,9 +166,12 @@ public class Mappings {
             output.getAbsolutePath()
         );
 
-        var jdk = side.getMCP().getCache().jdks().get(Constants.INSTALLER_TOOLS_JAVA_VERSION);
-        if (jdk == null)
-            throw new IllegalStateException("Failed to find JDK for version " + Constants.INSTALLER_TOOLS_JAVA_VERSION);
+        File jdk;
+        try {
+            jdk = side.getMCP().getCache().jdks().get(Constants.INSTALLER_TOOLS_JAVA_VERSION);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to find JDK for version " + Constants.INSTALLER_TOOLS_JAVA_VERSION, e);
+        }
 
         var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, Collections.emptyList(), args);
         if (ret.exitCode != 0)

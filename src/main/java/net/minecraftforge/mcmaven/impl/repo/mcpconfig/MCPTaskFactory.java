@@ -23,7 +23,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BiPredicate;
-import java.util.function.Supplier;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
@@ -41,11 +40,10 @@ import io.codechicken.diffpatch.util.PatchMode;
 import io.codechicken.diffpatch.util.Input.MultiInput;
 import io.codechicken.diffpatch.util.Output.MultiOutput;
 import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.util.data.OS;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.data.json.MCPConfig;
 import net.minecraftforge.util.file.FileUtils;
@@ -54,8 +52,7 @@ import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
-import net.minecraftforge.util.logging.Log;
-import org.jetbrains.annotations.NotNull;
+import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 import org.jetbrains.annotations.Nullable;
 
 // TODO [MCMavenizer][Documentation] Document
@@ -245,7 +242,7 @@ public class MCPTaskFactory {
 
         var ret = this.tasks.get(name);
         if (ret == null)
-            throw except("Unknown task `" + name + "`");
+            throw except("Unknown task `" + name + '`');
 
         return ret;
     }
@@ -281,7 +278,7 @@ public class MCPTaskFactory {
         if (target.exists() && cache.isSame())
             return target;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         try (var zip = new ZipFile(getData())) {
             var entry = zip.getEntry(value);
@@ -328,7 +325,7 @@ public class MCPTaskFactory {
                 FileUtils.ensureParent(target);
 
                 if (!target.exists() || !same) {
-                    GlobalOptions.assertNotCacheOnly();
+                    Mavenizer.assertNotCacheOnly();
                     try (var os = new FileOutputStream(target)) {
                         zip.getInputStream(e).transferTo(os);
                     }
@@ -380,8 +377,8 @@ public class MCPTaskFactory {
 
         if (spec >= 2) {
             switch (type) {
-                case "downloadClientMappings": return mc.versionFile("client_mappings", "txt");
-                case "downloadServerMappings": return mc.versionFile("server_mappings", "txt");
+                case "downloadClientMappings": return downloadClientMappings();
+                case "downloadServerMappings": return downloadServerMappings();
             }
         }
 
@@ -391,6 +388,14 @@ public class MCPTaskFactory {
             throw except("Unknown step type: " + type);
 
         return execute(name, step, custom);
+    }
+
+    public Task downloadClientMappings() {
+        return this.side.getMCP().getMinecraftTasks().versionFile("client_mappings", "txt");
+    }
+
+    public Task downloadServerMappings() {
+        return this.side.getMCP().getMinecraftTasks().versionFile("server_mappings", "txt");
     }
 
     private Task strip(String name, Map<String, String> step) {
@@ -414,7 +419,7 @@ public class MCPTaskFactory {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         if (output.exists())
             output.delete();
@@ -467,7 +472,7 @@ public class MCPTaskFactory {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         if (output.exists())
             output.delete();
@@ -542,10 +547,10 @@ public class MCPTaskFactory {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         var builder = PatchOperation.builder()
-            .logTo(Log::error)
+            .logTo(LOGGER::error)
             .baseInput(MultiInput.archive(ArchiveFormat.ZIP, input.toPath()))
             .patchesInput(MultiInput.folder(patches.toPath()))
             .patchedOutput(MultiOutput.archive(ArchiveFormat.ZIP, output.toPath()))
@@ -565,9 +570,9 @@ public class MCPTaskFactory {
             boolean success = result.exit == 0;
             if (!success) {
                 if (result.summary != null)
-                    result.summary.print(Log.ERROR, true);
+                    result.summary.print(LOGGER.getError(), true);
                 else
-                    Log.error("Failed to apply patches, no summary available");
+                    LOGGER.error("Failed to apply patches, no summary available");
 
                 throw except("Failed to apply patches, Rejects saved to: " + rejects.getAbsolutePath());
             }
@@ -600,11 +605,17 @@ public class MCPTaskFactory {
             cache.addKnown(lib.coord, lib.dl.sha1);
 
         if (output.exists() && libsVarCache.exists() && cache.isSame()) {
-            this.libraries = JsonData.<List<Lib.Cached>>fromJson(libsVarCache, new TypeToken<>() { }).stream().map(Lib.Cached::resolve).toList();
-            return output;
+            try {
+                this.libraries = JsonData.<List<Lib.Cached>>fromJson(libsVarCache, new TypeToken<>() { }).stream().map(Lib.Cached::resolve).toList();
+                return output;
+            } catch (Exception e) {
+                LOGGER.error("Failed to load cached libraries, regenerating...");
+                LOGGER.error("Cached file: " + libsVarCache.getAbsolutePath());
+                e.printStackTrace(LOGGER.getError());
+            }
         }
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
         cache.clear().add(jsonF);
 
         var buf = new StringBuilder(20_000);
@@ -618,9 +629,7 @@ public class MCPTaskFactory {
 
             buf.append("-e=").append(target.getAbsolutePath()).append('\n');
 
-            var artifact = Artifact.from(lib.coord);
-            if (lib.os != null && lib.os != OS.UNKNOWN)
-                artifact = artifact.withOS(lib.os);
+            var artifact = Artifact.from(lib.coord).withOS(lib.os);
 
             downloadedLibs.add(new Lib(artifact, target));
             cache.add(lib.coord, target);
@@ -714,7 +723,7 @@ public class MCPTaskFactory {
             if (output.exists() && cache.isSame())
                 return output;
 
-            GlobalOptions.assertNotCacheOnly();
+            Mavenizer.assertNotCacheOnly();
             cache.clear().add(bundle);
 
             var buf = new StringBuilder();
@@ -776,7 +785,7 @@ public class MCPTaskFactory {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         try {
             var whitelist = IMappingFile
@@ -841,13 +850,16 @@ public class MCPTaskFactory {
         if (output.exists() && cache.isSame())
             return output;
 
-        GlobalOptions.assertNotCacheOnly();
+        Mavenizer.assertNotCacheOnly();
 
         int java_version = func.getJavaVersion(this.side.getMCP().getConfig());
         var jdks = this.side.getMCP().getCache().jdks();
-        var jdk = jdks.get(java_version);
-        if (jdk == null)
-            throw new IllegalStateException("Failed to find JDK for version " + java_version);
+        File jdk;
+        try {
+            jdk = jdks.get(java_version);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to find JDK for version " + java_version, e);
+        }
 
         var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, jvm, run);
         if (ret.exitCode != 0)

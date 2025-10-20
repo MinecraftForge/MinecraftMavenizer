@@ -4,7 +4,7 @@
  */
 package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
-import net.minecraftforge.mcmaven.impl.GlobalOptions;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
 import net.minecraftforge.mcmaven.impl.tasks.RecompileTask;
 import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
@@ -123,7 +123,7 @@ public final class MCPConfigRepo extends Repo {
 
                 var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(mappings));
                 var classes = pending("Classes", classesTask, name, false, () -> classVariants(mappings, mcpSide));
-                var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"), false);
+                var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
                 var pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"), false);
 
                 pending.addAll(List.of(
@@ -168,7 +168,7 @@ public final class MCPConfigRepo extends Repo {
             if (output.exists() && cache.isSame())
                 return output;
 
-            GlobalOptions.assertNotCacheOnly();
+            Mavenizer.assertNotCacheOnly();
 
             try {
                 FileUtils.mergeJars(output, true, extraF, recompiledF);
@@ -183,7 +183,7 @@ public final class MCPConfigRepo extends Repo {
 
     private static Task metadata(File build, MCPSide side) {
         var minecraftTasks = side.getMCP().getMinecraftTasks();
-        return Task.named("metadata[forge]", Task.deps(minecraftTasks.versionJson), () -> {
+        return Task.named("metadata[" + side + ']', Task.deps(minecraftTasks.versionJson), () -> {
             var output = new File(build, "metadata.zip");
 
             // metadata
@@ -201,7 +201,7 @@ public final class MCPConfigRepo extends Repo {
             if (output.exists() && cache.isSame())
                 return output;
 
-            GlobalOptions.assertNotCacheOnly();
+            Mavenizer.assertNotCacheOnly();
 
             try {
                 FileUtils.ensureParent(output);
@@ -240,7 +240,7 @@ public final class MCPConfigRepo extends Repo {
             if (output.exists() && cache.isSame())
                 return output;
 
-            GlobalOptions.assertNotCacheOnly();
+            Mavenizer.assertNotCacheOnly();
 
             var builder = new POMBuilder("net.minecraft", side, version).preferGradleModule().dependencies(dependencies -> {
                 mcpSide.forAllLibraries(dependencies::add, Artifact::hasNoOs);
@@ -265,7 +265,7 @@ public final class MCPConfigRepo extends Repo {
             if (output.exists() && cache.isSame())
                 return output;
 
-            GlobalOptions.assertNotCacheOnly();
+            Mavenizer.assertNotCacheOnly();
 
             var builder = new POMBuilder("net.minecraft", side, version);
 
