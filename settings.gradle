@@ -41,7 +41,7 @@ dependencyResolutionManagement.versionCatalogs.register('libs') {
     library 'utils-download', 'net.minecraftforge', 'download-utils'  version '0.4.0'
     library 'utils-files',    'net.minecraftforge', 'file-utils'      version '0.3.2'
     library 'utils-hash',     'net.minecraftforge', 'hash-utils'      version '0.1.12'
-    library 'utils-data',     'net.minecraftforge', 'json-data-utils' version '0.4.0'
+    library 'utils-data',     'net.minecraftforge', 'json-data-utils' version '0.4.1'
     library 'utils-logging',  'net.minecraftforge', 'log-utils'       version '0.5.0'
     library 'utils-os',       'net.minecraftforge', 'os-utils'        version '0.1.0'
     bundle 'utils', ['utils-download', 'utils-files', 'utils-hash', 'utils-data', 'utils-logging', 'utils-os']

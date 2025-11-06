@@ -24,6 +24,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -110,8 +111,12 @@ public abstract class Repo {
         };
     }
 
+    protected GradleModule.Variant[] classVariants(Mappings mappings, MCPSide side) {
+        return classVariants(mappings, side, List.of(), List.of(), List.of());
+    }
+
     // Classes needs a variant for each OS type so that we can have different natives
-    protected GradleModule.Variant[] classVariants(Mappings mappings, MCPSide side, Artifact... extraDeps) {
+    protected GradleModule.Variant[] classVariants(Mappings mappings, MCPSide side, Collection<Artifact> extraDeps, Collection<Artifact> extraCompileDeps, Collection<Artifact> extraRuntimeDeps) {
         var all = new ArrayList<Artifact>();
         var natives = new HashMap<GradleAttributes.OperatingSystemFamily, List<Artifact>>();
 
@@ -172,6 +177,10 @@ public abstract class Repo {
             variant.deps(e.getValue());
             variants.add(variant);
         }
+
+        var apiVariant = GradleModule.Variant.of("api-classes", common);
+        apiVariant.attribute("org.gradle.usage", "java-api");
+        variants.add(apiVariant);
 
         return variants.toArray(new GradleModule.Variant[0]);
     }

@@ -35,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -260,6 +261,23 @@ public final class ForgeRepo extends Repo {
     protected GradleModule.Variant[] classVariants(Mappings mappings, Patcher patcher, Artifact... extraDeps) {
         var extra = new ArrayList<>(Arrays.asList(extraDeps));
         extra.addAll(patcher.getArtifacts());
-        return super.classVariants(mappings, patcher.getMCPSide(), extra.toArray(Artifact[]::new));
+
+        var extraCompile = new ArrayList<Artifact>();
+        var extraRuntime = new ArrayList<Artifact>();
+        if (patcher.config.extraDependencies != null) {
+            if (patcher.config.extraDependencies.compileOnly != null) {
+                for (var descriptor : patcher.config.extraDependencies.compileOnly) {
+                    extraCompile.add(Artifact.from(descriptor));
+                }
+            }
+
+            if (patcher.config.extraDependencies.runtimeOnly != null) {
+                for (var descriptor : patcher.config.extraDependencies.runtimeOnly) {
+                    extraRuntime.add(Artifact.from(descriptor));
+                }
+            }
+        }
+
+        return super.classVariants(mappings, patcher.getMCPSide(), extra, extraCompile, extraRuntime);
     }
 }
