@@ -17,6 +17,7 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
+
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import java.io.File;
@@ -27,12 +28,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -53,7 +51,7 @@ public abstract class Repo {
     public abstract List<PendingArtifact> process(Artifact artifact, Mappings mappings);
 
     protected static PendingArtifact pending(String message, Task task, Artifact artifact, boolean auxiliary) {
-        return pending(message, task, artifact, auxiliary, (Task)null);
+        return pending(message, task, artifact, auxiliary, (Task) null);
     }
 
     protected static PendingArtifact pending(String message, Task task, Artifact artifact, boolean auxiliary, Supplier<GradleModule.Variant[]> variants) {
@@ -68,12 +66,12 @@ public abstract class Repo {
     protected Supplier<GradleModule.Variant[]> sourceVariant(Mappings mappings) {
         return () -> new GradleModule.Variant[] {
             GradleModule.Variant.of("sources")
-                .attribute("org.gradle.usage", "java-runtime")
-                .attribute("org.gradle.category", "documentation")
-                .attribute("org.gradle.dependency.bundling", "external")
-                .attribute("org.gradle.docstype", "sources")
-                .attribute("org.gradle.libraryelements", "jar")
-                .attribute(Mappings.CHANNEL_ATTR, mappings.channel())
+                                .attribute("org.gradle.usage", "java-runtime")
+                                .attribute("org.gradle.category", "documentation")
+                                .attribute("org.gradle.dependency.bundling", "external")
+                                .attribute("org.gradle.docstype", "sources")
+                                .attribute("org.gradle.libraryelements", "jar")
+                                .attribute(Mappings.CHANNEL_ATTR, mappings.channel())
                 .attribute(Mappings.VERSION_ATTR, mappings.version())
         };
     }
@@ -151,12 +149,12 @@ public abstract class Repo {
 
         Consumer<GradleModule.Variant> common = v -> {
             v.attribute("org.gradle.usage", "java-runtime")
-            .attribute("org.gradle.category", "library")
-            .attribute("org.gradle.dependency.bundling", "external")
-            .attribute("org.gradle.libraryelements", "jar")
-            .attribute("org.gradle.jvm.environment", "standard-jvm")
-            .attribute(Mappings.CHANNEL_ATTR, mappings.channel())
-            .attribute(Mappings.VERSION_ATTR, mappings.version())
+             .attribute("org.gradle.category", "library")
+             .attribute("org.gradle.dependency.bundling", "external")
+             .attribute("org.gradle.libraryelements", "jar")
+             .attribute("org.gradle.jvm.environment", "standard-jvm")
+             .attribute(Mappings.CHANNEL_ATTR, mappings.channel())
+             .attribute(Mappings.VERSION_ATTR, mappings.version())
             ;
 
             if (java != null)
@@ -208,20 +206,13 @@ public abstract class Repo {
         });
     }
 
-    public static final class PendingArtifact implements Supplier<File> {
-        private final String message;
-        private final Task task;
-        private final Artifact artifact;
-        private final boolean auxiliary;
-        private final @Nullable Task variants;
-
-        private PendingArtifact(String message, Task task, Artifact artifact, boolean auxiliary, @Nullable Task variants) {
-            this.message = message;
-            this.task = task;
-            this.artifact = artifact;
-            this.auxiliary = auxiliary;
-            this.variants = variants;
-        }
+    public record PendingArtifact(
+        String message,
+        Task task,
+        Artifact artifact,
+        boolean auxiliary,
+        @Nullable Task variants
+    ) implements Supplier<File> {
 
         @Override
         public File get() {
@@ -244,16 +235,8 @@ public abstract class Repo {
             return task;
         }
 
-        public Artifact getArtifact() {
-            return artifact;
-        }
-
-        public boolean isAuxiliary() {
-            return auxiliary;
-        }
-
-        public @Nullable Task getVariants() {
-            return variants;
+        public PendingArtifact withVariants(Supplier<GradleModule.Variant[]> variants) {
+            return new PendingArtifact(message, task, artifact, auxiliary, variantTask(task, variants));
         }
     }
 }

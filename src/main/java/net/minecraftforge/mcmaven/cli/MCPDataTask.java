@@ -124,7 +124,7 @@ public class MCPDataTask {
             return -3;
         }
 
-        var repo = new MCPConfigRepo(new Cache(cacheRoot, jdkCacheRoot));
+        var repo = new MCPConfigRepo(new Cache(cacheRoot, jdkCacheRoot), false);
         LOGGER.info("  Output:     " + output.getAbsolutePath());
         LOGGER.info("  Cache:      " + cacheRoot.getAbsolutePath());
         LOGGER.info("  JDK Cache:  " + jdkCacheRoot.getAbsolutePath());

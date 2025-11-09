@@ -63,8 +63,10 @@ import java.util.Map;
 public final class MCPConfigRepo extends Repo {
     private final Map<Artifact, MCP> versions = new HashMap<>();
     private final Map<String, MinecraftTasks> mcTasks = new HashMap<>();
+    private final boolean dependenciesOnly;
 
-    public MCPConfigRepo(Cache cache) {
+    public MCPConfigRepo(Cache cache, boolean dependenciesOnly) {
+        this.dependenciesOnly = dependenciesOnly;
         super(cache);
     }
 
@@ -103,11 +105,19 @@ public final class MCPConfigRepo extends Repo {
         var build = mcpSide.getBuildFolder();
         var name = Artifact.from("net.minecraft", side, version);
 
+        var pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"), false);
+        var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
+
         if (isMappings) {
             name = mappings.getArtifact(mcpSide);
             return List.of(
                 pending("Mappings", mappings.getCsvZip(mcpSide), name, false),
                 pending("Mappings POM", simplePom(build, name), name.withExtension("pom"), false)
+            );
+        } else if (dependenciesOnly) {
+            return List.of(
+                pom.withVariants(() -> classVariants(mappings, mcpSide)),
+                metadata
             );
         }
 
@@ -123,8 +133,6 @@ public final class MCPConfigRepo extends Repo {
 
                 var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(mappings));
                 var classes = pending("Classes", classesTask, name, false, () -> classVariants(mappings, mcpSide));
-                var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
-                var pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"), false);
 
                 pending.addAll(List.of(
                     sources, classes, metadata, pom

@@ -29,15 +29,23 @@ import java.util.Map;
 // TODO [MCMavenizer][Deobf] ADD DEOBF
 //  use single detached configuration to resolve individual configurations
 //  pass in downloaded files to mcmaven (absolute path)
-public record MinecraftMaven(File output, Cache cache, Mappings mappings, Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants) {
+public record MinecraftMaven(
+    File output,
+    boolean dependenciesOnly,
+    Cache cache,
+    Mappings mappings,
+    Map<String, String> foreignRepositories,
+    boolean globalAuxiliaryVariants
+) {
     private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.14.4"); // Only 1.14.4+ has official mappings, we can support more when we add more mappings
 
-    public MinecraftMaven(File output, File cacheRoot, File jdkCacheRoot, Mappings mappings, Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants) {
-        this(output, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants);
+    public MinecraftMaven(File output, boolean dependenciesOnly, File cacheRoot, File jdkCacheRoot, Mappings mappings, Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants) {
+        this(output, dependenciesOnly, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants);
     }
 
     public MinecraftMaven {
         LOGGER.info("  Output:            " + output.getAbsolutePath());
+        LOGGER.info("  Dependencies Only: " + dependenciesOnly);
         LOGGER.info("  Cache:             " + cache.root().getAbsolutePath());
         LOGGER.info("  JDK Cache:         " + cache.jdks().root().getAbsolutePath());
         LOGGER.info("  Offline:           " + Mavenizer.isOffline());
@@ -53,9 +61,12 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings, Map<St
         var module = artifact.getGroup() + ':' + artifact.getName();
         var version = artifact.getVersion();
         LOGGER.info("Processing Minecraft dependency: %s:%s".formatted(module, version));
-        var mcprepo = new MCPConfigRepo(this.cache);
+        var mcprepo = new MCPConfigRepo(this.cache, dependenciesOnly);
 
         if (Constants.FORGE_GROUP.equals(artifact.getGroup()) && Constants.FORGE_NAME.equals(artifact.getName())) {
+            if (dependenciesOnly)
+                throw new IllegalArgumentException("ForgeRepo doesn't currently support dependenciesOnly");
+
             var repo = new ForgeRepo(this.cache, mcprepo);
             if (artifact.getVersion() == null)
                 throw new IllegalArgumentException("No version specified for Forge");
@@ -125,9 +136,9 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings, Map<St
             // Basically, I want to support multiple variants of a Forge dep.
             // Simplest case would be different mapping channels.
             // I haven't added an opt-in for making artifacts that use mappings, so just assume any artifact with variants
-            var artifact = pending.getArtifact();
+            var artifact = pending.artifact();
             String suffix = null;
-            if (pending.getVariants() != null && !mappings.isPrimary()) {
+            if (pending.variants() != null && !mappings.isPrimary()) {
                 suffix = mappings.channel() + '-' + mappings.version();
                 if (artifact.getClassifier() == null)
                     artifact = artifact.withClassifier(suffix);
@@ -143,7 +154,7 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings, Map<St
                     .add("source", source);
 
                 boolean write;
-                if ("pom".equals(pending.getArtifact().getExtension())) {
+                if ("pom".equals(pending.artifact().getExtension())) {
                     // Write the pom for non-primary mappings if we haven't generated primary mappings yet
                     write = !target.exists() || (mappings.isPrimary() && !cache.isSame());
                 } else {
@@ -162,8 +173,8 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings, Map<St
                 }
             }
 
-            if (pending.getVariants() != null) {
-                var source = pending.getVariants().execute();
+            if (pending.variants() != null) {
+                var source = pending.variants().execute();
                 var cache = HashStore.fromFile(varTarget)
                     .add("source", source);
 
@@ -171,11 +182,13 @@ public record MinecraftMaven(File output, Cache cache, Mappings mappings, Map<St
                     variants.add(Artifact.from(artifact.getGroup(), artifact.getName(), artifact.getVersion()));
                     try {
                         var data = JsonData.fromJson(source, GradleModule.Variant[].class);
-                        var file = new GradleModule.Variant.File(target);
-                        for (var variant : data) {
-                            variant.file(file);
-                            if (suffix != null && !(pending.isAuxiliary() && this.globalAuxiliaryVariants))
-                                variant.name = variant.name + '-' + suffix;
+                        if (!dependenciesOnly) {
+                            var file = new GradleModule.Variant.File(target);
+                            for (var variant : data) {
+                                variant.file(file);
+                                if (suffix != null && !(pending.auxiliary() && this.globalAuxiliaryVariants))
+                                    variant.name = variant.name + '-' + suffix;
+                            }
                         }
                         JsonData.toJson(data, varTarget);
                         cache.save();

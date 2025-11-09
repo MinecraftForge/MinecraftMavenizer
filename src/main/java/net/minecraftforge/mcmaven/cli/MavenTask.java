@@ -59,6 +59,10 @@ class MavenTask {
             "Root directory to generate the maven repository")
             .withRequiredArg().ofType(File.class).defaultsTo(new File("output"));
 
+        // dependencies only
+        var dependenciesOnlyO = parser.accepts("dependencies-only",
+            "Outputs the maven containing only the Gradle Module and POM for the artifact's dependencies without outputting the artifact itself");
+
         // offline mode, fail on downloads
         var offlineO = parser.accepts("offline",
             "Do not attempt to download anything (allows offline operations, if possible)")
@@ -154,7 +158,7 @@ class MavenTask {
             foreignRepositories.put(split[0], split[1]);
         }
 
-        var mcmaven = new MinecraftMaven(output, cache, jdkCache, mappings, foreignRepositories, options.has(globalAuxiliaryVariantsO));
+        var mcmaven = new MinecraftMaven(output, options.has(dependenciesOnlyO), cache, jdkCache, mappings, foreignRepositories, options.has(globalAuxiliaryVariantsO));
         mcmaven.run(artifact);
     }
 }
