@@ -11,6 +11,7 @@ import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
+import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
@@ -97,6 +98,9 @@ public final class MCPConfigRepo extends Repo {
         boolean isMappings = "mappings".equals(side);
         if (isMappings)
             side = "joined";
+
+        if (side.endsWith("-extra"))
+            return processExtra(Constants.MC_GROUP + ':' + side.substring(0, side.length() - "-extra".length()), version);
 
         var mcp = this.get(Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip"));
         var mcpSide = mcp.getSide(side);
