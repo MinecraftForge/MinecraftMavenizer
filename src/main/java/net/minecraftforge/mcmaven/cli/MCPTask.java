@@ -244,19 +244,29 @@ public class MCPTask {
     // TODO [Mavenizer][Extra MCPTask Files] do this better
     private static void writeFiles(MCPTaskFactory mcpTaskFactory, File output) {
         var files = new MCPSetupFiles();
-        files.versionManifest = mcpTaskFactory.findStep("downloadManifest").execute().getAbsolutePath();
-        files.versionJson = mcpTaskFactory.findStep("downloadJson").execute().getAbsolutePath();
-        files.clientRaw = mcpTaskFactory.findStep("downloadClient").execute().getAbsolutePath();
-        files.serverRaw = mcpTaskFactory.findStep("downloadServer").execute().getAbsolutePath();
-        files.serverExtracted = mcpTaskFactory.findStep("extractServer").execute().getAbsolutePath();
+        files.versionManifest = getTaskPath(mcpTaskFactory, "downloadManifest");
+        files.versionJson = getTaskPath(mcpTaskFactory, "downloadJson");
+        files.clientRaw = getTaskPath(mcpTaskFactory, "downloadClient");
+        files.serverRaw = getTaskPath(mcpTaskFactory, "downloadServer");
+        files.serverExtracted = getTaskPath(mcpTaskFactory, "extractServer");
         files.clientMappings = mcpTaskFactory.downloadClientMappings().execute().getAbsolutePath();
         files.serverMappings = mcpTaskFactory.downloadServerMappings().execute().getAbsolutePath();
-        files.librariesList = mcpTaskFactory.findStep("listLibraries").execute().getAbsolutePath();
+        files.librariesList = getTaskPath(mcpTaskFactory, "listLibraries");
 
         try {
             JsonData.toJson(files, output);
         } catch (IOException e) {
             throw new RuntimeException("Failed to write extra files data: " + output.getPath(), e);
+        }
+    }
+
+    // TODO Do this better
+    private static @Nullable String getTaskPath(MCPTaskFactory mcpTaskFactory, String step) {
+        try {
+            return mcpTaskFactory.findStep(step).execute().getAbsolutePath();
+        } catch (Exception e) {
+            LOGGER.error("Cannot serialize output path for MCP step: " + step);
+            return null;
         }
     }
 }
