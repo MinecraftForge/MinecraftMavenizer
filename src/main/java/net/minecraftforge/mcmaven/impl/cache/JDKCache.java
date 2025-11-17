@@ -22,8 +22,7 @@ import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 /** Represents the JDK cache for this tool. */
 public final class JDKCache {
-    private boolean attemptedLocate = false;
-    private final List<Throwable> attemptedLocateErrors = new ArrayList<>();
+    private Map<JavaLocator, List<String>> attemptedLocate = null;
     private final File root;
     private final Map<Integer, File> jdks = new HashMap<>();
     private final JavaProvisioner disco;
@@ -50,7 +49,7 @@ public final class JDKCache {
      * @return The JDK, or {@code null} if it could not be found or downloaded
      */
     public File get(int version) throws Exception {
-        if (!attemptedLocate)
+        if (attemptedLocate == null)
             attemptLocate();
 
         // check cache. stop immediately if we get a hit.
@@ -61,7 +60,18 @@ public final class JDKCache {
             ret = disco.provision(version).home(); // Implementation detail, we only download jdks, so no need to check here
         } catch (Exception e) {
             LOGGER.error("Failed to provision JDK " + version);
+            disco.logOutput().forEach(LOGGER::error);
             e.printStackTrace(LOGGER.getLog(Logger.Level.ERROR));
+
+            if (!attemptedLocate.isEmpty()) {
+                LOGGER.error("The following errors were found trying to find existing JDKs:");
+                for (var entry : attemptedLocate.entrySet()) {
+                    var locator = entry.getKey();
+                    var output = entry.getValue();
+                    LOGGER.error("Errors with locator: " + locator.getClass().getName() + " " + locator);
+                    output.forEach(LOGGER::error);
+                }
+            }
             throw e;
         }
 
@@ -77,8 +87,8 @@ public final class JDKCache {
     }
 
     private void attemptLocate() {
-        if (attemptedLocate) return;
-        attemptedLocate = true;
+        if (attemptedLocate != null) return;
+        attemptedLocate = Map.of();
 
         List<JavaLocator> locators = new ArrayList<>();
         locators.add(JavaLocator.home());
@@ -87,13 +97,16 @@ public final class JDKCache {
 
         List<JavaInstall> installs = new ArrayList<>();
 
+        var errors = new HashMap<JavaLocator, List<String>>(locators.size());
         for (JavaLocator locator : locators) {
-            try {
-                installs.addAll(locator.findAll());
-            } catch (Exception e) {
-                attemptedLocateErrors.add(e);
+            var located = locator.findAll();
+            if (located.isEmpty()) {
+                errors.put(locator, locator.logOutput());
+            } else {
+                installs.addAll(located);
             }
         }
+        attemptedLocate = errors;
 
         // Remove duplicates
         var seen = new HashSet<File>();
