@@ -93,6 +93,7 @@ public final class JDKCache {
         List<JavaLocator> locators = new ArrayList<>();
         locators.add(JavaLocator.home());
         locators.add(JavaLocator.gradle());
+        locators.add(JavaLocator.paths());
         locators.add(this.disco);
 
         List<JavaInstall> installs = new ArrayList<>();

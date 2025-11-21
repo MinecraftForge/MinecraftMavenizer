@@ -67,8 +67,8 @@ public final class MCPConfigRepo extends Repo {
     private final boolean dependenciesOnly;
 
     public MCPConfigRepo(Cache cache, boolean dependenciesOnly) {
-        this.dependenciesOnly = dependenciesOnly;
         super(cache);
+        this.dependenciesOnly = dependenciesOnly;
     }
 
     public MCP get(String version) {
