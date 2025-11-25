@@ -164,7 +164,7 @@ public class MCPDataTask {
 
                     var obf2OffClient = IMappingFile.load(client.execute());
                     var obf2OffServer = IMappingFile.load(server.execute());
-                    var obf2Off = obf2OffClient.merge(obf2OffServer);
+                    var obf2Off = obf2OffClient.merge(obf2OffServer).reverse();
 
                     ret = ret.rename(new IRenamer() {
                         @Override
