@@ -35,7 +35,6 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -48,7 +47,7 @@ import java.util.stream.Stream;
 public final class ForgeRepo extends Repo {
     // TODO: [MCMavenizer][FGVersion] Handle this as an edge-case in FGVersion
     private static final ComparableVersion USERDEV3_START = new ComparableVersion("1.12.2-14.23.5.2851");
-    private static final ComparableVersion USERDEV3_END = new ComparableVersion("1.12.2-14.23.5.2860");
+    private static final ComparableVersion USERDEV3_END = new ComparableVersion("1.12.3"); //There is no 1.12.3, but I haven't disabled Userdev3 for 1.12.2 yet, so
 
     final MCPConfigRepo mcpconfig;
     final File globalBuild;
@@ -95,7 +94,7 @@ public final class ForgeRepo extends Repo {
     private static Artifact getUserdev(String forge) {
         var forgever = new ComparableVersion(forge);
         // userdev3, old attempt to make 1.12.2 FG3 compatible
-        var userdev3 = forgever.compareTo(USERDEV3_START) >= 0 && forgever.compareTo(USERDEV3_END) <= 0;
+        var userdev3 = forgever.compareTo(USERDEV3_START) >= 0 && forgever.compareTo(USERDEV3_END) < 0;
         return Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, forge, userdev3 ? "userdev3" : "userdev", "jar");
     }
 
@@ -258,6 +257,7 @@ public final class ForgeRepo extends Repo {
         });
     }
 
+    @SuppressWarnings("deprecation")
     protected GradleModule.Variant[] classVariants(Mappings mappings, Patcher patcher, Artifact... extraDeps) {
         var extra = new ArrayList<>(Arrays.asList(extraDeps));
         extra.addAll(patcher.getArtifacts());
