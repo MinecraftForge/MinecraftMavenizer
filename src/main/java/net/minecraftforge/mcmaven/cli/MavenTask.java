@@ -88,6 +88,9 @@ class MavenTask {
         var globalAuxiliaryVariantsO = parser.accepts("global-auxiliary-variants",
             "Declares sources and javadoc jars as global variants, no matter the mapping version. This is used to work around gradle/gradle#35065");
 
+        var disableGradleO = parser.accepts("disable-gradle",
+            "Disabels the gradle module file, and writes all mappings to the main artifact files.");
+
         var shorthandOptions = new HashMap<String, OptionSpecBuilder>();
         var artifacts = Map.of(
             "forge",  Constants.FORGE_ARTIFACT,
@@ -158,7 +161,8 @@ class MavenTask {
             foreignRepositories.put(split[0], split[1]);
         }
 
-        var mcmaven = new MinecraftMaven(output, options.has(dependenciesOnlyO), cache, jdkCache, mappings, foreignRepositories, options.has(globalAuxiliaryVariantsO));
+        var mcmaven = new MinecraftMaven(output, options.has(dependenciesOnlyO), cache, jdkCache, mappings,
+            foreignRepositories, options.has(globalAuxiliaryVariantsO), options.has(disableGradleO));
         mcmaven.run(artifact);
     }
 }

@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 public final class POMBuilder {
+    public static final String GRADLE_MAGIC_COMMENT = " do_not_remove: published-with-gradle-metadata ";
     private final String group, name, version;
     private final Dependencies dependencies = new Dependencies();
     private @Nullable String description;
@@ -72,7 +73,7 @@ public final class POMBuilder {
         doc.appendChild(project);
 
         if (this.preferGradleModule)
-            project.appendChild(doc.createComment(" do_not_remove: published-with-gradle-metadata "));
+            project.appendChild(doc.createComment(GRADLE_MAGIC_COMMENT));
 
         set(doc, project, "modelVersion", "4.0.0");
         set(doc, project, "groupId", this.group);

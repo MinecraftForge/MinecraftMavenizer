@@ -14,17 +14,38 @@ import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
+import net.minecraftforge.mcmaven.impl.util.POMBuilder;
+import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
+import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.util.hash.HashUtils;
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+
+import org.w3c.dom.Node;
+import org.xml.sax.SAXException;
 
 // TODO [MCMavenizer][Deobf] ADD DEOBF
 //  use single detached configuration to resolve individual configurations
@@ -35,12 +56,14 @@ public record MinecraftMaven(
     Cache cache,
     Mappings mappings,
     Map<String, String> foreignRepositories,
-    boolean globalAuxiliaryVariants
+    boolean globalAuxiliaryVariants,
+    boolean disableGradle
 ) {
     private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.14.4"); // Only 1.14.4+ has official mappings, we can support more when we add more mappings
 
-    public MinecraftMaven(File output, boolean dependenciesOnly, File cacheRoot, File jdkCacheRoot, Mappings mappings, Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants) {
-        this(output, dependenciesOnly, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants);
+    public MinecraftMaven(File output, boolean dependenciesOnly, File cacheRoot, File jdkCacheRoot, Mappings mappings,
+        Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants, boolean disableGradle) {
+        this(output, dependenciesOnly, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants, disableGradle);
     }
 
     public MinecraftMaven {
@@ -54,6 +77,7 @@ public record MinecraftMaven(
         if (!foreignRepositories.isEmpty())
             LOGGER.info("  Foreign Repos:     [" + String.join(", ", foreignRepositories.values()) + ']');
         LOGGER.info("  GradleVariantHack: " + globalAuxiliaryVariants);
+        LOGGER.info("  Disable Gradle:    " + disableGradle);
         LOGGER.info();
     }
 
@@ -138,7 +162,13 @@ public record MinecraftMaven(
             // I haven't added an opt-in for making artifacts that use mappings, so just assume any artifact with variants
             var artifact = pending.artifact();
             String suffix = null;
-            if (pending.variants() != null && !mappings.isPrimary()) {
+            if (!disableGradle && pending.variants() != null && !mappings.isPrimary()) {
+                // If we are not the primary mapping, but we haven't generated the primary mapping yet, do so.
+                // This will duplicate the files. But the other option is to require not writing the variants until the primary mapping is requested.
+                var primaryTarget = new File(this.output, artifact.getLocalPath());
+                if (!primaryTarget.exists())
+                    updateFile(primaryTarget, pending.get(), pending.artifact());
+
                 suffix = mappings.channel() + '-' + mappings.version();
                 if (artifact.getClassifier() == null)
                     artifact = artifact.withClassifier(suffix);
@@ -147,33 +177,10 @@ public record MinecraftMaven(
             }
 
             var target = new File(this.output, artifact.getLocalPath());
+            updateFile(target, pending.get(), pending.artifact());
+
             var varTarget = new File(this.output, artifact.getLocalPath() + ".variants");
-            {
-                var source = pending.get();
-                var cache = HashStore.fromFile(target)
-                    .add("source", source);
-
-                boolean write;
-                if ("pom".equals(pending.artifact().getExtension())) {
-                    // Write the pom for non-primary mappings if we haven't generated primary mappings yet
-                    write = !target.exists() || (mappings.isPrimary() && !cache.isSame());
-                } else {
-                    write = !target.exists() || !cache.isSame();
-                }
-
-                if (write) {
-                    // TODO: [MCMavenizer] Add --api argument to turn class artifacts to api-only targets for a public repo
-                    try {
-                        org.apache.commons.io.FileUtils.copyFile(source, target);
-                        HashUtils.updateHash(target);
-                        cache.save();
-                    } catch (Throwable t) {
-                        throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
-                    }
-                }
-            }
-
-            if (pending.variants() != null) {
+            if (!disableGradle && pending.variants() != null) {
                 var source = pending.variants().execute();
                 var cache = HashStore.fromFile(varTarget)
                     .add("source", source);
@@ -181,7 +188,7 @@ public record MinecraftMaven(
                 if (!varTarget.exists() || !cache.isSame()) {
                     variants.add(Artifact.from(artifact.getGroup(), artifact.getName(), artifact.getVersion()));
                     try {
-                        var data = JsonData.fromJson(source, GradleModule.Variant[].class);
+                        GradleModule.Variant[] data = JsonData.fromJson(source, GradleModule.Variant[].class);
                         if (!dependenciesOnly) {
                             var file = new GradleModule.Variant.File(target);
                             for (var variant : data) {
@@ -190,6 +197,8 @@ public record MinecraftMaven(
                                     variant.name = variant.name + '-' + suffix;
                             }
                         }
+                        // Sort them to make it predictable/easy to diff
+                        Arrays.sort(data, (a, b) -> a.name.compareTo(b.name));
                         JsonData.toJson(data, varTarget);
                         cache.save();
                     } catch (Throwable t) {
@@ -201,6 +210,36 @@ public record MinecraftMaven(
 
         for (var artifact : variants) {
             updateVariants(artifact);
+        }
+    }
+
+    private void updateFile(File target, File source, Artifact artifact) {
+        var cache = HashStore.fromFile(target)
+            .add("source", source);
+
+        var isPom = "pom".equals(artifact.getExtension());
+        boolean write;
+        if (isPom) {
+            cache.addKnown("disableGradle", Boolean.toString(disableGradle));
+            // Write the pom for non-primary mappings if we haven't generated primary mappings yet
+            write = !target.exists() || ((disableGradle || mappings.isPrimary()) && !cache.isSame());
+        } else {
+            write = !target.exists() || !cache.isSame();
+        }
+
+        if (write) {
+            // TODO: [MCMavenizer] Add --api argument to turn class artifacts to api-only targets for a public repo
+            try {
+                if (disableGradle && isPom) {
+                    makeNonGradlePom(source, target);
+                } else {
+                    org.apache.commons.io.FileUtils.copyFile(source, target);
+                }
+                HashUtils.updateHash(target);
+                cache.save();
+            } catch (Throwable t) {
+                throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
+            }
         }
     }
 
@@ -239,6 +278,64 @@ public record MinecraftMaven(
             cache.save();
         } catch (Throwable t) {
             throw new RuntimeException("Failed to write artifact module: %s".formatted(artifact), t);
+        }
+    }
+
+    private void makeNonGradlePom(File source, File target) throws IOException, SAXException, ParserConfigurationException, TransformerException {
+        var docFactory = DocumentBuilderFactory.newInstance();
+        var docBuilder = docFactory.newDocumentBuilder();
+        var doc = docBuilder.parse(source);
+
+        var modified = false;
+        var projects = doc.getElementsByTagName("project");
+        for (var x = 0; x < projects.getLength(); x++) {
+            var project = projects.item(x);
+            var children = project.getChildNodes();
+            for (int y = 0; y < children.getLength(); y++) {
+                var child = children.item(y);
+                if (child.getNodeType() == Node.COMMENT_NODE) {
+                    var content = child.getTextContent();
+                    if (content.equals(POMBuilder.GRADLE_MAGIC_COMMENT)) {
+                        project.removeChild(child);
+                        y--;
+                        modified = true;
+                    }
+                }
+            }
+        }
+
+        if (!modified) {
+            org.apache.commons.io.FileUtils.copyFile(source, target);
+            return;
+        }
+
+        var transformerFactory = TransformerFactory.newInstance();
+        var transformer = transformerFactory.newTransformer(new StreamSource(new StringReader(
+            // This needs to strip spacing so our output doesn't have extra whitespace
+            """
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+                <xsl:strip-space elements="*"/>
+                <xsl:output method="xml" encoding="UTF-8"/>
+
+                <xsl:template match="@*|node()">
+                    <xsl:copy>
+                        <xsl:apply-templates select="@*|node()"/>
+                    </xsl:copy>
+                </xsl:template>
+            </xsl:stylesheet>
+            """
+        )));
+
+        transformer.setOutputProperty(OutputKeys.INDENT, "yes"); //Make it pretty
+        transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
+
+        var output = new ByteArrayOutputStream();
+        transformer.transform(new DOMSource(doc), new StreamResult(output));
+        var data = output.toString().getBytes(StandardCharsets.UTF_8);
+
+        FileUtils.ensureParent(target);
+        try (var os = new FileOutputStream(target)) {
+            os.write(data);
         }
     }
 }
