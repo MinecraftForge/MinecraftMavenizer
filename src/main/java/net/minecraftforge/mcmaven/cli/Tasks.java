@@ -6,6 +6,8 @@ package net.minecraftforge.mcmaven.cli;
 
 import java.util.Locale;
 
+import joptsimple.OptionParser;
+
 enum Tasks {
     MAVEN(MavenTask::run, "Generates a maven repository for Minecraft Artifacts"),
     MCP(MCPTask::run, "Generates a 'clean' sources jar from a MCPConfig pipeline"),
@@ -13,7 +15,7 @@ enum Tasks {
     ;
 
     interface Callback {
-        void run(String[] args) throws Exception;
+        OptionParser run(String[] args, boolean getParser) throws Exception;
     }
     final String key;
     final Callback callback;
@@ -24,5 +26,4 @@ enum Tasks {
         this.callback = callback;
         this.description = description;
     }
-
 }

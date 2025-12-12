@@ -6,8 +6,6 @@ package net.minecraftforge.mcmaven.cli;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-
 import joptsimple.OptionParser;
 import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
@@ -30,8 +28,8 @@ import net.minecraftforge.util.logging.Logger;
 import org.jetbrains.annotations.Nullable;
 
 // TODO [Mavenizer][MCPTask] Cleanup. Works well but is a mess.
-public class MCPTask {
-    public static void run(String[] args) throws Exception {
+class MCPTask {
+    static OptionParser run(String[] args, boolean getParser) throws Exception {
         // TODO [MCMavenizer] Make this into a --log [level] option
         LOGGER.setEnabled(Logger.Level.INFO);
 
@@ -100,11 +98,14 @@ public class MCPTask {
             .availableIf(mappingsO).withRequiredArg();
         //@formatter:on
 
+        if (getParser)
+            return parser;
+
         var options = parser.parse(args);
         if (options.has(helpO)) {
             parser.printHelpOn(LOGGER.getInfo());
             LOGGER.release();
-            return;
+            return parser;
         }
 
         var output = options.valueOf(outputO);
@@ -126,7 +127,7 @@ public class MCPTask {
         if (artifact == null) {
             LOGGER.error("Missing mcp --version or --artifact");
             LOGGER.release();
-            return;
+            return parser;
         }
 
         var repo = new MCPConfigRepo(new Cache(cacheRoot, jdkCacheRoot), false);
@@ -174,7 +175,7 @@ public class MCPTask {
                 }
             }
 
-            return;
+            return parser;
         }
 
         var sourcesTask = side.getSources();
@@ -239,6 +240,8 @@ public class MCPTask {
                 throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
             }
         }
+
+        return parser;
     }
 
     // TODO [Mavenizer][Extra MCPTask Files] do this better
