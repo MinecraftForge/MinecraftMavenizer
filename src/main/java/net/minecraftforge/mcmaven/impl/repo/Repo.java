@@ -239,4 +239,19 @@ public abstract class Repo {
             return new PendingArtifact(message, task, artifact, auxiliary, variantTask(task, variants));
         }
     }
+
+    /*
+     * Artifacts for the "mappings" object:
+     * channel-version.zip: Zip file containing csv's for classes,fields,methods akin to old MCP bot data
+     * channel-verson-map2obf.tsrg.gz: gzip compressed tsrg file for mapped names to obf (notch) names
+     * channel-verson-map2srg.tsrg.gz: gzip compressed tsrg file for mapped names to srg (intermediate) names
+     */
+    protected List<PendingArtifact> mappingArtifacts(File cache, Mappings mappings, MCPSide side) {
+        var coords = mappings.getArtifact(side);
+        var csvs = pending("Mappings Zip", mappings.getCsvZip(side), coords, false);
+        var pom = pending("Mappings POM", simplePom(cache, coords), coords.withExtension("pom"), false);
+        var m2o = pending("Mappings map2obf", mappings.getMapped2Obf(side), coords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
+        var m2s = pending("Mappings map2srg", mappings.getMapped2Srg(side), coords.withClassifier("map2srg").withExtension("tsrg.gz"), false);
+        return List.of(csvs, pom, m2o, m2s);
+    }
 }

@@ -19,6 +19,12 @@ import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
+import net.minecraftforge.mcmaven.impl.util.Util;
+import net.minecraftforge.srgutils.IMappingFile;
+import net.minecraftforge.srgutils.IRenamer;
+import net.minecraftforge.srgutils.IMappingFile.IField;
+import net.minecraftforge.srgutils.IMappingFile.IMethod;
+import net.minecraftforge.srgutils.IMappingFile.IParameter;
 import net.minecraftforge.util.hash.HashStore;
 import org.jetbrains.annotations.Nullable;
 
@@ -28,7 +34,21 @@ public class Mappings {
     public static final String CHANNEL_ATTR = "net.minecraftforge.mappings.channel";
     public static final String VERSION_ATTR = "net.minecraftforge.mappings.version";
 
-    protected final Map<MCPSide, Task> tasks = new HashMap<>();
+    protected enum Tasks {
+        CSVs("srg2names"),
+        MappedToSrg("mapped2srg"),
+        MappedToObf("mapped2obf");
+
+        private final String name;
+
+        private Tasks(String name) {
+            this.name = name;
+        }
+    };
+
+    protected record Key(Tasks type, MCPSide side) {}
+
+    protected final Map<Key, Task> tasks = new HashMap<>();
     private final String channel;
     private final @Nullable String version;
 
@@ -114,7 +134,8 @@ public class Mappings {
     }
 
     public Task getCsvZip(MCPSide side) {
-        var ret = tasks.get(side);
+        var key = new Key(Tasks.CSVs, side);
+        var ret = tasks.get(key);
         if (ret != null)
             return ret;
 
@@ -126,8 +147,31 @@ public class Mappings {
             Task.deps(srg, client, server),
             () -> getMappings(side, srg, client, server)
         );
-        tasks.put(side, ret);
+        tasks.put(key, ret);
+        return ret;
+    }
 
+    public Task getMapped2Srg(MCPSide side) {
+        return getTsrg(side, Tasks.MappedToSrg);
+    }
+
+    public Task getMapped2Obf(MCPSide side) {
+        return getTsrg(side, Tasks.MappedToObf);
+    }
+
+    private Task getTsrg(MCPSide side, Tasks type) {
+        var key = new Key(type, side);
+        var ret = tasks.get(key);
+        if (ret != null)
+            return ret;
+
+        var srg = side.getTasks().getMappings();
+        var csv = getCsvZip(side);
+        ret = Task.named(type.name + '[' + this + ']',
+            Task.deps(srg, csv),
+            () -> makeTsrg(side, srg, csv, type == Tasks.MappedToObf)
+        );
+        tasks.put(key, ret);
         return ret;
     }
 
@@ -176,6 +220,55 @@ public class Mappings {
         var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, Collections.emptyList(), args);
         if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to run MCP Step, See log: " + log.getAbsolutePath());
+
+        cache.save();
+        return output;
+    }
+
+    private File makeTsrg(MCPSide side, Task srgTask, Task csvTask, boolean toObf) {
+        var root = getFolder(new File(side.getMCP().getBuildFolder(), "data/mapings"));
+        var output = new File(root, channel() + '-' + version + '-' + (toObf ? "srg" : "obf") + ".tsrg.gz");
+
+        var srg = srgTask.execute();
+        var csv = csvTask.execute();
+
+        var cache = HashStore.fromFile(output)
+            .add("srg", srg)
+            .add("csv", csv);
+
+        if (output.exists() && cache.isSame())
+            return output;
+
+        try {
+            var names = Mappings.load(csv).names();
+
+            var map = IMappingFile.load(srg); // obf2srg
+            if (!toObf)
+                map = map.reverse().chain(map); // srg2obf + obf2srg = srg2srg
+
+            // Now we rename target2mapped
+            map = map.rename(new IRenamer() {
+                @Override
+                public String rename(IField value) {
+                    return names.getOrDefault(value.getMapped(), value.getMapped());
+                }
+
+                @Override
+                public String rename(IMethod value) {
+                    return names.getOrDefault(value.getMapped(), value.getMapped());
+                }
+
+                @Override
+                public String rename(IParameter value) {
+                    return names.getOrDefault(value.getMapped(), value.getMapped());
+                }
+            });
+
+            // Write in reversed == mapped2target
+            map.write(output.getAbsoluteFile().toPath(), IMappingFile.Format.TSRG2, true);
+        } catch (IOException e) {
+            Util.sneak(e);
+        }
 
         cache.save();
         return output;

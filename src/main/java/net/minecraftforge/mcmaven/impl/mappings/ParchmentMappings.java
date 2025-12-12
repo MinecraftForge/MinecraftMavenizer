@@ -57,7 +57,8 @@ public class ParchmentMappings extends Mappings {
 
     @Override
     public Task getCsvZip(MCPSide side) {
-        var ret = tasks.get(side);
+        var key = new Key(Tasks.CSVs, side);
+        var ret = tasks.get(key);
         if (ret != null)
             return ret;
 
@@ -72,8 +73,7 @@ public class ParchmentMappings extends Mappings {
             Task.deps(Set.of(srg, client, server, data).stream().filter(Objects::nonNull).toList()),
             () -> getMappings(side.getMCP(), srg, client, server, data)
         );
-        tasks.put(side, ret);
-
+        tasks.put(key, ret);
         return ret;
     }
 

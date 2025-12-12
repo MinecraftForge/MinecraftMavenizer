@@ -36,7 +36,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Stream;
 
 // TODO: [MCMavenizer][ForgeRepo] For now, the ForgeRepo needs to be fully complete with everything it has to do.
 // later, we can worry about refactoring it so that other repositories such as MCP (clean) and FMLOnly can function.
@@ -140,8 +139,7 @@ public final class ForgeRepo extends Repo {
         var extraCoords = Artifact.from(Constants.MC_GROUP, Constants.MC_CLIENT + "-extra", patcher.getMCP().getName().getVersion());
         var mappingCoords = mappings.getArtifact(joined);
 
-        var mapzip = pending("Mappings Zip", mappings.getCsvZip(joined), mappingCoords, false);
-        var mappom = pending("Mappings POM", simplePom(build, mappingCoords), mappingCoords.withExtension("pom"), false);
+        var mappingArtifacts = mappingArtifacts(build, mappings, joined);
 
         var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(mappings));
         var classes = pending("Classes", classesTask, name, false, () -> classVariants(mappings, patcher, extraCoords, mappingCoords));
@@ -150,10 +148,12 @@ public final class ForgeRepo extends Repo {
         var pom = pending("Maven POM", pom(build, patcher, version, extraCoords, mappingCoords), name.withExtension("pom"), false);
 
         var extraOutput = this.mcpconfig.processExtra(Constants.MC_GROUP + ':' + Constants.MC_CLIENT, patcher.getMCP().getName().getVersion());
-        return Stream.concat(
-            extraOutput.stream(),
-            Stream.of(mapzip, mappom, sources, classes, pom, metadata)
-        ).toList();
+
+        var ret = new ArrayList<PendingArtifact>();
+        ret.addAll(mappingArtifacts);
+        ret.addAll(extraOutput);
+        ret.addAll(List.of(sources, classes, pom, metadata));
+        return ret;
     }
 
     private static Task metadata(File build, Patcher patcher) {

@@ -113,11 +113,7 @@ public final class MCPConfigRepo extends Repo {
         var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
 
         if (isMappings) {
-            name = mappings.getArtifact(mcpSide);
-            return List.of(
-                pending("Mappings", mappings.getCsvZip(mcpSide), name, false),
-                pending("Mappings POM", simplePom(build, name), name.withExtension("pom"), false)
-            );
+            return mappingArtifacts(build, mappings, mcpSide);
         } else if (dependenciesOnly) {
             return List.of(
                 pom.withVariants(() -> classVariants(mappings, mcpSide)),
