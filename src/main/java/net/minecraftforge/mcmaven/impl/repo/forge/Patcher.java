@@ -437,7 +437,7 @@ public class Patcher implements Supplier<Task> {
 
         var ret = ProcessUtils.runJar(jdk, globalBase, log, tool, Collections.emptyList(), args);
         if (ret.exitCode != 0)
-            throw new IllegalStateException("Failed to run Access Transformer, See log: " + log.getAbsolutePath());
+            throw new IllegalStateException("Failed to run Access Transformer (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
 
         cache.save();
         return output;
@@ -476,7 +476,7 @@ public class Patcher implements Supplier<Task> {
 
         var ret = ProcessUtils.runJar(jdk, globalBase, log, tool, Collections.emptyList(), args);
         if (ret.exitCode != 0)
-            throw new IllegalStateException("Failed to run Side Stripper, See log: " + log.getAbsolutePath());
+            throw new IllegalStateException("Failed to run Side Stripper (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
 
         cache.save();
         return output;
@@ -550,7 +550,7 @@ public class Patcher implements Supplier<Task> {
 
         var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, data.getJvmArgs(), args);
         if (ret.exitCode != 0)
-            throw new IllegalStateException("Failed to run MCP Step, See log: " + log.getAbsolutePath());
+            throw new IllegalStateException("Failed to run MCP Step (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
 
         cache.save();
         return output;

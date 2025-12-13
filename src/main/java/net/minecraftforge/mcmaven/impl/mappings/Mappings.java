@@ -219,7 +219,7 @@ public class Mappings {
 
         var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, Collections.emptyList(), args);
         if (ret.exitCode != 0)
-            throw new IllegalStateException("Failed to run MCP Step, See log: " + log.getAbsolutePath());
+            throw new IllegalStateException("Failed to run MCP Step (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
 
         cache.save();
         return output;

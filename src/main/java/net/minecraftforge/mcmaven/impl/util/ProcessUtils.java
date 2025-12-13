@@ -146,7 +146,10 @@ public final class ProcessUtils {
             }
         }
 
-        return process.exitValue();
+        var exitValue = process.exitValue();
+        if (exitValue != 0)
+            lines.accept("Process returned non-zero exit value: " + exitValue);
+        return exitValue;
     }
 
     static Path getPathFromResource(String resource) {
