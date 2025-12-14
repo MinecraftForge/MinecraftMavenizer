@@ -66,6 +66,7 @@ public abstract class Repo {
     protected Supplier<GradleModule.Variant[]> sourceVariant(Mappings mappings) {
         return () -> new GradleModule.Variant[] {
             GradleModule.Variant.of("sources")
+                                .attribute("org.gradle.status", "release")
                                 .attribute("org.gradle.usage", "java-runtime")
                                 .attribute("org.gradle.category", "documentation")
                                 .attribute("org.gradle.dependency.bundling", "external")
@@ -79,6 +80,7 @@ public abstract class Repo {
     protected Supplier<GradleModule.Variant[]> metadataVariant() {
         return () -> new GradleModule.Variant[] {
             GradleModule.Variant.of("metadata")
+                .attribute("org.gradle.status", "release")
                 .attribute("org.gradle.usage", "metadata")
         };
     }
@@ -102,6 +104,7 @@ public abstract class Repo {
         return () -> new GradleModule.Variant[] {
             GradleModule.Variant
                 .of(name)
+                .attribute("org.gradle.status", "release")
                 .attribute("org.gradle.category", "library")
                 .attribute("org.gradle.libraryelements", "jar")
                 .attribute(Mappings.CHANNEL_ATTR, mappings.channel())
@@ -148,7 +151,8 @@ public abstract class Repo {
         );
 
         Consumer<GradleModule.Variant> common = v -> {
-            v.attribute("org.gradle.usage", "java-runtime")
+            v.attribute("org.gradle.status", "release")
+             .attribute("org.gradle.usage", "java-runtime")
              .attribute("org.gradle.category", "library")
              .attribute("org.gradle.dependency.bundling", "external")
              .attribute("org.gradle.libraryelements", "jar")
