@@ -8,14 +8,18 @@ import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
+import net.minecraftforge.mcmaven.impl.repo.Repo.PendingArtifact;
 import net.minecraftforge.mcmaven.impl.repo.forge.FGVersion;
 import net.minecraftforge.mcmaven.impl.repo.forge.ForgeRepo;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
-import net.minecraftforge.mcmaven.impl.util.Util;
+import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
+import net.minecraftforge.srgutils.MinecraftVersion;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
@@ -30,10 +34,12 @@ import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -57,13 +63,17 @@ public record MinecraftMaven(
     Mappings mappings,
     Map<String, String> foreignRepositories,
     boolean globalAuxiliaryVariants,
-    boolean disableGradle
+    boolean disableGradle,
+    boolean stubJars,
+    Set<String> mcpConfigVersions
 ) {
-    private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.14.4"); // Only 1.14.4+ has official mappings, we can support more when we add more mappings
+    // Only 1.14.4+ has official mappings, we can support more when we add more mappings
+    private static final MinecraftVersion MIN_OFFICIAL_MAPPINGS = MinecraftVersion.from("1.14.4");
+    private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.14.4");
 
     public MinecraftMaven(File output, boolean dependenciesOnly, File cacheRoot, File jdkCacheRoot, Mappings mappings,
-        Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants, boolean disableGradle) {
-        this(output, dependenciesOnly, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants, disableGradle);
+        Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants, boolean disableGradle, boolean stubJars) {
+        this(output, dependenciesOnly, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants, disableGradle, stubJars, new HashSet<>());
     }
 
     public MinecraftMaven {
@@ -78,6 +88,7 @@ public record MinecraftMaven(
             LOGGER.info("  Foreign Repos:     [" + String.join(", ", foreignRepositories.values()) + ']');
         LOGGER.info("  GradleVariantHack: " + globalAuxiliaryVariants);
         LOGGER.info("  Disable Gradle:    " + disableGradle);
+        LOGGER.info("  Stub Jars:         " + stubJars);
         LOGGER.info();
     }
 
@@ -86,47 +97,116 @@ public record MinecraftMaven(
         var version = artifact.getVersion();
         LOGGER.info("Processing Minecraft dependency: %s:%s".formatted(module, version));
         var mcprepo = new MCPConfigRepo(this.cache, dependenciesOnly);
-
         if (Constants.FORGE_GROUP.equals(artifact.getGroup()) && Constants.FORGE_NAME.equals(artifact.getName())) {
-            if (dependenciesOnly)
-                throw new IllegalArgumentException("ForgeRepo doesn't currently support dependenciesOnly");
-
             var repo = new ForgeRepo(this.cache, mcprepo);
-            if (artifact.getVersion() == null)
-                throw new IllegalArgumentException("No version specified for Forge");
-
-            if ("all".equals(version)) {
-                var versions = this.cache.maven().getVersions(artifact);
-                var mappingCache = new HashMap<String, Mappings>();
-                for (var ver : versions.reversed()) {
-                    var cver = new ComparableVersion(ver);
-                    if (cver.compareTo(MIN_SUPPORTED_FORGE) < 0)
-                        continue;
-
-                    var fg = FGVersion.fromForge(ver);
-                    if (fg == null || fg.ordinal() < FGVersion.v3.ordinal()) // Unsupported
-                        continue;
-
-                    var mappings = mappingCache.computeIfAbsent(forgeToMcVersion(ver), this.mappings()::withMCVersion);
-                    var art = artifact.withVersion(ver);
-                    var artifacts = repo.process(art, mappings);
-                    finalize(art, mappings, artifacts);
-                }
-            } else {
-                var mappings = this.mappings().withMCVersion(forgeToMcVersion(version));
-                var artifacts = repo.process(artifact, mappings);
-                finalize(artifact, mappings, artifacts);
-            }
+            createForge(artifact, mcprepo, repo);
         } else if (Constants.MC_GROUP.equals(artifact.getGroup())) {
-            if (artifact.getVersion() == null)
-                throw new IllegalArgumentException("No version specified for MCPConfig");
-
-            var mappings = this.mappings().withMCVersion(mcpToMcVersion(version));
-            var artifacts = mcprepo.process(artifact, mappings);
-            finalize(artifact, mappings, artifacts);
+            createMinecraft(artifact, mcprepo);
         } else {
             throw new IllegalArgumentException("Artifact '%s' is currently Unsupported. Will add later".formatted(module));
         }
+    }
+
+    protected void createForge(Artifact artifact, MCPConfigRepo mcprepo, ForgeRepo repo) {
+        if (dependenciesOnly)
+            throw new IllegalArgumentException("ForgeRepo doesn't currently support dependenciesOnly");
+
+        var version = artifact.getVersion();
+        if (version == null)
+            throw new IllegalArgumentException("No version specified for Forge");
+
+        if ("all".equals(version)) {
+            var versions = this.cache.maven().getVersions(artifact);
+            var mappingCache = new HashMap<String, Mappings>();
+            for (var ver : versions.reversed()) {
+                var cver = new ComparableVersion(ver);
+                if (cver.compareTo(MIN_SUPPORTED_FORGE) < 0)
+                    continue;
+
+                var fg = FGVersion.fromForge(ver);
+                if (fg == null || fg.ordinal() < FGVersion.v3.ordinal()) // Unsupported
+                    continue;
+
+                var mappings = mappingCache.computeIfAbsent(forgeToMcVersion(ver), this.mappings::withMCVersion);
+                var art = artifact.withVersion(ver);
+                var artifacts = repo.process(art, mappings);
+                finalize(art, mappings, artifacts);
+            }
+        } else {
+            var mappings = this.mappings.withMCVersion(forgeToMcVersion(version));
+            var artifacts = repo.process(artifact, mappings);
+            finalize(artifact, mappings, artifacts);
+        }
+    }
+
+    protected void createMinecraft(Artifact artifact, MCPConfigRepo mcprepo) {
+        if (artifact.getVersion() == null)
+            throw new IllegalArgumentException("No version specified for MCPConfig");
+
+        var version = artifact.getVersion();
+        if (version == null)
+            throw new IllegalArgumentException("No version specified for Forge");
+
+        if ("all".equals(version)) {
+            var manifestFile = mcprepo.getLauncherManifestTask().execute();
+            var manifest = JsonData.launcherManifest(manifestFile);
+            for (var ver : manifest.versions) {
+
+                try {
+                    var cver = MinecraftVersion.from(ver.id);
+                    if (cver.compareTo(MIN_OFFICIAL_MAPPINGS) < 0)
+                        continue;
+                } catch (IllegalArgumentException e) {
+                    // Invalid/unknown version, so skip.
+                    continue;
+                }
+
+                var versioned = artifact.withVersion(ver.id);
+                // If there is no MCPConfig, then we just produce a official named jar
+                List<PendingArtifact> artifacts = null;
+                if (hasMcp(mcprepo, ver.id))
+                    artifacts = mcprepo.process(versioned, mappings.withMCVersion(ver.id));
+                else if (mappings.channel().equals("official") && hasOfficialMappings(mcprepo, ver.id))
+                    artifacts = mcprepo.processWithoutMcp(versioned, mappings.withMCVersion(ver.id));
+                else {
+                    LOGGER.info("Skipping " + versioned + " no mcp config");
+                    continue;
+                }
+                finalize(artifact, mappings, artifacts);
+            }
+        } else {
+            var mcVersion = mcpToMcVersion(version);
+            var mappings = this.mappings.withMCVersion(mcVersion);
+
+            List<PendingArtifact> artifacts = null;
+            if (hasMcp(mcprepo, version))
+                artifacts = mcprepo.process(artifact, mappings);
+            else if (mappings.channel().equals("official") && hasOfficialMappings(mcprepo, mcVersion))
+                artifacts = mcprepo.processWithoutMcp(artifact, mappings);
+            else
+                throw new IllegalStateException("Can not process " + artifact + " as it does not have a MCPConfig ror official mappings");
+
+            finalize(artifact, mappings, artifacts);
+        }
+    }
+
+    // This is ugly, but there really isn't a good way to check if a file exists. DownlodUtils could probably use a 'exists' that HEAD's and returns false non 404
+    private boolean hasMcp(MCPConfigRepo repo, String version) {
+        if (this.mcpConfigVersions.isEmpty()) {
+            var versions = repo.getCache().maven().getVersions(MCP.artifact("1.21.11"));
+            this.mcpConfigVersions.addAll(versions);
+        }
+        return this.mcpConfigVersions.contains(version);
+    }
+
+    // No official mappings, we can't do anything
+    private static boolean hasOfficialMappings(MCPConfigRepo repo, String version) {
+        var tasks = repo.getMCTasks(version);
+        var versionF = tasks.versionJson.execute();
+        var json = JsonData.minecraftVersion(versionF);
+
+        return json.getDownload(MinecraftTasks.Files.CLIENT_MAPPINGS.key) != null ||
+            json.getDownload(MinecraftTasks.Files.SERVER_MAPPINGS.key) != null;
     }
 
     private static String forgeToMcVersion(String version) {
@@ -151,7 +231,7 @@ public record MinecraftMaven(
         return version.substring(0, idx);
     }
 
-    private void finalize(Artifact module, Mappings mappings, List<Repo.PendingArtifact> artifacts) {
+    protected void finalize(Artifact module, Mappings mappings, List<Repo.PendingArtifact> artifacts) {
         var variants = new HashSet<Artifact>();
         for (var pending : artifacts) {
             if (pending == null)
@@ -161,6 +241,13 @@ public record MinecraftMaven(
             // Simplest case would be different mapping channels.
             // I haven't added an opt-in for making artifacts that use mappings, so just assume any artifact with variants
             var artifact = pending.artifact();
+
+            if (stubJars && "jar".equals(artifact.getExtension())) {
+                // No sources allowed in stub repos
+                if ("sources".equals(artifact.getClassifier()))
+                    continue;
+            }
+
             String suffix = null;
             if (!disableGradle && pending.variants() != null && !mappings.isPrimary()) {
                 // If we are not the primary mapping, but we haven't generated the primary mapping yet, do so.
@@ -214,6 +301,11 @@ public record MinecraftMaven(
     }
 
     private void updateFile(File target, File source, Artifact artifact) {
+        if (stubJars && "jar".equals(artifact.getExtension())) {
+            writeStub(target, source, artifact);
+            return;
+        }
+
         var cache = HashStore.fromFile(target)
             .add("source", source);
 
@@ -228,7 +320,6 @@ public record MinecraftMaven(
         }
 
         if (write) {
-            // TODO: [MCMavenizer] Add --api argument to turn class artifacts to api-only targets for a public repo
             try {
                 if (disableGradle && isPom) {
                     makeNonGradlePom(source, target);
@@ -240,6 +331,37 @@ public record MinecraftMaven(
             } catch (Throwable t) {
                 throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
             }
+        }
+    }
+
+    private void writeStub(File target, File source, Artifact artifact) {
+        var tool = this.cache.maven().download(Constants.STUBIFY);
+        var cache = HashStore.fromFile(target)
+            .add("tool", tool)
+            .add("source", source);
+
+        if (target.exists() && cache.isSame())
+            return;
+
+        File jdk;
+        try {
+            jdk = this.cache.jdks().get(Constants.STUBIFY_JAVA_VERSION);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to find JDK for version " + Constants.STUBIFY_JAVA_VERSION, e);
+        }
+
+        var log = new File(source.getAbsolutePath() + ".stubify.log");
+        var ret = ProcessUtils.runJar(jdk, source.getParentFile(), log, tool, Collections.emptyList(),
+            List.of("--input", source.getAbsolutePath(), "--output", target.getAbsolutePath())
+        );
+        if (ret.exitCode != 0)
+            throw new IllegalStateException("Failed to stubify jar file (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
+
+        try {
+            cache.save();
+            HashUtils.updateHash(target);
+        } catch (Throwable t) {
+            throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
         }
     }
 

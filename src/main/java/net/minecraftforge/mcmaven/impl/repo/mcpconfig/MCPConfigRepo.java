@@ -15,6 +15,7 @@ import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
+import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
 
@@ -64,6 +65,8 @@ import java.util.Map;
 public final class MCPConfigRepo extends Repo {
     private final Map<Artifact, MCP> versions = new HashMap<>();
     private final Map<String, MinecraftTasks> mcTasks = new HashMap<>();
+    private final Task downloadLauncherManifest = Task.named("downloadLauncherManifest", this::downloadLauncherManifest);
+
     private final boolean dependenciesOnly;
 
     public MCPConfigRepo(Cache cache, boolean dependenciesOnly) {
@@ -72,7 +75,7 @@ public final class MCPConfigRepo extends Repo {
     }
 
     public MCP get(String version) {
-        return this.get(Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip"));
+        return this.get(MCP.artifact(version));
     }
 
     public MCP get(Artifact artifact) {
@@ -84,25 +87,61 @@ public final class MCPConfigRepo extends Repo {
     }
 
     public MinecraftTasks getMCTasks(String version) {
-        return this.mcTasks.computeIfAbsent(version, k -> new MinecraftTasks(this.cache.root(), version));
+        return this.mcTasks.computeIfAbsent(version, _ -> new MinecraftTasks(this.cache, version, this.downloadLauncherManifest));
+    }
+
+    public Task getLauncherManifestTask() {
+        return this.downloadLauncherManifest;
+    }
+
+    private File downloadLauncherManifest() {
+        var target = new File(this.cache.root(), "launcher_manifest.json");
+        if (!target.exists() || (!Mavenizer.isCacheOnly() && target.lastModified() < System.currentTimeMillis() - Constants.CACHE_TIMEOUT)) {
+            try {
+                // Don't error on cache outdated, as we don't have a cache key for this.
+                if (Mavenizer.isCacheOnly())
+                    Mavenizer.assertNotCacheOnly();
+                Mavenizer.assertOnline();
+                DownloadUtils.downloadFile(target, Constants.LAUNCHER_MANIFEST);
+            } catch (IOException e) {
+                Util.sneak(e);
+            }
+        }
+        return target;
+    }
+
+    private void validate(Artifact artifact) {
+        if (!Constants.MC_GROUP.equals(artifact.getGroup()))
+            throw new IllegalArgumentException("MCPConfigRepo cannot process modules that aren't for group net.minecraft");
+
+        switch (artifact.getName()) {
+            case "client":
+            case "client-extra":
+            case "server":
+            case "server-extra":
+            case "joined":
+            case "joined-extra":
+            case "mappings":
+                return;
+            default:
+                throw new IllegalArgumentException("MCPConfigRepo does not support artifact: " + artifact);
+        }
     }
 
     @Override
     public List<PendingArtifact> process(Artifact artifact, Mappings mappings) {
-        var module = artifact.getGroup() + ':' + artifact.getName();
+        validate(artifact);
         var version = artifact.getVersion();
-        if (!module.startsWith("net.minecraft:"))
-            throw new IllegalArgumentException("MCPConfigRepo cannot process modules that aren't for group net.minecraft");
 
-        var side = module.substring("net.minecraft:".length());
-        boolean isMappings = "mappings".equals(side);
+        var side = artifact.getName();
+        var isMappings = "mappings".equals(side);
         if (isMappings)
             side = "joined";
 
         if (side.endsWith("-extra"))
             return processExtra(Constants.MC_GROUP + ':' + side.substring(0, side.length() - "-extra".length()), version);
 
-        var mcp = this.get(Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip"));
+        var mcp = this.get(MCP.artifact(version));
         var mcpSide = mcp.getSide(side);
 
         var mcpTasks = mcpSide.getTasks();
@@ -143,13 +182,41 @@ public final class MCPConfigRepo extends Repo {
         };
     }
 
+    public List<PendingArtifact> processWithoutMcp(Artifact artifact, Mappings mappings) {
+        // Without MCPConfig, we can't create a source artifact.
+        // So all we can do is check if it has official mappings
+        // If it does, we can generate an official named jar file, and obf to official mapping file.
+        if (!"official".equals(mappings.channel()))
+            throw new IllegalArgumentException("MCPConfigRepo.processWithoutMcp only knows how to generate official named artifacts");
+
+        var tasks = this.getMCTasks(artifact.getVersion());
+        var cache = new File(this.cache.root(), "without_mcp");
+        if ("mappings".equals(artifact.getName())) {
+            //net.minecraft:mappings_{CHANNEL}:{MCP_VERSION}[-{VERSION}]@zip
+            var coords = Artifact.from(Constants.MC_GROUP, "mappings_official", artifact.getVersion()).withExtension("zip");
+            var pom = pending("Mappings POM", simplePom(cache, coords), coords.withExtension("pom"), false);
+            var m2o = pending("Mappings map2obf", tasks.mergeMappings(), coords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
+            return List.of(pom, m2o);
+        } else if ("client".equals(artifact.getName())) {
+            var pom = pending("Maven POM", tasks.clientPom(), artifact.withExtension("pom"), false);
+            var jar = pending("Official Jar", tasks.renameClient(), artifact, false);
+            return List.of(pom, jar);
+        } else if ("server".equals(artifact.getName())) {
+            var pom = pending("Maven POM", tasks.serverPom(), artifact.withExtension("pom"), false);
+            var jar = pending("Official Jar", tasks.renameServer(), artifact, false);
+            return List.of(pom, jar);
+        } else {
+            throw new IllegalArgumentException("MCPConfigRepo does not support artifact: " + artifact);
+        }
+    }
+
     public List<PendingArtifact> processExtra(String module, String version) {
         if (!module.startsWith("net.minecraft:"))
             throw new IllegalArgumentException("MCPConfigRepo cannot process modules that aren't for group net.minecraft");
 
         var side = module.substring("net.minecraft:".length());
         var displayName = Character.toUpperCase(side.charAt(0)) + side.substring(1);
-        var mcp = this.get(Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip"));
+        var mcp = this.get(MCP.artifact(version));
         var mcpSide = mcp.getSide(side);
 
         var build = mcpSide.getBuildFolder();
@@ -242,7 +309,7 @@ public final class MCPConfigRepo extends Repo {
     }
 
     private static Task pom(File build, String side, MCPSide mcpSide, String version) {
-        return Task.named("pom[" + side + ']', () -> {
+        return Task.named("pom[" + version + "][" + side + ']' , () -> {
             var output = new File(build, side + ".pom");
             var cache = HashStore.fromFile(output);
             if (output.exists() && cache.isSame())

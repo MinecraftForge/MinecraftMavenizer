@@ -6,8 +6,6 @@ package net.minecraftforge.mcmaven.cli;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-
 import joptsimple.OptionParser;
 import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
@@ -15,6 +13,7 @@ import net.minecraftforge.mcmaven.impl.data.MCPSetupFiles;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.mappings.ParchmentMappings;
 import net.minecraftforge.mcmaven.impl.repo.forge.Patcher;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPTaskFactory;
 import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
@@ -116,7 +115,7 @@ public class MCPTask {
 
         var artifact =
             options.has(artifactO) ? Artifact.from(options.valueOf(artifactO)) :
-            options.has(versionO) ? Artifact.from("de.oceanlabs.mcp", "mcp_config", options.valueOf(versionO), null, "zip") :
+            options.has(versionO) ? MCP.artifact(options.valueOf(versionO)) :
             null;
 
         var pipeline = options.valueOf(pipelineO);

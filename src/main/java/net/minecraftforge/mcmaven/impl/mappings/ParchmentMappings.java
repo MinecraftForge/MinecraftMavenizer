@@ -25,6 +25,7 @@ import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.Task;
@@ -65,8 +66,8 @@ public class ParchmentMappings extends Mappings {
         var mc = side.getMCP().getMinecraftTasks();
         var srg = side.getTasks().getMappings();
 
-        var client = mc.versionFile("client_mappings", "txt");
-        var server = mc.versionFile("server_mappings", "txt");
+        var client = mc.versionFile(MinecraftTasks.Files.CLIENT_MAPPINGS);
+        var server = mc.versionFile(MinecraftTasks.Files.SERVER_MAPPINGS);
         var data = downloadTask(side.getMCP());
 
         ret = Task.named("srg2names[" + this + ']',

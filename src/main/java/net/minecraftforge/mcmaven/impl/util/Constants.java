@@ -36,4 +36,10 @@ public final class Constants {
 
     public static final Artifact INSTALLER_TOOLS = Artifact.from("net.minecraftforge:installertools:1.4.3:fatjar");
     public static final int INSTALLER_TOOLS_JAVA_VERSION = 8;
+
+    public static final Artifact RENAMER = Artifact.from("net.minecraftforge:ForgeAutoRenamingTool:1.1.2:all");
+    public static final int RENAMER_JAVA_VERSION = 8;
+
+    public static final Artifact STUBIFY = Artifact.from("net.minecraftforge:jar-stubify:1.0.0");
+    public static final int STUBIFY_JAVA_VERSION = 25;
 }

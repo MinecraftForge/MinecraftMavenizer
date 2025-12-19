@@ -367,7 +367,7 @@ public class Patcher implements Supplier<Task> {
     }
 
     private Task extractSingle(String key, String value) {
-        return this.extracts.computeIfAbsent(value, k ->
+        return this.extracts.computeIfAbsent(value, _ ->
             Task.named("extract[" + key + ']', () -> extractSingleTask(key, value))
         );
     }

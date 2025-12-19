@@ -29,6 +29,10 @@ public class MCP {
 
     private final Map<String, MCPSide> sides = new HashMap<>();
 
+    public static Artifact artifact(String version) {
+        return Artifact.from("de.oceanlabs.mcp", "mcp_config", version, null, "zip");
+    }
+
     public MCP(MCPConfigRepo repo, Artifact name) {
         this.repo = repo;
         this.name = name;

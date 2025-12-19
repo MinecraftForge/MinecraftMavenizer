@@ -198,8 +198,8 @@ public class MCPTaskFactory {
         this.injectFileFilter = this.getFileFilter();
     }
 
-    private static final BiPredicate<File, String> TRUE = (f, s) -> true;
-    private static final BiPredicate<File, String> NOT_CONTAINS_CLIENT = (f, s) -> !s.contains("client");
+    private static final BiPredicate<File, String> TRUE = (_, _) -> true;
+    private static final BiPredicate<File, String> NOT_CONTAINS_CLIENT = (_, s) -> !s.contains("client");
     private BiPredicate<File, String> getFileFilter() {
         return this.side.containsClient() ? TRUE : NOT_CONTAINS_CLIENT;
     }
@@ -364,8 +364,8 @@ public class MCPTaskFactory {
         switch (type) {
             case "downloadManifest": return mc.launcherManifest;
             case "downloadJson":     return mc.versionJson;
-            case "downloadClient":   return mc.versionFile("client", "jar");
-            case "downloadServer":   return mc.versionFile("server", "jar");
+            case "downloadClient":   return mc.versionFile(MinecraftTasks.Files.CLIENT_JAR);
+            case "downloadServer":   return mc.versionFile(MinecraftTasks.Files.SERVER_JAR);
             case "strip":            return strip(name, step);
             case "inject":           return inject(name, step);
             case "patch":            return patch(name, step);
@@ -391,11 +391,11 @@ public class MCPTaskFactory {
     }
 
     public Task downloadClientMappings() {
-        return this.side.getMCP().getMinecraftTasks().versionFile("client_mappings", "txt");
+        return this.side.getMCP().getMinecraftTasks().versionFile(MinecraftTasks.Files.CLIENT_MAPPINGS);
     }
 
     public Task downloadServerMappings() {
-        return this.side.getMCP().getMinecraftTasks().versionFile("server_mappings", "txt");
+        return this.side.getMCP().getMinecraftTasks().versionFile(MinecraftTasks.Files.SERVER_MAPPINGS);
     }
 
     private Task strip(String name, Map<String, String> step) {

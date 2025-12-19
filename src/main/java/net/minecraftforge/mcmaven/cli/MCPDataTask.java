@@ -13,7 +13,9 @@ import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.mappings.ParchmentMappings;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.srgutils.IRenamer;
@@ -101,7 +103,7 @@ public class MCPDataTask {
 
         var artifact =
             options.has(artifactO) ? Artifact.from(options.valueOf(artifactO)) :
-            options.has(versionO) ? Artifact.from("de.oceanlabs.mcp", "mcp_config", options.valueOf(versionO), null, "zip") :
+            options.has(versionO) ? MCP.artifact(options.valueOf(versionO)) :
             null;
 
         if (artifact == null) {
@@ -159,8 +161,8 @@ public class MCPDataTask {
 
                 if (mcp.getConfig().official) {
                     var mc = mcp.getMinecraftTasks();
-                    var client = mc.versionFile("client_mappings", "txt");
-                    var server = mc.versionFile("server_mappings", "txt");
+                    var client = mc.versionFile(MinecraftTasks.Files.CLIENT_MAPPINGS);
+                    var server = mc.versionFile(MinecraftTasks.Files.SERVER_MAPPINGS);
 
                     var obf2OffClient = IMappingFile.load(client.execute());
                     var obf2OffServer = IMappingFile.load(server.execute());

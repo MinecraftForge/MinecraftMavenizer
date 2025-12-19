@@ -133,7 +133,7 @@ public abstract class Repo {
                 all.add(artifact);
             } else {
                 for (var variant : osVariants) {
-                    natives.computeIfAbsent(variant, k -> new ArrayList<>()).add(artifact);
+                    natives.computeIfAbsent(variant, _ -> new ArrayList<>()).add(artifact);
                 }
             }
         }
