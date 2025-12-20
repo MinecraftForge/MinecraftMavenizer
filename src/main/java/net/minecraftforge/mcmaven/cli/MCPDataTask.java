@@ -28,16 +28,8 @@ import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 // TODO [Mavenizer][MCPDataTask] This is a copy of FG6's ExtractMCPData task.
 // its not the best, but I dont want to re-wrok INSTALLER_TOOLS to put the tsrg in the mappings zip
-public class MCPDataTask {
-    public static void run(String[] args) throws Exception {
-        int ret = runI(args);
-        if (ret != 0) {
-            LOGGER.release();
-            //System.exit(ret);
-        }
-    }
-
-    private static int runI(String[] args) throws Exception {
+class MCPDataTask {
+    static OptionParser run(String[] args, boolean getParser) throws Exception {
         // TODO [MCMavenizer] Make this into a --log [level] option
         LOGGER.setEnabled(Logger.Level.INFO);
 
@@ -89,10 +81,13 @@ public class MCPDataTask {
             .withRequiredArg();
         //@formatter:on
 
+        if (getParser)
+            return parser;
+
         var options = parser.parse(args);
         if (options.has(helpO)) {
             parser.printHelpOn(LOGGER.getInfo());
-            return -1;
+            return parser;
         }
 
         var output = options.valueOf(outputO);
@@ -108,7 +103,7 @@ public class MCPDataTask {
 
         if (artifact == null) {
             LOGGER.error("Missing mcp --version or --artifact");
-            return -2;
+            return parser;
         }
 
         var mcVersion = MinecraftMaven.mcpToMcVersion(artifact.getVersion());
@@ -123,7 +118,7 @@ public class MCPDataTask {
         var key = options.valueOf(keyO);
         if (key == null) {
             LOGGER.error("Missing --key option");
-            return -3;
+            return parser;
         }
 
         var repo = new MCPConfigRepo(new Cache(cacheRoot, jdkCacheRoot), false);
@@ -146,14 +141,14 @@ public class MCPDataTask {
 
         if (path == null) {
             LOGGER.error("Could not find data entry for '%s'".formatted(key));
-            return -4;
+            return parser;
         }
 
         try (ZipFile zip = new ZipFile(mcp.getData())) {
             var entry = zip.getEntry(path);
             if (entry == null) {
                 LOGGER.error("Invalid config zip, missing file: " + path);
-                return -5;
+                return parser;
             }
 
             if ("mappings".equals(key)) {
@@ -204,6 +199,6 @@ public class MCPDataTask {
             }
         }
 
-        return 0;
+        return parser;
     }
 }

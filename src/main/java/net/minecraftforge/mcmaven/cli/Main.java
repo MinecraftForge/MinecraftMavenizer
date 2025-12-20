@@ -6,6 +6,8 @@ package net.minecraftforge.mcmaven.cli;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSpecBuilder;
+import net.minecraftforge.util.logging.Logger;
+
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import java.time.Duration;
@@ -40,6 +42,10 @@ public class Main {
         var tasks = Tasks.values();
         var opts = new ArrayList<OptionSpecBuilder>();
 
+        var helpO = parser.accepts("help",
+            "Displays this help message and exits")
+            .forHelp();
+
         for (var task : tasks)
             opts.add(parser.accepts(task.key, task.description));
 
@@ -54,12 +60,25 @@ public class Main {
 
         for (var task : tasks) {
             if (options.has(task.key)) {
-                task.callback.run(args);
+                task.callback.run(args, false);
                 return;
             }
         }
 
-        parser.printHelpOn(LOGGER.getInfo());
-        LOGGER.release();
+        if (options.has(helpO)) {
+            LOGGER.setEnabled(Logger.Level.INFO);
+            parser.printHelpOn(LOGGER.getInfo());
+            for (var task : tasks) {
+                LOGGER.info();
+                LOGGER.info(task.key + " Task:");
+                LOGGER.push();
+                var taskParser = task.callback.run(new String[0], true);
+                taskParser.printHelpOn(LOGGER.getInfo());
+                LOGGER.pop();
+            }
+            LOGGER.release();
+        } else { // Default to --maven as that is the main usecase.
+            Tasks.MAVEN.callback.run(args, false);
+        }
     }
 }
