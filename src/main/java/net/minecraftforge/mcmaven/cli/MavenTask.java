@@ -94,6 +94,12 @@ class MavenTask {
         var stubO = parser.accepts("stub",
             "Runs any generated jar through a stub tool, deleteing data files and stubing all class files. The resulting jar can be compiled against but is non-functional.");
 
+        var accessTransformerO = parser.accepts("access-transformer",
+            "An AccessTransformer config to apply to the artifacts have been built. This is a work around for Gradle's broken ArtifactTransformer system. https://github.com/MinecraftForge/ForgeGradle/issues/1023")
+            .availableUnless(stubO)
+            .withRequiredArg().ofType(File.class);
+        stubO.availableUnless(accessTransformerO);
+
         var shorthandOptions = new HashMap<String, OptionSpecBuilder>();
         var artifacts = Map.of(
             "forge",  Constants.FORGE_ARTIFACT,
@@ -165,7 +171,8 @@ class MavenTask {
         }
 
         var mcmaven = new MinecraftMaven(output, options.has(dependenciesOnlyO), cache, jdkCache, mappings,
-            foreignRepositories, options.has(globalAuxiliaryVariantsO), options.has(disableGradleO), options.has(stubO));
+            foreignRepositories, options.has(globalAuxiliaryVariantsO), options.has(disableGradleO), options.has(stubO),
+            options.valueOf(accessTransformerO));
         mcmaven.run(artifact);
     }
 }

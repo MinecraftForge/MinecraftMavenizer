@@ -50,6 +50,7 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
+import org.jetbrains.annotations.Nullable;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
 
@@ -65,30 +66,34 @@ public record MinecraftMaven(
     boolean globalAuxiliaryVariants,
     boolean disableGradle,
     boolean stubJars,
-    Set<String> mcpConfigVersions
+    Set<String> mcpConfigVersions,
+    @Nullable File accessTransformer
 ) {
     // Only 1.14.4+ has official mappings, we can support more when we add more mappings
     private static final MinecraftVersion MIN_OFFICIAL_MAPPINGS = MinecraftVersion.from("1.14.4");
     private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.14.4");
 
     public MinecraftMaven(File output, boolean dependenciesOnly, File cacheRoot, File jdkCacheRoot, Mappings mappings,
-        Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants, boolean disableGradle, boolean stubJars) {
-        this(output, dependenciesOnly, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants, disableGradle, stubJars, new HashSet<>());
+        Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants, boolean disableGradle, boolean stubJars,
+        @Nullable File accessTransformer) {
+        this(output, dependenciesOnly, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants, disableGradle, stubJars, new HashSet<>(), accessTransformer);
     }
 
     public MinecraftMaven {
-        LOGGER.info("  Output:            " + output.getAbsolutePath());
-        LOGGER.info("  Dependencies Only: " + dependenciesOnly);
-        LOGGER.info("  Cache:             " + cache.root().getAbsolutePath());
-        LOGGER.info("  JDK Cache:         " + cache.jdks().root().getAbsolutePath());
-        LOGGER.info("  Offline:           " + Mavenizer.isOffline());
-        LOGGER.info("  Cache Only:        " + Mavenizer.isCacheOnly());
-        LOGGER.info("  Mappings:          " + mappings);
+        LOGGER.info("  Output:             " + output.getAbsolutePath());
+        LOGGER.info("  Dependencies Only:  " + dependenciesOnly);
+        LOGGER.info("  Cache:              " + cache.root().getAbsolutePath());
+        LOGGER.info("  JDK Cache:          " + cache.jdks().root().getAbsolutePath());
+        LOGGER.info("  Offline:            " + Mavenizer.isOffline());
+        LOGGER.info("  Cache Only:         " + Mavenizer.isCacheOnly());
+        LOGGER.info("  Mappings:           " + mappings);
         if (!foreignRepositories.isEmpty())
-            LOGGER.info("  Foreign Repos:     [" + String.join(", ", foreignRepositories.values()) + ']');
-        LOGGER.info("  GradleVariantHack: " + globalAuxiliaryVariants);
-        LOGGER.info("  Disable Gradle:    " + disableGradle);
-        LOGGER.info("  Stub Jars:         " + stubJars);
+            LOGGER.info("  Foreign Repos:      [" + String.join(", ", foreignRepositories.values()) + ']');
+        LOGGER.info("  GradleVariantHack:  " + globalAuxiliaryVariants);
+        LOGGER.info("  Disable Gradle:     " + disableGradle);
+        LOGGER.info("  Stub Jars:          " + stubJars);
+        if (accessTransformer != null)
+            LOGGER.info("  Access Transformer: " + accessTransformer.getAbsolutePath());
         LOGGER.info();
     }
 
@@ -301,9 +306,18 @@ public record MinecraftMaven(
     }
 
     private void updateFile(File target, File source, Artifact artifact) {
-        if (stubJars && "jar".equals(artifact.getExtension())) {
-            writeStub(target, source, artifact);
-            return;
+        var isJar = "jar".equals(artifact.getExtension());
+        if (isJar) {
+            if (stubJars) {
+                writeStub(target, source, artifact);
+                return;
+            }
+
+            // Only transform main artifacts
+            if (accessTransformer != null && artifact.getClassifier() == null) {
+                writeAccessTransformed(target, source, artifact);
+                return;
+            }
         }
 
         var cache = HashStore.fromFile(target)
@@ -356,6 +370,42 @@ public record MinecraftMaven(
         );
         if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to stubify jar file (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
+
+        try {
+            cache.save();
+            HashUtils.updateHash(target);
+        } catch (Throwable t) {
+            throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
+        }
+    }
+
+    private void writeAccessTransformed(File target, File source, Artifact artifact) {
+        var tool = this.cache.maven().download(Constants.ACCESS_TRANSFORMER);
+        var cache = HashStore.fromFile(target)
+            .add("tool", tool)
+            .add("at", accessTransformer)
+            .add("source", source);
+
+        if (target.exists() && cache.isSame())
+            return;
+
+        File jdk;
+        try {
+            jdk = this.cache.jdks().get(Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to find JDK for version " + Constants.ACCESS_TRANSFORMER_JAVA_VERSION, e);
+        }
+
+        var log = new File(source.getAbsolutePath() + ".accesstransformer.log");
+        var ret = ProcessUtils.runJar(jdk, source.getParentFile(), log, tool, Collections.emptyList(),
+            List.of(
+                "--inJar", source.getAbsolutePath(),
+                "--outJar", target.getAbsolutePath(),
+                "--atfile", accessTransformer.getAbsolutePath()
+            )
+        );
+        if (ret.exitCode != 0)
+            throw new IllegalStateException("Failed to Access Transform jar file (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
 
         try {
             cache.save();
