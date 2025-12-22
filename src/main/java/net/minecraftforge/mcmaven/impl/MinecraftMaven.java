@@ -50,7 +50,6 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
-import org.jetbrains.annotations.Nullable;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
 
@@ -67,7 +66,7 @@ public record MinecraftMaven(
     boolean disableGradle,
     boolean stubJars,
     Set<String> mcpConfigVersions,
-    @Nullable File accessTransformer
+    List<File> accessTransformer
 ) {
     // Only 1.14.4+ has official mappings, we can support more when we add more mappings
     private static final MinecraftVersion MIN_OFFICIAL_MAPPINGS = MinecraftVersion.from("1.14.4");
@@ -75,7 +74,7 @@ public record MinecraftMaven(
 
     public MinecraftMaven(File output, boolean dependenciesOnly, File cacheRoot, File jdkCacheRoot, Mappings mappings,
         Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants, boolean disableGradle, boolean stubJars,
-        @Nullable File accessTransformer) {
+        List<File> accessTransformer) {
         this(output, dependenciesOnly, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants, disableGradle, stubJars, new HashSet<>(), accessTransformer);
     }
 
@@ -92,8 +91,17 @@ public record MinecraftMaven(
         LOGGER.info("  GradleVariantHack:  " + globalAuxiliaryVariants);
         LOGGER.info("  Disable Gradle:     " + disableGradle);
         LOGGER.info("  Stub Jars:          " + stubJars);
-        if (accessTransformer != null)
-            LOGGER.info("  Access Transformer: " + accessTransformer.getAbsolutePath());
+        if (!accessTransformer.isEmpty()) {
+            LOGGER.getInfo().print("  Access Transformer: ");
+            var itor = accessTransformer.iterator();
+            while (itor.hasNext()) {
+                var file = itor.next();
+                LOGGER.getInfo().print(file.getAbsolutePath());
+                if (itor.hasNext())
+                    LOGGER.getInfo().print(", ");
+            }
+            LOGGER.getInfo().println();
+        }
         LOGGER.info();
     }
 
@@ -314,13 +322,14 @@ public record MinecraftMaven(
             }
 
             // Only transform main artifacts
-            if (accessTransformer != null && artifact.getClassifier() == null) {
+            if (!accessTransformer.isEmpty() && artifact.getClassifier() == null) {
                 writeAccessTransformed(target, source, artifact);
                 return;
             }
         }
 
         var cache = HashStore.fromFile(target)
+            .add(accessTransformer)
             .add("source", source);
 
         var isPom = "pom".equals(artifact.getExtension());
@@ -383,7 +392,7 @@ public record MinecraftMaven(
         var tool = this.cache.maven().download(Constants.ACCESS_TRANSFORMER);
         var cache = HashStore.fromFile(target)
             .add("tool", tool)
-            .add("at", accessTransformer)
+            .add(accessTransformer)
             .add("source", source);
 
         if (target.exists() && cache.isSame())
@@ -397,13 +406,15 @@ public record MinecraftMaven(
         }
 
         var log = new File(source.getAbsolutePath() + ".accesstransformer.log");
-        var ret = ProcessUtils.runJar(jdk, source.getParentFile(), log, tool, Collections.emptyList(),
-            List.of(
-                "--inJar", source.getAbsolutePath(),
-                "--outJar", target.getAbsolutePath(),
-                "--atfile", accessTransformer.getAbsolutePath()
-            )
-        );
+        var args = new ArrayList<>(List.of(
+            "--inJar", source.getAbsolutePath(),
+            "--outJar", target.getAbsolutePath()
+        ));
+        for (var file : accessTransformer) {
+            args.add("--atfile");
+            args.add(file.getAbsolutePath());
+        }
+        var ret = ProcessUtils.runJar(jdk, source.getParentFile(), log, tool, Collections.emptyList(), args);
         if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to Access Transform jar file (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
 

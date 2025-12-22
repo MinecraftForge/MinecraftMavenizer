@@ -172,7 +172,7 @@ class MavenTask {
 
         var mcmaven = new MinecraftMaven(output, options.has(dependenciesOnlyO), cache, jdkCache, mappings,
             foreignRepositories, options.has(globalAuxiliaryVariantsO), options.has(disableGradleO), options.has(stubO),
-            options.valueOf(accessTransformerO));
+            options.valuesOf(accessTransformerO));
         mcmaven.run(artifact);
     }
 }
