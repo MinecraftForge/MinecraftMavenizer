@@ -182,6 +182,7 @@ public abstract class Repo {
 
         var apiVariant = GradleModule.Variant.of("api-classes", common);
         apiVariant.attribute("org.gradle.usage", "java-api");
+        apiVariant.deps(extraCompileDeps);
         variants.add(apiVariant);
 
         return variants.toArray(new GradleModule.Variant[0]);

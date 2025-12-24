@@ -17,6 +17,8 @@ import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
+import net.minecraftforge.mcmaven.impl.util.POMBuilder.Dependencies;
+import net.minecraftforge.mcmaven.impl.util.POMBuilder.Dependencies.Dependency;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
@@ -228,6 +230,7 @@ public final class ForgeRepo extends Repo {
                 .addKnown("data", patcher.getDataHash())
                 .addKnown("extra", Util.replace(clientExtra, Object::toString))
                 .addKnown("mappings", Util.replace(mappings, Object::toString))
+                .addKnown("code-version", "1")
                 ;
 
             if (output.exists() && cache.isSame())
@@ -243,6 +246,8 @@ public final class ForgeRepo extends Repo {
                     dependencies.add(mappings);
 
                 patcher.forAllLibraries(dependencies::add, Artifact::hasNoOs);
+
+                addExtraRuntimeToPom(patcher, dependencies);
             });
 
             FileUtils.ensureParent(output);
@@ -255,6 +260,27 @@ public final class ForgeRepo extends Repo {
             cache.save();
             return output;
         });
+    }
+
+    @SuppressWarnings("deprecation")
+    private static void addExtraRuntimeToPom(Patcher patcher, Dependencies deps) {
+        if (patcher.config.extraDependencies == null)
+            return;
+
+        // Following https://maven.apache.org/guides/introduction/introduction-to-dependency-mechanism.html#dependency-scope
+        // PROVIDED == 'compileOnly'
+        if (patcher.config.extraDependencies.compileOnly != null) {
+            for (var descriptor : patcher.config.extraDependencies.compileOnly) {
+                deps.add(Artifact.from(descriptor), Dependency.Scope.PROVIDED);
+            }
+        }
+
+        // RUNTIME = 'runtimeOnly'
+        if (patcher.config.extraDependencies.runtimeOnly != null) {
+            for (var descriptor : patcher.config.extraDependencies.runtimeOnly) {
+                deps.add(Artifact.from(descriptor), Dependency.Scope.RUNTIME);
+            }
+        }
     }
 
     @SuppressWarnings("deprecation")
