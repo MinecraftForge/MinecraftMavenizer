@@ -16,6 +16,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
@@ -33,14 +34,41 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
+import org.jetbrains.annotations.Nullable;
 
 public class ParchmentMappings extends Mappings {
+    private static final String TIMESTAMP_REGEX = "\\d{4}.\\d{2}.\\d{2}";
+    private static final Pattern TIMESTAMP_LOOKUP = Pattern.compile(TIMESTAMP_REGEX);
+    private static final Pattern TIMESTAMP_REMOVAL = Pattern.compile("-?" + TIMESTAMP_REGEX + "?");
+
+    private final String timestamp;
+    private final @Nullable String minecraft;
     private Task downloadTask;
 
     public ParchmentMappings(String version) {
-        super("parchment", Objects.requireNonNull(version, "Parchment mappings version must be present"));
-        if (version.contains("-SNAPSHOT"))
+        if (version == null)
+            throw new IllegalArgumentException("Parchment mappings version must be present");
+        else if (version.contains("-SNAPSHOT"))
             throw new IllegalArgumentException("Parchment snapshots are not supported: " + version);
+
+        var matcher = TIMESTAMP_LOOKUP.matcher(version);
+        if (!matcher.find())
+            throw new IllegalArgumentException("Parchment version does not contain a timestamp: " + version);
+        var timestamp = this.timestamp = matcher.group();
+
+        String minecraft = null;
+        var mcVersions = TIMESTAMP_REMOVAL.split(version);
+        for (var mcVersion : mcVersions) {
+            // We're just looking for the first instance of a Minecraft version
+            //
+            if (mcVersion.isEmpty()) continue;
+
+            minecraft = mcVersion;
+            break;
+        }
+        this.minecraft = minecraft;
+
+        super("parchment", (minecraft != null ? minecraft + '-' : "") + timestamp);
     }
 
     @Override
@@ -51,9 +79,10 @@ public class ParchmentMappings extends Mappings {
     // Maybe download the maven-metadata.xml for the MC version and pick the latest one?
     @Override
     public Mappings withMCVersion(String mcVer) {
-        if (this.version().indexOf('-') != -1) // assume our version specifies the MC version
-            return this;
-        return new ParchmentMappings(mcVer + '-' + this.version());
+        // assume our version specifies the MC version
+        return mcVer == null || this.minecraft != null
+            ? this
+            : new ParchmentMappings(mcVer + '-' + timestamp);
     }
 
     @Override
@@ -89,12 +118,7 @@ public class ParchmentMappings extends Mappings {
 
     private File download(Cache cache) {
         var maven = new MavenCache("parchment", Constants.PARCHMENT_MAVEN, cache.root());
-        var idx = version().indexOf('-');
-        if (idx == -1)
-            throw new IllegalStateException("Unknown Parchment version: " + version());
-        var mcversion = version().substring(0, idx);
-        var ver = version().substring(idx + 1);
-        var artifact = Artifact.from(Constants.PARCHMENT_GROUP, "parchment-" + mcversion, ver, "checked").withExtension("zip");
+        var artifact = Artifact.from(Constants.PARCHMENT_GROUP, "parchment-" + minecraft, timestamp, "checked").withExtension("zip");
         return maven.download(artifact);
     }
 
