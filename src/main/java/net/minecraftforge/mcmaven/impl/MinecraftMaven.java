@@ -322,14 +322,13 @@ public record MinecraftMaven(
             }
 
             // Only transform main artifacts
-            if (!accessTransformer.isEmpty() && artifact.getClassifier() == null && !artifact.getName().endsWith("-extra")) {
+            if (!accessTransformer.isEmpty() && artifact.getClassifier() == null) {
                 writeAccessTransformed(target, source, artifact);
                 return;
             }
         }
 
         var cache = HashStore.fromFile(target)
-            .add(accessTransformer)
             .add("source", source);
 
         var isPom = "pom".equals(artifact.getExtension());
@@ -414,6 +413,12 @@ public record MinecraftMaven(
             args.add("--atfile");
             args.add(file.getAbsolutePath());
         }
+
+        // Older versions of AT have a bug where it wont create the directories as needed.
+        var parent = target.getParentFile();
+        if (parent != null && !parent.exists())
+            parent.mkdirs();
+
         var ret = ProcessUtils.runJar(jdk, source.getParentFile(), log, tool, Collections.emptyList(), args);
         if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to Access Transform jar file (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
