@@ -322,7 +322,7 @@ public record MinecraftMaven(
             }
 
             // Only transform main artifacts
-            if (!accessTransformer.isEmpty() && artifact.getClassifier() == null) {
+            if (!accessTransformer.isEmpty() && artifact.getClassifier() == null && !artifact.getName().endsWith("-extra")) {
                 writeAccessTransformed(target, source, artifact);
                 return;
             }
