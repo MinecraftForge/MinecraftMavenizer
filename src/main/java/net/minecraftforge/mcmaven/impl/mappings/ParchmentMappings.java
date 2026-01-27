@@ -27,7 +27,6 @@ import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
-import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
@@ -35,12 +34,15 @@ import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
 
 public class ParchmentMappings extends Mappings {
+	private final ParchmentVersion parsedVersion;
     private Task downloadTask;
 
     public ParchmentMappings(String version) {
-        super("parchment", Objects.requireNonNull(version, "Parchment mappings version must be present"));
-        if (version.contains("-SNAPSHOT"))
-            throw new IllegalArgumentException("Parchment snapshots are not supported: " + version);
+    	this(ParchmentVersion.parse(version));
+    }
+    private ParchmentMappings(ParchmentVersion version) {
+        super("parchment", version.toFriendly());
+        this.parsedVersion = version;
     }
 
     @Override
@@ -51,9 +53,18 @@ public class ParchmentMappings extends Mappings {
     // Maybe download the maven-metadata.xml for the MC version and pick the latest one?
     @Override
     public Mappings withMCVersion(String mcVer) {
-        if (this.version().indexOf('-') != -1) // assume our version specifies the MC version
-            return this;
-        return new ParchmentMappings(mcVer + '-' + this.version());
+    	if (mcVer == null)
+    		throw new IllegalArgumentException("Minecraft Version can not be null");
+
+    	if (mcVer.equals(this.parsedVersion.mcVersion()))
+    		return this;
+
+    	return new ParchmentMappings(this.parsedVersion.withMinecraft(mcVer));
+    }
+
+    @Override
+    public Artifact getArtifact(MCPSide side) {
+    	return this.parsedVersion.getMappingArtifact(side.getMCP().getName().getVersion());
     }
 
     @Override
@@ -88,13 +99,8 @@ public class ParchmentMappings extends Mappings {
     }
 
     private File download(Cache cache) {
-        var maven = new MavenCache("parchment", Constants.PARCHMENT_MAVEN, cache.root());
-        var idx = version().indexOf('-');
-        if (idx == -1)
-            throw new IllegalStateException("Unknown Parchment version: " + version());
-        var mcversion = version().substring(0, idx);
-        var ver = version().substring(idx + 1);
-        var artifact = Artifact.from(Constants.PARCHMENT_GROUP, "parchment-" + mcversion, ver, "checked").withExtension("zip");
+        var maven = new MavenCache("parchment", ParchmentVersion.PARCHMENT_MAVEN, cache.root());
+        var artifact = this.parsedVersion.getArtifact();
         return maven.download(artifact);
     }
 
@@ -105,7 +111,7 @@ public class ParchmentMappings extends Mappings {
         var data = dataTask.execute();
 
         var root = getFolder(new File(mcp.getBuildFolder(), "data/mapings"));
-        var output = new File(root, "parchment" + version() + ".zip");
+        var output = new File(root, "parchment-" + version() + ".zip");
         var cache = HashStore.fromFile(output)
             .add("srg", srg)
             .add("client", client)
