@@ -1,7 +1,9 @@
+import org.gradle.api.plugins.jvm.JvmTestSuite
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     id 'java'
+    id 'jvm-test-suite'
     id 'idea'
     id 'eclipse'
     id 'maven-publish'
@@ -34,11 +36,14 @@ dependencies {
     implementation libs.commonsio
 
     implementation libs.bundles.utils
+}
 
-    // This is explicitly NOT a JPMS project, so we can use a test souceset and Eclipse is happy
-    // If we ever add JPMS, this must be split into a sub-project.
-    testImplementation testLibs.junit.api
-    testRuntimeOnly testLibs.bundles.junit.runtime
+// This is explicitly NOT a JPMS project, so we can use a test souceset and Eclipse is happy
+// If we ever add JPMS, this must be split into a sub-project.
+testing {
+    suites.named('test', JvmTestSuite) {
+        useJUnitJupiter(testLibs.versions.junit)
+    }
 }
 
 license {
