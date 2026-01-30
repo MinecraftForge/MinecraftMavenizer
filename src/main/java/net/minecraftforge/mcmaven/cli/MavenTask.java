@@ -21,7 +21,7 @@ import net.minecraftforge.util.logging.Logger;
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 class MavenTask {
-    static void run(String[] args) throws Exception {
+    static OptionParser run(String[] args, boolean getParser) throws Exception {
         // TODO [MCMavenizer] Make this into a --log [level] option
         LOGGER.setEnabled(Logger.Level.INFO);
 
@@ -127,11 +127,14 @@ class MavenTask {
         });
         //@formatter:on
 
+        if (getParser)
+            return parser;
+
         var options = parser.parse(args);
         if (options.has(helpO)) {
             parser.printHelpOn(LOGGER.getInfo());
             LOGGER.release();
-            return;
+            return parser;
         }
 
         // global options
@@ -174,5 +177,7 @@ class MavenTask {
             foreignRepositories, options.has(globalAuxiliaryVariantsO), options.has(disableGradleO), options.has(stubO),
             options.valuesOf(accessTransformerO));
         mcmaven.run(artifact);
+
+        return parser;
     }
 }
