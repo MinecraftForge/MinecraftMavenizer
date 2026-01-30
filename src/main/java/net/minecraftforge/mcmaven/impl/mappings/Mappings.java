@@ -127,8 +127,8 @@ public class Mappings {
         var mcpVersion = side.getMCP().getName().getVersion();
         var mcVersion = side.getMCP().getConfig().version;
         var artifactVersion = mcpVersion;
-        if (this.version != null && !mcVersion.equals(this.version))
-            artifactVersion = mcpVersion + '-' + this.version;
+        if (this.version() != null && !mcVersion.equals(this.version()))
+            artifactVersion += '-' + this.version();
 
         return Artifact.from(Constants.MC_GROUP, "mappings_" + this.channel, artifactVersion)
             .withExtension("zip");

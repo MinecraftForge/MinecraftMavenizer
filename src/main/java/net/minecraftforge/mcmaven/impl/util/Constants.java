@@ -15,10 +15,6 @@ public final class Constants {
     public static final String FORGE_ARTIFACT = FORGE_GROUP + ':' + FORGE_NAME;
     public static final String FORGE_MAVEN = "https://maven.minecraftforge.net/";
 
-    // Parchment related things
-    public static final String PARCHMENT_MAVEN = "https://maven.parchmentmc.org/";
-    public static final String PARCHMENT_GROUP = "org.parchmentmc.data"; // Name is "parchment-{mcversion}'
-
     // TODO Other toolchains such as FMLOnly (not required, but would be useful so we have the framework to use other toolchains)
     public static final String FMLONLY_NAME = "fmlonly";
     public static final String FMLONLY_ARTIFACT = FORGE_GROUP + ':' + FMLONLY_NAME;
