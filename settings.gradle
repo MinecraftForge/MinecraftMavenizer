@@ -45,8 +45,6 @@ dependencyResolutionManagement.versionCatalogs.register('libs') {
     library 'utils-logging',  'net.minecraftforge', 'log-utils'       version '0.5.1'
     library 'utils-os',       'net.minecraftforge', 'os-utils'        version '0.1.0'
     bundle 'utils', ['utils-download', 'utils-files', 'utils-hash', 'utils-data', 'utils-logging', 'utils-os']
-
-
 }
 
 dependencyResolutionManagement.versionCatalogs.register('testLibs') {

@@ -39,7 +39,7 @@ public final class Mavenizer {
         if (cacheOnly) {
             throw new IllegalArgumentException("Cache is out of date! Please run without --cache-only");
         } else if (!cacheMiss) {
-            LOGGER.warn("Cache miss!", new Exception("Cache miss!"));
+            LOGGER.debug("Cache miss!", new Exception("Cache miss!"));
             cacheMiss = true;
             LOGGER.release();
         }

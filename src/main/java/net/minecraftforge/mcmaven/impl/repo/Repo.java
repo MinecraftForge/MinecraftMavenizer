@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -48,7 +49,7 @@ public abstract class Repo {
         return cache;
     }
 
-    public abstract List<PendingArtifact> process(Artifact artifact, Mappings mappings);
+    public abstract List<PendingArtifact> process(Artifact artifact, Mappings mappings, Map<String, Supplier<String>> outputJson);
 
     protected static PendingArtifact pending(String message, Task task, Artifact artifact, boolean auxiliary) {
         return pending(message, task, artifact, auxiliary, (Task) null);
@@ -251,12 +252,22 @@ public abstract class Repo {
      * channel-verson-map2obf.tsrg.gz: gzip compressed tsrg file for mapped names to obf (notch) names
      * channel-verson-map2srg.tsrg.gz: gzip compressed tsrg file for mapped names to srg (intermediate) names
      */
-    protected List<PendingArtifact> mappingArtifacts(File cache, Mappings mappings, MCPSide side) {
+    protected List<PendingArtifact> mappingArtifacts(File cache, Mappings mappings, MCPSide side, Map<String, Supplier<String>> outputJson) {
         var coords = mappings.getArtifact(side);
         var csvs = pending("Mappings Zip", mappings.getCsvZip(side), coords, false);
         var pom = pending("Mappings POM", simplePom(cache, coords), coords.withExtension("pom"), false);
         var m2o = pending("Mappings map2obf", mappings.getMapped2Obf(side), coords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
         var m2s = pending("Mappings map2srg", mappings.getMapped2Srg(side), coords.withClassifier("map2srg").withExtension("tsrg.gz"), false);
+        if (outputJson != null) {
+        	outputJson.put("mappings.channel", mappings::channel);
+        	outputJson.put("mappings.version", mappings::version);
+        	outputJson.put("mappings.csv.artifact", csvs.artifact()::toString);
+        	outputJson.put("mappings.csv.file", csvs.task().filePathSupplier());
+        	outputJson.put("mappings.obf.artifact", m2o.artifact()::toString);
+        	outputJson.put("mappings.obf.file", m2o.task().filePathSupplier());
+        	outputJson.put("mappings.srg.artifact", m2s.artifact()::toString);
+        	outputJson.put("mappings.srg.file", m2s.task().filePathSupplier());
+        }
         return List.of(csvs, pom, m2o, m2s);
     }
 }

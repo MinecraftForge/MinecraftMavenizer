@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /*
  * Provides the following artifacts:
@@ -129,7 +130,7 @@ public final class MCPConfigRepo extends Repo {
     }
 
     @Override
-    public List<PendingArtifact> process(Artifact artifact, Mappings mappings) {
+    public List<PendingArtifact> process(Artifact artifact, Mappings mappings, Map<String, Supplier<String>> outputJson) {
         validate(artifact);
         var version = artifact.getVersion();
 
@@ -151,14 +152,16 @@ public final class MCPConfigRepo extends Repo {
         var pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"), false);
         var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
 
-        if (isMappings) {
-            return mappingArtifacts(build, mappings, mcpSide);
-        } else if (dependenciesOnly) {
+        if (dependenciesOnly) {
             return List.of(
                 pom.withVariants(() -> classVariants(mappings, mcpSide)),
                 metadata
             );
         }
+
+        var mappingArtifacts = mappingArtifacts(build, mappings, mcpSide, outputJson);
+        if (isMappings)
+            return mappingArtifacts;
 
         return switch (mappings.channel()) {
             case "notch" -> List.of(pending("Classes", mcpTasks.getRawJar(), name.withClassifier("raw"), false, simpleVariant("obf-notch", new Mappings("notch", null))));
@@ -177,12 +180,14 @@ public final class MCPConfigRepo extends Repo {
                     sources, classes, metadata, pom
                 ));
 
+                pending.addAll(mappingArtifacts);
+
                 yield pending;
             }
         };
     }
 
-    public List<PendingArtifact> processWithoutMcp(Artifact artifact, Mappings mappings) {
+    public List<PendingArtifact> processWithoutMcp(Artifact artifact, Mappings mappings, Map<String, Supplier<String>> outputJson) {
         // Without MCPConfig, we can't create a source artifact.
         // So all we can do is check if it has official mappings
         // If it does, we can generate an official named jar file, and obf to official mapping file.
@@ -191,20 +196,29 @@ public final class MCPConfigRepo extends Repo {
 
         var tasks = this.getMCTasks(artifact.getVersion());
         var cache = new File(this.cache.root(), "without_mcp");
+
+        //net.minecraft:mappings_{CHANNEL}:{MCP_VERSION}[-{VERSION}]@zip
+        var mapCoords = Artifact.from(Constants.MC_GROUP, "mappings_official", artifact.getVersion()).withExtension("zip");
+        var mapPom = pending("Mappings POM", simplePom(cache, mapCoords), mapCoords.withExtension("pom"), false);
+        var m2o = pending("Mappings map2obf", tasks.mergeMappings(), mapCoords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
+
+        if (outputJson != null) {
+        	outputJson.put("mappings.channel", mappings::channel);
+        	outputJson.put("mappings.version", mappings::version);
+        	outputJson.put("mappings.obf.artifact", m2o.artifact()::toString);
+        	outputJson.put("mappings.obf.file", m2o.task().filePathSupplier());
+        }
+
         if ("mappings".equals(artifact.getName())) {
-            //net.minecraft:mappings_{CHANNEL}:{MCP_VERSION}[-{VERSION}]@zip
-            var coords = Artifact.from(Constants.MC_GROUP, "mappings_official", artifact.getVersion()).withExtension("zip");
-            var pom = pending("Mappings POM", simplePom(cache, coords), coords.withExtension("pom"), false);
-            var m2o = pending("Mappings map2obf", tasks.mergeMappings(), coords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
-            return List.of(pom, m2o);
+            return List.of(mapPom, m2o);
         } else if ("client".equals(artifact.getName())) {
             var pom = pending("Maven POM", tasks.clientPom(), artifact.withExtension("pom"), false);
             var jar = pending("Official Jar", tasks.renameClient(), artifact, false);
-            return List.of(pom, jar);
+            return List.of(mapPom, m2o, pom, jar);
         } else if ("server".equals(artifact.getName())) {
             var pom = pending("Maven POM", tasks.serverPom(), artifact.withExtension("pom"), false);
             var jar = pending("Official Jar", tasks.renameServer(), artifact, false);
-            return List.of(pom, jar);
+            return List.of(mapPom, m2o, pom, jar);
         } else {
             throw new IllegalArgumentException("MCPConfigRepo does not support artifact: " + artifact);
         }
