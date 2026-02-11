@@ -19,6 +19,7 @@ import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
+import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.MinecraftVersion;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
@@ -29,6 +30,7 @@ import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -40,6 +42,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.function.Supplier;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -50,6 +54,7 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
+import org.jetbrains.annotations.Nullable;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
 
@@ -66,7 +71,8 @@ public record MinecraftMaven(
     boolean disableGradle,
     boolean stubJars,
     Set<String> mcpConfigVersions,
-    List<File> accessTransformer
+    List<File> accessTransformer,
+    @Nullable File outputJsonFile
 ) {
     // Only 1.14.4+ has official mappings, we can support more when we add more mappings
     private static final MinecraftVersion MIN_OFFICIAL_MAPPINGS = MinecraftVersion.from("1.14.4");
@@ -74,12 +80,14 @@ public record MinecraftMaven(
 
     public MinecraftMaven(File output, boolean dependenciesOnly, File cacheRoot, File jdkCacheRoot, Mappings mappings,
         Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants, boolean disableGradle, boolean stubJars,
-        List<File> accessTransformer) {
-        this(output, dependenciesOnly, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants, disableGradle, stubJars, new HashSet<>(), accessTransformer);
+        List<File> accessTransformer, @Nullable File outputJsonFile) {
+        this(output, dependenciesOnly, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants, disableGradle, stubJars, new HashSet<>(), accessTransformer, outputJsonFile);
     }
 
     public MinecraftMaven {
         LOGGER.info("  Output:             " + output.getAbsolutePath());
+        if (outputJsonFile != null)
+            LOGGER.info("  Output JSON:        " + outputJsonFile.getAbsolutePath());
         LOGGER.info("  Dependencies Only:  " + dependenciesOnly);
         LOGGER.info("  Cache:              " + cache.root().getAbsolutePath());
         LOGGER.info("  JDK Cache:          " + cache.jdks().root().getAbsolutePath());
@@ -109,18 +117,41 @@ public record MinecraftMaven(
         var module = artifact.getGroup() + ':' + artifact.getName();
         var version = artifact.getVersion();
         LOGGER.info("Processing Minecraft dependency: %s:%s".formatted(module, version));
+        Map<String, Supplier<String>> outputJson = null;
+        if (outputJsonFile != null) {
+        	outputJson = new HashMap<>();
+        	outputJson.put("spec", () -> "1");
+        }
+
         var mcprepo = new MCPConfigRepo(this.cache, dependenciesOnly);
         if (Constants.FORGE_GROUP.equals(artifact.getGroup()) && Constants.FORGE_NAME.equals(artifact.getName())) {
             var repo = new ForgeRepo(this.cache, mcprepo);
-            createForge(artifact, mcprepo, repo);
+            createForge(artifact, mcprepo, repo, outputJson);
         } else if (Constants.MC_GROUP.equals(artifact.getGroup())) {
-            createMinecraft(artifact, mcprepo);
+            createMinecraft(artifact, mcprepo, outputJson);
         } else {
             throw new IllegalArgumentException("Artifact '%s' is currently Unsupported. Will add later".formatted(module));
         }
+
+        if (outputJson != null) {
+        	var finalized = new TreeMap<String, String>();
+        	for (var entry : outputJson.entrySet())
+        		finalized.put(entry.getKey(), entry.getValue().get());
+
+        	var parent = outputJsonFile.getParentFile();
+        	if (parent != null && !parent.exists())
+        		parent.mkdirs();
+
+            try (var writer = new FileWriter(outputJsonFile)) {
+                Util.GSON.toJson(finalized, writer);
+            } catch (IOException e) {
+            	LOGGER.error("Failed to write output json file: " + outputJsonFile.getAbsolutePath(), e);
+            	Util.sneak(e);
+            }
+        }
     }
 
-    protected void createForge(Artifact artifact, MCPConfigRepo mcprepo, ForgeRepo repo) {
+    protected void createForge(Artifact artifact, MCPConfigRepo mcprepo, ForgeRepo repo, Map<String, Supplier<String>> outputJson) {
         if (dependenciesOnly)
             throw new IllegalArgumentException("ForgeRepo doesn't currently support dependenciesOnly");
 
@@ -129,6 +160,9 @@ public record MinecraftMaven(
             throw new IllegalArgumentException("No version specified for Forge");
 
         if ("all".equals(version)) {
+        	if (outputJson != null)
+        		throw new IllegalArgumentException("Output Json does not support bulk operations");
+
             var versions = this.cache.maven().getVersions(artifact);
             var mappingCache = new HashMap<String, Mappings>();
             for (var ver : versions.reversed()) {
@@ -142,17 +176,17 @@ public record MinecraftMaven(
 
                 var mappings = mappingCache.computeIfAbsent(forgeToMcVersion(ver), this.mappings::withMCVersion);
                 var art = artifact.withVersion(ver);
-                var artifacts = repo.process(art, mappings);
+                var artifacts = repo.process(art, mappings, outputJson);
                 finalize(art, mappings, artifacts);
             }
         } else {
             var mappings = this.mappings.withMCVersion(forgeToMcVersion(version));
-            var artifacts = repo.process(artifact, mappings);
+            var artifacts = repo.process(artifact, mappings, outputJson);
             finalize(artifact, mappings, artifacts);
         }
     }
 
-    protected void createMinecraft(Artifact artifact, MCPConfigRepo mcprepo) {
+    protected void createMinecraft(Artifact artifact, MCPConfigRepo mcprepo, Map<String, Supplier<String>> outputJson) {
         if (artifact.getVersion() == null)
             throw new IllegalArgumentException("No version specified for MCPConfig");
 
@@ -161,6 +195,9 @@ public record MinecraftMaven(
             throw new IllegalArgumentException("No version specified for Forge");
 
         if ("all".equals(version)) {
+        	if (outputJson != null)
+        		throw new IllegalArgumentException("Output Json does not support bulk operations");
+
             var manifestFile = mcprepo.getLauncherManifestTask().execute();
             var manifest = JsonData.launcherManifest(manifestFile);
             for (var ver : manifest.versions) {
@@ -178,9 +215,9 @@ public record MinecraftMaven(
                 // If there is no MCPConfig, then we just produce a official named jar
                 List<PendingArtifact> artifacts = null;
                 if (hasMcp(mcprepo, ver.id))
-                    artifacts = mcprepo.process(versioned, mappings.withMCVersion(ver.id));
+                    artifacts = mcprepo.process(versioned, mappings.withMCVersion(ver.id), outputJson);
                 else if (mappings.channel().equals("official") && hasOfficialMappings(mcprepo, ver.id))
-                    artifacts = mcprepo.processWithoutMcp(versioned, mappings.withMCVersion(ver.id));
+                    artifacts = mcprepo.processWithoutMcp(versioned, mappings.withMCVersion(ver.id), outputJson);
                 else {
                     LOGGER.info("Skipping " + versioned + " no mcp config");
                     continue;
@@ -193,9 +230,9 @@ public record MinecraftMaven(
 
             List<PendingArtifact> artifacts = null;
             if (hasMcp(mcprepo, version))
-                artifacts = mcprepo.process(artifact, mappings);
+                artifacts = mcprepo.process(artifact, mappings, outputJson);
             else if (mappings.channel().equals("official") && hasOfficialMappings(mcprepo, mcVersion))
-                artifacts = mcprepo.processWithoutMcp(artifact, mappings);
+                artifacts = mcprepo.processWithoutMcp(artifact, mappings, outputJson);
             else
                 throw new IllegalStateException("Can not process " + artifact + " as it does not have a MCPConfig ror official mappings");
 

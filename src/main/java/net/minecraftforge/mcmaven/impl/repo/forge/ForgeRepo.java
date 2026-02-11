@@ -38,6 +38,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Supplier;
 
 // TODO: [MCMavenizer][ForgeRepo] For now, the ForgeRepo needs to be fully complete with everything it has to do.
 // later, we can worry about refactoring it so that other repositories such as MCP (clean) and FMLOnly can function.
@@ -66,7 +68,7 @@ public final class ForgeRepo extends Repo {
     }
 
     @Override
-    public List<PendingArtifact> process(Artifact artifact, Mappings mappings) {
+    public List<PendingArtifact> process(Artifact artifact, Mappings mappings, Map<String, Supplier<String>> outputJson) {
         var module = artifact.getGroup() + ':' + artifact.getName();
         var version = artifact.getVersion();
         if (!Constants.FORGE_ARTIFACT.equals(module))
@@ -84,7 +86,7 @@ public final class ForgeRepo extends Repo {
                 throw new IllegalArgumentException("Only FG 3+ currently supported");
 
             if (fg.ordinal() <= FGVersion.v6.ordinal())
-                return processV3(version, mappings);
+                return processV3(version, mappings, outputJson);
 
             throw new IllegalArgumentException("Forge version %s is not supported yet".formatted(version));
         } finally {
@@ -126,7 +128,7 @@ public final class ForgeRepo extends Repo {
     ///   - pom:
     ///     - Standard maven pom file that contains all dependency information.
     // Made this an MD comment to make it easier to read in IDE - Jonathan
-    private List<PendingArtifact> processV3(String version, Mappings mappings) {
+    private List<PendingArtifact> processV3(String version, Mappings mappings, Map<String, Supplier<String>> outputJson) {
         var name = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version);
         var userdev = getUserdev(version);
 
@@ -141,7 +143,7 @@ public final class ForgeRepo extends Repo {
         var extraCoords = Artifact.from(Constants.MC_GROUP, Constants.MC_CLIENT + "-extra", patcher.getMCP().getName().getVersion());
         var mappingCoords = mappings.getArtifact(joined);
 
-        var mappingArtifacts = mappingArtifacts(build, mappings, joined);
+        var mappingArtifacts = mappingArtifacts(build, mappings, joined, outputJson);
 
         var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(mappings));
         var classes = pending("Classes", classesTask, name, false, () -> classVariants(mappings, patcher, extraCoords, mappingCoords));

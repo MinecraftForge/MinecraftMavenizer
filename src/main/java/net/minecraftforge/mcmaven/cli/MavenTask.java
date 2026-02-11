@@ -100,6 +100,10 @@ class MavenTask {
             .withRequiredArg().ofType(File.class);
         stubO.availableUnless(accessTransformerO);
 
+        var outputJsonO = parser.accepts("output-json",
+    		"File to write extended output data to. Not compatible with bulk operations.")
+    		.withRequiredArg().ofType(File.class);
+
         var shorthandOptions = new HashMap<String, OptionSpecBuilder>();
         var artifacts = Map.of(
             "forge",  Constants.FORGE_ARTIFACT,
@@ -173,9 +177,19 @@ class MavenTask {
             foreignRepositories.put(split[0], split[1]);
         }
 
-        var mcmaven = new MinecraftMaven(output, options.has(dependenciesOnlyO), cache, jdkCache, mappings,
-            foreignRepositories, options.has(globalAuxiliaryVariantsO), options.has(disableGradleO), options.has(stubO),
-            options.valuesOf(accessTransformerO));
+        var mcmaven = new MinecraftMaven(
+    		output,
+    		options.has(dependenciesOnlyO),
+    		cache,
+    		jdkCache,
+    		mappings,
+            foreignRepositories,
+            options.has(globalAuxiliaryVariantsO),
+            options.has(disableGradleO),
+            options.has(stubO),
+            options.valuesOf(accessTransformerO),
+            options.valueOf(outputJsonO)
+		);
         mcmaven.run(artifact);
 
         return parser;

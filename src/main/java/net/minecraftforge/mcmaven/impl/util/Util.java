@@ -19,9 +19,16 @@ import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnknownNullability;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
 // TODO [MCMavenizer][Documentation] Document
 @NotNullByDefault
 public class Util {
+    public static final Gson GSON = new GsonBuilder()
+        .setPrettyPrinting()
+        .create();
+
     public static <S extends Comparable<S>> int compare(@Nullable S a, @Nullable S b) {
         if (a == null)
             return b == null ? 0 : -1;

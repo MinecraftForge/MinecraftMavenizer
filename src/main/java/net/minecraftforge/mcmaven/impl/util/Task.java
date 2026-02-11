@@ -42,6 +42,14 @@ public interface Task {
      */
     String name();
 
+    /**
+     * A Supplier that returns the absolute path to the resulting file.
+     * Useful for our output json file.
+     */
+    default Supplier<String> filePathSupplier() {
+    	return () -> this.execute().getAbsolutePath();
+    }
+
     static Task named(String name, Callable<File> supplier) {
         return named(name, List.of(), supplier);
     }
