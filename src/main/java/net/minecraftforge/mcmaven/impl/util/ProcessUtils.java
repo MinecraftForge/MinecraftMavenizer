@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.ToIntFunction;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
@@ -114,6 +115,19 @@ public final class ProcessUtils {
      * @return The exit code of the process
      */
     public static int runCommand(File workDir, Consumer<String> lines, String... args) {
+    	return runCommand(workDir, lines, args);
+    }
+
+    /**
+     * Runs a command and collects the output into the given consumer.
+     *
+     * @param workDir The working directory
+     * @param lines   The consumer to collect the output into
+     * @param logHandler Log line handler, return non-zero to terminate process
+     * @param args    The command-line arguments
+     * @return The exit code of the process
+     */
+    public static int runCommand(File workDir, Consumer<String> lines, ToIntFunction<String> logHandler, String... args) {
         LOGGER.debug("Running Command: " + String.join(" ", args));
 
         Process process;
@@ -132,12 +146,21 @@ public final class ProcessUtils {
 
         var is = new BufferedReader(new InputStreamReader(process.getInputStream()));
 
+        int forcedExit = 0;
         while (process.isAlive()) {
             try {
                 while (is.ready()) {
                     String line = is.readLine();
                     if (line != null)
                         lines.accept(line);
+
+                    if (logHandler != null && forcedExit == 0) {
+                    	forcedExit = logHandler.applyAsInt(line);
+
+                		// We don't want to exit here, because we want to log the rest of the output before exiting.
+                    	if (forcedExit != 0)
+                    		process.destroy();
+                    }
                 }
             } catch (IOException e) {
                 getStackTrace(e, lines);
@@ -146,7 +169,7 @@ public final class ProcessUtils {
             }
         }
 
-        var exitValue = process.exitValue();
+        var exitValue = forcedExit == 0 ? process.exitValue() : forcedExit;
         if (exitValue != 0)
             lines.accept("Process returned non-zero exit value: " + exitValue);
         return exitValue;
@@ -183,6 +206,22 @@ public final class ProcessUtils {
      * @return The exit code of the process
      */
     public static Result runJar(File javaHome, File workDir, File logFile, File tool, List<String> jvm, List<String> run) {
+    	return runJar(javaHome, workDir, logFile, tool, jvm, run, null);
+    }
+
+    /**
+     * Executes a jar file with the given arguments.
+     *
+     * @param javaHome The Java home directory
+     * @param workDir  The working directory
+     * @param logFile  The output log file
+     * @param tool     The jar file to run (usually a tool)
+     * @param jvm      The JVM arguments
+     * @param run      The program arguments
+     * @param logHandler Log line handler, return non-zero to terminate process
+     * @return The exit code of the process
+     */
+    public static Result runJar(File javaHome, File workDir, File logFile, File tool, List<String> jvm, List<String> run, ToIntFunction<String> logHandler) {
         FileUtils.ensureParent(logFile);
         try (var log = new PrintWriter(new FileWriter(logFile), true)) {
             String classpath = tool.getAbsolutePath();
@@ -219,8 +258,7 @@ public final class ProcessUtils {
                 log.println(line);
             };
 
-            int ret = runCommand(workDir, lines, args.toArray(String[]::new));
-            System.currentTimeMillis();
+            int ret = runCommand(workDir, lines, logHandler, args.toArray(String[]::new));
 
             log.flush();
             return new Result(consoleLog, ret);

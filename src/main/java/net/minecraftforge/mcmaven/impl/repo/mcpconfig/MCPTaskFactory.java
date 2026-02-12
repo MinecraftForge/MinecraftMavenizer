@@ -829,20 +829,36 @@ public class MCPTaskFactory {
         var runArgs = fillArgs(func.args, args, deps);
 
         return Task.named(name, Task.deps(deps),
-            () -> execute(jvmArgs, runArgs, func, log, output)
+            () -> execute(name, jvmArgs, runArgs, func, log, output)
         );
     }
 
-    private File execute(List<TaskOrArg> jvmArgs, List<TaskOrArg> runArgs, MCPConfig.Function func, File log, File output) {
+    private static final boolean isDecompiler(String name, Artifact artifact) {
+    	if ("decompile".equals(name))
+    		return true;
+
+    	switch (artifact.getName()) {
+    		case "forgeflower":
+    		case "fernflower":
+    		case "vineflower":
+    			return true;
+    	}
+
+    	return false;
+    }
+
+    private File execute(String name, List<TaskOrArg> jvmArgs, List<TaskOrArg> runArgs, MCPConfig.Function func, File log, File output) {
         // First download the tool
         var maven = new MavenCache("mcp-tools", func.repo, this.side.getMCP().getCache().root());
         var toolA = Artifact.from(func.version);
         var tool = maven.download(toolA);
 
+        var isDecompile = isDecompiler(name, toolA);
+
         var cache = HashStore.fromFile(output);
         cache.add("tool", tool);
-        cache.add("jvm-args", jvmArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));
-        cache.add("run-args", runArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));
+        cache.addKnown("jvm-args", jvmArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));
+        cache.addKnown("run-args", runArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));
         var tasks = new HashMap<Task, String>();
         var jvm = resolveArgs(cache, tasks, jvmArgs);
         var run = resolveArgs(cache, tasks, runArgs);
@@ -861,7 +877,7 @@ public class MCPTaskFactory {
             throw new IllegalStateException("Failed to find JDK for version " + java_version, e);
         }
 
-        var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, jvm, run);
+        var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, jvm, run, isDecompile ? MCPTaskFactory::parseDecompileLog : null);
         if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to run MCP Step (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
 
@@ -915,4 +931,30 @@ public class MCPTaskFactory {
         return ret;
     }
 
+    private static final int OUT_OF_MEMORY = -1001;
+    private static final int FAILED_DECOMPILE = -1002;
+    // Yes this is slow as fuck, but this is only run during a decompile run which is already slow,
+    // This is to check if Fernflower is broken and returning success when it really failed.
+    // It also eagerly exits the process when something fails so as to not waste time.
+    private static int parseDecompileLog(String line) {
+		if (line.startsWith("java.lang.OutOfMemoryError:"))
+			return OUT_OF_MEMORY;
+		if (line.contains("ERROR:")) {
+			// String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + cl.qualifiedName + " couldn't be written.";
+			// String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + classWrapper.getClassStruct().qualifiedName + " couldn't be written.";
+			// String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + node.classStruct.qualifiedName + " couldn't be written.";
+			if (line.endsWith(" couldn't be written."))
+				return FAILED_DECOMPILE;
+			// DecompilerContext.getLogger().logError("Class " + cl.qualifiedName + " couldn't be processed.", t);
+			if (line.endsWith(" couldn't be processed."))
+				return FAILED_DECOMPILE;
+		    // DecompilerContext.getLogger().logError("Class " + cl.qualifiedName + " couldn't be fully decompiled.", t);
+			if (line.endsWith(" couldn't be fully decompiled."))
+				return FAILED_DECOMPILE;
+	        // String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + classStruct.qualifiedName + " couldn't be decompiled.";
+			if (line.endsWith(" couldn't be decompiled."))
+				return FAILED_DECOMPILE;
+		}
+		return 0;
+    }
 }
