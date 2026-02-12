@@ -87,6 +87,7 @@ public interface Task {
         private final SequencedCollection<? extends Supplier<? extends Task>> deps;
         private final Callable<File> supplier;
         private File file;
+        private RuntimeException failed = null;
 
         private Simple(String name, SequencedCollection<? extends Supplier<? extends Task>> deps, Callable<File> supplier) {
             this.name = name;
@@ -96,6 +97,10 @@ public interface Task {
 
         @Override
         public File execute() {
+        	// Don't try to execute again if we've already failed
+        	if (failed != null)
+        		throw failed;
+
             // immediately stop if result is already calculated
             if (this.file == null) {
                 // run all task dependencies
@@ -106,7 +111,8 @@ public interface Task {
                     try {
                         task.execute();
                     } catch (Exception e) {
-                        throw new RuntimeException("Failed to execute task `%s` which is required by task `%s`".formatted(task.name(), this.name()), e);
+                        failed = new RuntimeException("Failed to execute task `%s` which is required by task `%s`".formatted(task.name(), this.name()), e);
+                        throw failed;
                     }
                 }
 
@@ -120,7 +126,8 @@ public interface Task {
                     LOGGER.debug(String.format("-> took %d:%02d.%03d", time.toMinutesPart(), time.toSecondsPart(), time.toMillisPart()));
                     LOGGER.debug("-> " + this.file.getAbsolutePath());
                 } catch (Exception e) {
-                    throw new RuntimeException("Failed to execute task `%s`".formatted(this.name()), e);
+                    failed = new RuntimeException("Failed to execute task `%s`".formatted(this.name()), e);
+                    throw failed;
                 } finally {
                     LOGGER.pop(indent);
                 }
