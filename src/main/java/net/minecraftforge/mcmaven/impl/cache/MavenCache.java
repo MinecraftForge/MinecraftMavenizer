@@ -6,6 +6,7 @@ package net.minecraftforge.mcmaven.impl.cache;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
+import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.Util;
@@ -88,7 +89,11 @@ public sealed class MavenCache permits MinecraftMavenCache {
     @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
     public final File download(Artifact artifact) {
         try {
-            return download(false, artifact.getPath());
+        	if (artifact.getVersion() == null)
+        		throw new IllegalArgumentException("Can not download artifact with null version: " + artifact);
+
+        	var resolved = resolve(artifact);
+            return download(false, resolved.getPath());
         } catch (Exception e) {
             if (!this.foreignRepositories.isEmpty()) {
                 for (var repo : this.foreignRepositories) {
@@ -277,5 +282,47 @@ public sealed class MavenCache permits MinecraftMavenCache {
         } catch (SAXException | IOException | ParserConfigurationException e) {
             throw new RuntimeException("Failed to parse " + meta.getAbsolutePath(), e);
         }
+    }
+
+    /**
+     * Try and resolve dynamic versions.
+     */
+    private Artifact resolve(Artifact artifact) {
+    	var version = artifact.getVersion();
+    	if (version == null)
+    		throw new IllegalArgumentException("Can not resolve null version: " + artifact);
+
+    	if (version.endsWith("+")) {
+    		var versions = getVersions(artifact);
+
+    		if (version.length() > 1) {
+    			var prefix = version.substring(0, version.length() - 1);
+    			for (var itr = versions.iterator(); itr.hasNext(); ) {
+    				var v = itr.next();
+    				if (!v.startsWith(prefix))
+    					itr.remove();
+    			}
+    		}
+
+    		ComparableVersion ret = null;
+    		for (var ver : versions) {
+    			ComparableVersion comp = null;
+    			try {
+    				comp = new ComparableVersion(ver);
+    			} catch (Exception e) {
+    				LOGGER.debug("Failed to parse version " + ver + " while resolving " + artifact + ", skipping");
+    				continue;
+    			}
+
+    			// Grab the highest version
+    			if (ret == null || ret.compareTo(comp) < 0)
+    				ret = comp;
+    		}
+
+    		if (ret != null)
+    			artifact = artifact.withVersion(ret.toString());
+    	}
+
+    	return artifact;
     }
 }
