@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.zip.ZipFile;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
@@ -58,9 +59,18 @@ public class Mappings {
         var channel = split[0];
         var version = split.length > 1 ? split[1] : null;
 
-        return "parchment".equalsIgnoreCase(channel)
-            ? new ParchmentMappings(version)
-            : new Mappings(channel, version);
+        switch (channel) {
+            case "parchment":
+            	return new ParchmentMappings(version);
+            case "official":
+            	return new Mappings(channel, version);
+            case "snapshot":
+            case "snapshot_nodoc":
+            case "stable":
+            case "stable_nodoc":
+            	return new MCPMappings(channel, version);
+        }
+        throw new IllegalArgumentException("Unsupported Mappings: " + mappingsNotation);
     }
 
     public record Data(Map<String, String> names, Map<String, String> docs) { }
@@ -119,6 +129,8 @@ public class Mappings {
     }
 
     public Mappings withMCVersion(String version) {
+    	if (Objects.equals(this.version, version))
+    		return this;
         return new Mappings(channel(), version);
     }
 
