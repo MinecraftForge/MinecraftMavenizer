@@ -468,6 +468,7 @@ public class MCPTaskFactory {
         var cache = HashStore.fromFile(output);
         cache.add("input", input);
         cache.add("inject", inject);
+        cache.addKnown("codever", "1");
 
         if (output.exists() && cache.isSame())
             return output;
@@ -479,7 +480,7 @@ public class MCPTaskFactory {
 
         FileUtils.ensureParent(output);
 
-        var templateF = new File(input, "package-info-template.java");
+        var templateF = new File(inject, "package-info-template.java");
         String template = null;
         try {
             if (templateF.exists()) {
@@ -514,7 +515,8 @@ public class MCPTaskFactory {
                     }
                 }
 
-                FileUtils.mergeJars(output, false, this.injectFileFilter, input, inject, packages);
+                var filter = this.injectFileFilter.and((_, name) -> !name.equals("package-info-template.java"));
+                FileUtils.mergeJars(output, false, filter, input, inject, packages);
             } else {
                 FileUtils.mergeJars(output, false, this.injectFileFilter, input, inject);
             }
@@ -601,8 +603,10 @@ public class MCPTaskFactory {
         var libsVarCache = new File(output.getAbsoluteFile().getParentFile(), "libraries.txt");
 
         var cache = HashStore.fromFile(output).add(jsonF).add(libsVarCache);
-        for (var lib : libs)
-            cache.addKnown(lib.coord, lib.dl.sha1);
+        for (var lib : libs) {
+            if (lib.dl != null) // Sometimes natives don't have a main download
+                cache.addKnown(lib.coord, lib.dl.sha1);
+        }
 
         if (output.exists() && libsVarCache.exists() && cache.isSame()) {
             try {
@@ -622,6 +626,10 @@ public class MCPTaskFactory {
         var minecraft = this.side.getMCP().getCache().minecraft();
         var downloadedLibs = new ArrayList<Lib>();
         for (var lib : libs) {
+            // Sometimes natives don't have a main download
+            if (lib.dl == null)
+                continue;
+
             if (!lib.dl.url.toString().startsWith(Constants.MOJANG_MAVEN))
                 throw new IllegalStateException("Unable to download library " + lib.dl.path + " as it is not on Mojang's repo and I was lazy. " + lib.dl.url);
 
@@ -834,17 +842,17 @@ public class MCPTaskFactory {
     }
 
     private static final boolean isDecompiler(String name, Artifact artifact) {
-    	if ("decompile".equals(name))
-    		return true;
+        if ("decompile".equals(name))
+            return true;
 
-    	switch (artifact.getName()) {
-    		case "forgeflower":
-    		case "fernflower":
-    		case "vineflower":
-    			return true;
-    	}
+        switch (artifact.getName()) {
+            case "forgeflower":
+            case "fernflower":
+            case "vineflower":
+                return true;
+        }
 
-    	return false;
+        return false;
     }
 
     private File execute(String name, List<TaskOrArg> jvmArgs, List<TaskOrArg> runArgs, MCPConfig.Function func, File log, File output) {
@@ -857,8 +865,8 @@ public class MCPTaskFactory {
 
         var cache = HashStore.fromFile(output);
         cache.add("tool", tool);
-        cache.addKnown("jvm-args", jvmArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));
-        cache.addKnown("run-args", runArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));
+        cache.add("jvm-args", jvmArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));
+        cache.add("run-args", runArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));
         var tasks = new HashMap<Task, String>();
         var jvm = resolveArgs(cache, tasks, jvmArgs);
         var run = resolveArgs(cache, tasks, runArgs);
@@ -937,24 +945,24 @@ public class MCPTaskFactory {
     // This is to check if Fernflower is broken and returning success when it really failed.
     // It also eagerly exits the process when something fails so as to not waste time.
     private static int parseDecompileLog(String line) {
-		if (line.startsWith("java.lang.OutOfMemoryError:"))
-			return OUT_OF_MEMORY;
-		if (line.contains("ERROR:")) {
-			// String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + cl.qualifiedName + " couldn't be written.";
-			// String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + classWrapper.getClassStruct().qualifiedName + " couldn't be written.";
-			// String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + node.classStruct.qualifiedName + " couldn't be written.";
-			if (line.endsWith(" couldn't be written."))
-				return FAILED_DECOMPILE;
-			// DecompilerContext.getLogger().logError("Class " + cl.qualifiedName + " couldn't be processed.", t);
-			if (line.endsWith(" couldn't be processed."))
-				return FAILED_DECOMPILE;
-		    // DecompilerContext.getLogger().logError("Class " + cl.qualifiedName + " couldn't be fully decompiled.", t);
-			if (line.endsWith(" couldn't be fully decompiled."))
-				return FAILED_DECOMPILE;
-	        // String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + classStruct.qualifiedName + " couldn't be decompiled.";
-			if (line.endsWith(" couldn't be decompiled."))
-				return FAILED_DECOMPILE;
-		}
-		return 0;
+        if (line.startsWith("java.lang.OutOfMemoryError:"))
+            return OUT_OF_MEMORY;
+        if (line.contains("ERROR:")) {
+            // String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + cl.qualifiedName + " couldn't be written.";
+            // String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + classWrapper.getClassStruct().qualifiedName + " couldn't be written.";
+            // String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + node.classStruct.qualifiedName + " couldn't be written.";
+            if (line.endsWith(" couldn't be written."))
+                return FAILED_DECOMPILE;
+            // DecompilerContext.getLogger().logError("Class " + cl.qualifiedName + " couldn't be processed.", t);
+            if (line.endsWith(" couldn't be processed."))
+                return FAILED_DECOMPILE;
+            // DecompilerContext.getLogger().logError("Class " + cl.qualifiedName + " couldn't be fully decompiled.", t);
+            if (line.endsWith(" couldn't be fully decompiled."))
+                return FAILED_DECOMPILE;
+            // String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + classStruct.qualifiedName + " couldn't be decompiled.";
+            if (line.endsWith(" couldn't be decompiled."))
+                return FAILED_DECOMPILE;
+        }
+        return 0;
     }
 }

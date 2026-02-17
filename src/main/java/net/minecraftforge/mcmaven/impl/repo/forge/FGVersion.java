@@ -8,6 +8,7 @@ import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.TreeMap;
 
 /**
@@ -90,6 +91,17 @@ public enum FGVersion {
         //forge(v6_0_24, "1.20.6-50.0.1");
     }
 
+    // Special versions that do not match the general ranges of historical versions.
+    // This will probably need updating when we back port new ForgeDev toolchain to older versions.
+    private static final List<SpecialCase> SPECIAL_CASES = List.of(
+        special(v3, "1.12.2-14.23.5.2851", "1.12.3")
+    );
+
+    private record SpecialCase(FGVersion version, ComparableVersion start, ComparableVersion end) {}
+    private static SpecialCase special(FGVersion fg, String start, String end) {
+        return new SpecialCase(fg, new ComparableVersion(start), new ComparableVersion(end));
+    }
+
     /**
      * Gets the ForgeGradle version that corresponds to the given Forge version.
      *
@@ -98,6 +110,12 @@ public enum FGVersion {
      */
     public static @Nullable FGVersion fromForge(String version) {
         var ver = new ComparableVersion(version);
+
+        for (var special : SPECIAL_CASES) {
+            if (ver.compareTo(special.start) >= 0 && ver.compareTo(special.end()) < 0)
+                return special.version;
+        }
+
         for (var entry : FORGE_TO_FG.entrySet()) {
             if (entry.getValue().compareTo(ver) <= 0)
                 return entry.getKey();

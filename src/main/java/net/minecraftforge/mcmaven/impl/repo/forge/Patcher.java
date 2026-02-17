@@ -5,6 +5,7 @@
 package net.minecraftforge.mcmaven.impl.repo.forge;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -281,15 +282,38 @@ public class Patcher implements Supplier<Task> {
             classpath.add(lib.file());
         }
 
+        var cache = this.forge.getCache();
+
         for (var lib : this.getMCP().getConfig().getLibraries(MCPSide.JOINED)) {
-            classpath.add(this.forge.getCache().maven().download(Artifact.from(lib)));
+            classpath.add(getArtifact(cache, lib));
         }
 
         for (var lib : this.config.libraries) {
-            classpath.add(this.forge.getCache().maven().download(Artifact.from(lib)));
+            classpath.add(getArtifact(cache, lib));
         }
 
         return classpath;
+    }
+
+    private static final File getArtifact(Cache cache, String coords) {
+        var artifact = Artifact.from(coords);
+        // Some libraries are on Minecraft's maven. Such as launchwrapper.
+        // Rather then configure Forge's server to proxy Mojang's I add this check.
+        if ("net.minecraft".equals(artifact.getGroup()))
+            return cache.minecraft().download(artifact);
+        try {
+            return cache.maven().download(artifact);
+        } catch (Exception e) {
+            // If its 404 on Forge's maven, try Mojang's
+            if (e.getCause() instanceof FileNotFoundException) {
+                try {
+                    return cache.minecraft().download(artifact);
+                } catch (Exception e2) {
+                    e.addSuppressed(e2);
+                }
+            }
+            return Util.sneak(e);
+        }
     }
 
     /** @return The final unnamed sources */
@@ -495,8 +519,10 @@ public class Patcher implements Supplier<Task> {
         var deps = new HashSet<Task>();
         deps.add(input);
 
-        for (var entry : data.data.entrySet())
-            deps.add(extractSingle(entry.getKey(), entry.getValue()));
+        if (data.data != null) {
+            for (var entry : data.data.entrySet())
+                deps.add(extractSingle(entry.getKey(), entry.getValue()));
+        }
 
         return Task.named("postProcess[" + this.name.getName() + ']',
             Task.deps(deps),
@@ -523,11 +549,13 @@ public class Patcher implements Supplier<Task> {
         var files = new HashMap<String, String>();
         files.put("{input}", input.getAbsolutePath());
         files.put("{output}", output.getAbsolutePath());
-        for (var entry : data.data.entrySet()) {
-            var extract = extractSingle(entry.getKey(), entry.getValue());
-            var file = extract.execute();
-            files.put('{' + entry.getKey() + '}', file.getAbsolutePath());
-            cache.add(entry.getKey(), file);
+        if (data.data != null) {
+            for (var entry : data.data.entrySet()) {
+                var extract = extractSingle(entry.getKey(), entry.getValue());
+                var file = extract.execute();
+                files.put('{' + entry.getKey() + '}', file.getAbsolutePath());
+                cache.add(entry.getKey(), file);
+            }
         }
 
         if (output.exists() && cache.isSame())
