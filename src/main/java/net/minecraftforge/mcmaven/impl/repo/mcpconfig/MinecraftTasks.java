@@ -93,7 +93,15 @@ public class MinecraftTasks {
         if (target.exists() && cache.isSame())
             return target;
 
-        Mavenizer.assertNotCacheOnly();
+        // The manifest doesn't contain anything we can key off off, so this happens often
+        // Do don't do the big warn if we get here.
+        if (Mavenizer.isCacheOnly())
+            Mavenizer.assertNotCacheOnly();
+
+        // If we are offline, but the file exists, use it
+        if (Mavenizer.isOffline() && target.exists())
+            return target;
+
         Mavenizer.assertOnline();
 
         var manifest = JsonData.launcherManifest(manifestF);

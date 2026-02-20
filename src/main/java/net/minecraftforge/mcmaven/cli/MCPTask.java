@@ -269,7 +269,7 @@ class MCPTask {
         try {
             return mcpTaskFactory.findStep(step).execute().getAbsolutePath();
         } catch (Exception e) {
-            LOGGER.error("Cannot serialize output path for MCP step: " + step);
+            LOGGER.error("Cannot serialize output path for MCP step: " + step, e);
             return null;
         }
     }
