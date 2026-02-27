@@ -153,6 +153,19 @@ public final class ForgeRepo extends Repo {
 
         var extraOutput = this.mcpconfig.processExtra(Constants.MC_GROUP + ':' + Constants.MC_CLIENT, patcher.getMCP().getName().getVersion());
 
+        // Add some extra metadata for FG to consume:
+        if (outputJson != null) {
+            outputJson.put("mcp.version", patcher.getMCP().getName()::getVersion);
+            outputJson.put("mcp.artifact", patcher.getMCP().getName()::toString);
+            outputJson.put("mc.version", patcher.getMCP().getMinecraftTasks()::getVersion);
+
+            var modules = patcher.config.modules;
+            if (modules == null || modules.isEmpty())
+                outputJson.put("patcher.modules", () -> "");
+            else
+                outputJson.put("patcher.modules", () -> String.join(",", modules));
+        }
+
         var ret = new ArrayList<PendingArtifact>();
         ret.addAll(mappingArtifacts);
         ret.addAll(extraOutput);
