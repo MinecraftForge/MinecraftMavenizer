@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,6 +47,7 @@ import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.data.json.MCPConfig;
+import net.minecraftforge.util.data.json.MinecraftVersion;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
@@ -599,7 +601,15 @@ public class MCPTaskFactory {
         var jsonF = jsonTask.execute();
         var json = JsonData.minecraftVersion(jsonF);
 
-        var libs = json.getLibs();
+        var libsRaw = json.getLibs();
+        // Deduplicate libs, Some versions have conditions that cause libraries to be listed multiple times
+        var seen = new HashSet<String>();
+        var libs = new LinkedHashSet<MinecraftVersion.Lib>(libsRaw.size());
+        for (var lib : libsRaw) {
+            if (seen.add(lib.coord))
+                libs.add(lib);
+        }
+
         var libsVarCache = new File(output.getAbsoluteFile().getParentFile(), "libraries.txt");
 
         var cache = HashStore.fromFile(output).add(jsonF).add(libsVarCache);
@@ -875,6 +885,11 @@ public class MCPTaskFactory {
             return output;
 
         Mavenizer.assertNotCacheOnly();
+
+        // Make sure the output directory exists, some old tools don't do it themselves.
+        var parent = output.getParentFile();
+        if (parent != null && !parent.exists())
+            parent.mkdirs();
 
         int java_version = func.getJavaVersion(this.side.getMCP().getConfig());
         var jdks = this.side.getMCP().getCache().jdks();
