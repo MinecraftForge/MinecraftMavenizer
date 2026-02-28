@@ -532,35 +532,39 @@ public class MCPTaskFactory {
 
     private Task patch(String name, Map<String, String> step) {
         var input = this.findStep(step.get("input"));
-        var patches = this.findData("patches");
         var output = new File(this.build, name + "/output.jar");
         var rejects = new File(this.build, name + "/rejects.jar");
         return Task.named(name,
-            Task.deps(input, patches),
-            () -> patch(input, patches, output, rejects)
+            Task.deps(input),
+            () -> patch(input, output, rejects)
         );
     }
 
-    private File patch(Task inputTask, Task patchesTask, File output, File rejects) {
+    private File patch(Task inputTask, File output, File rejects) {
         var input = inputTask.execute();
-        var patches = patchesTask.execute();
         var cache = HashStore.fromFile(output);
         cache.add("input", input);
-        cache.add("patches", patches);
+        cache.add("data", this.getData());
 
         if (output.exists() && cache.isSame())
             return output;
 
         Mavenizer.assertNotCacheOnly();
 
+        var patches = this.cfg.getData(this.side.getName()).get("patches");
+
         var builder = PatchOperation.builder()
             .logTo(LOGGER::error)
             .baseInput(MultiInput.archive(ArchiveFormat.ZIP, input.toPath()))
-            .patchesInput(MultiInput.folder(patches.toPath()))
+            .patchesInput(MultiInput.archive(ArchiveFormat.ZIP, this.getData().toPath()))
             .patchedOutput(MultiOutput.archive(ArchiveFormat.ZIP, output.toPath()))
             .rejectsOutput(MultiOutput.archive(ArchiveFormat.ZIP, rejects.toPath()))
+            .patchesPrefix(patches)
             .level(LogLevel.ERROR)
-            .mode(PatchMode.ACCESS)
+            // Some MCPConfig versions have bad offsets.
+            // This is also needed for versions with SAS because it removes the imports/annotations.
+            // So allow a little bit of shifting
+            .mode(PatchMode.OFFSET)
             //.aPrefix("a")
             //.bPrefix("b")
         ;
@@ -573,6 +577,11 @@ public class MCPTaskFactory {
 
             boolean success = result.exit == 0;
             if (!success) {
+                LOGGER.error("Fialed to apply patches");
+                LOGGER.error("  Input:   " + input.getAbsolutePath());
+                LOGGER.error("  Patches: " + this.getData().getAbsolutePath());
+                LOGGER.error("  Output:  " + output.getAbsolutePath());
+                LOGGER.error("  Rejects: " + rejects.getAbsolutePath());
                 if (result.summary != null)
                     result.summary.print(LOGGER.getError(), true);
                 else

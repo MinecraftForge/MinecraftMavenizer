@@ -626,6 +626,11 @@ public class Patcher implements Supplier<Task> {
 
             boolean success = result.exit == 0;
             if (!success) {
+                LOGGER.error("Fialed to apply patches");
+                LOGGER.error("  Input:   " + input.getAbsolutePath());
+                LOGGER.error("  Patches: " + data.getAbsolutePath());
+                LOGGER.error("  Output:  " + output.getAbsolutePath());
+                LOGGER.error("  Rejects: " + rejects.getAbsolutePath());
                 if (result.summary != null)
                     result.summary.print(LOGGER.getError(), true);
                 else
