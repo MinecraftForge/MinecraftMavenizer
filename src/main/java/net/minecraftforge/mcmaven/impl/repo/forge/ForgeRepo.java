@@ -37,6 +37,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -153,6 +154,30 @@ public final class ForgeRepo extends Repo {
 
         var extraOutput = this.mcpconfig.processExtra(Constants.MC_GROUP + ':' + Constants.MC_CLIENT, patcher.getMCP().getName().getVersion());
 
+        // Gradle only allows downloading artifacts from one repo, so we need to pull in any classifers that we reference
+        var classifiers = new HashMap<Artifact, PendingArtifact>();
+        for (var parent : patcher.getStack()) {
+            for (var artifact : parent.getArtifacts()) {
+                if (!name.getGroup().equals(artifact.getGroup())
+                    || !name.getName().equals(artifact.getName())
+                    || !name.getVersion().equals(artifact.getVersion())
+                    || classifiers.containsKey(artifact)
+                )
+                    continue;
+                // Classifers can not have variants in gradle, so we just need to download them
+                classifiers.put(artifact,
+                    pending("Classifier-" + artifact.getClassifier(),
+                        Task.named(
+                            "classifier[" + artifact.getClassifier() + '@' + artifact.getExtension() + ']',
+                            () -> this.cache.maven().download(artifact)
+                        ),
+                        artifact,
+                        false
+                    )
+                );
+            }
+        }
+
         // Add some extra metadata for FG to consume:
         if (outputJson != null) {
             outputJson.put("mcp.version", patcher.getMCP().getName()::getVersion);
@@ -170,6 +195,7 @@ public final class ForgeRepo extends Repo {
         ret.addAll(mappingArtifacts);
         ret.addAll(extraOutput);
         ret.addAll(List.of(sources, classes, pom, metadata));
+        ret.addAll(classifiers.values());
         return ret;
     }
 
