@@ -72,6 +72,12 @@ class MavenTask {
         var cacheOnlyO = parser.accepts("cache-only",
             "Only use caches, fail if any downloads need to occur or if a task needs to do work");
 
+        // ignore caches, currently only invalidates HashStore entries
+        var ignoreCacheO = parser.accepts("ignore-cache",
+            "Forces all cache checks to fail, which results in all tasks re-running")
+            .availableUnless(cacheOnlyO);
+        cacheOnlyO.availableUnless(ignoreCacheO);
+
         var mappingsO = parser.accepts("mappings",
             "Mappings to use for this artifact. Formatted as channel:version")
             .withRequiredArg().ofType(String.class).defaultsTo("official");
@@ -101,8 +107,8 @@ class MavenTask {
         stubO.availableUnless(accessTransformerO);
 
         var outputJsonO = parser.accepts("output-json",
-    		"File to write extended output data to. Not compatible with bulk operations.")
-    		.withRequiredArg().ofType(File.class);
+            "File to write extended output data to. Not compatible with bulk operations.")
+            .withRequiredArg().ofType(File.class);
 
         var shorthandOptions = new HashMap<String, OptionSpecBuilder>();
         var artifacts = Map.of(
@@ -146,6 +152,8 @@ class MavenTask {
             Mavenizer.setOffline();
         if (options.has(cacheOnlyO))
             Mavenizer.setCacheOnly();
+        if (options.has(ignoreCacheO))
+            Mavenizer.setIgnoreCache();
 
         var output = options.valueOf(outputO);
         var cache = options.valueOf(cacheO);
@@ -178,18 +186,18 @@ class MavenTask {
         }
 
         var mcmaven = new MinecraftMaven(
-    		output,
-    		options.has(dependenciesOnlyO),
-    		cache,
-    		jdkCache,
-    		mappings,
+            output,
+            options.has(dependenciesOnlyO),
+            cache,
+            jdkCache,
+            mappings,
             foreignRepositories,
             options.has(globalAuxiliaryVariantsO),
             options.has(disableGradleO),
             options.has(stubO),
             options.valuesOf(accessTransformerO),
             options.valueOf(outputJsonO)
-		);
+        );
         mcmaven.run(artifact);
 
         return parser;

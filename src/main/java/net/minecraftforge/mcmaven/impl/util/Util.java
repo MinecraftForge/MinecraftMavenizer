@@ -6,6 +6,7 @@ package net.minecraftforge.mcmaven.impl.util;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.TimeZone;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -107,5 +108,27 @@ public class Util {
         ret.setTime(time);
         TimeZone.setDefault(_default);
         return ret;
+    }
+
+    public static boolean attemptCleanupDirectory(File path) {
+        var success = true;
+        var dirs = new ArrayList<File>();
+        var queue = new ArrayList<File>();
+        queue.add(path);
+        while (!queue.isEmpty()) {
+            var dir = queue.removeFirst();
+            dirs.add(dir);
+            for (var file : dir.listFiles()) {
+                if (file.isDirectory())
+                    queue.add(file);
+                else
+                    success = file.delete() && success;
+            }
+        }
+
+        while (!dirs.isEmpty())
+            success = dirs.removeLast().delete() && success;
+
+        return success;
     }
 }

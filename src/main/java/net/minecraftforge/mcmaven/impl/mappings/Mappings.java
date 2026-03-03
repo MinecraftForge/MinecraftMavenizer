@@ -61,14 +61,14 @@ public class Mappings {
 
         switch (channel) {
             case "parchment":
-            	return new ParchmentMappings(version);
+                return new ParchmentMappings(version);
             case "official":
-            	return new Mappings(channel, version);
+                return new Mappings(channel, version);
             case "snapshot":
             case "snapshot_nodoc":
             case "stable":
             case "stable_nodoc":
-            	return new MCPMappings(channel, version);
+                return new MCPMappings(channel, version);
         }
         throw new IllegalArgumentException("Unsupported Mappings: " + mappingsNotation);
     }
@@ -129,8 +129,8 @@ public class Mappings {
     }
 
     public Mappings withMCVersion(String version) {
-    	if (Objects.equals(this.version, version))
-    		return this;
+        if (Objects.equals(this.version, version))
+            return this;
         return new Mappings(channel(), version);
     }
 
@@ -205,10 +205,8 @@ public class Mappings {
         cache.add("client", client);
         cache.add("server", server);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         var args = List.of(
             "--task",
@@ -249,7 +247,7 @@ public class Mappings {
             .add("srg", srg)
             .add("csv", csv);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
 
         try {

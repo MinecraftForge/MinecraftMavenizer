@@ -61,17 +61,15 @@ public final class RecompileTask implements Task {
         );
     }
 
-    private File recompileSourcesImpl(Task inputTask, File outputJar) {
-        var cache = HashStore.fromFile(outputJar);
+    private File recompileSourcesImpl(Task inputTask, File output) {
+        var cache = HashStore.fromFile(output);
         var javaTarget = this.mcp.getConfig().java_target;
         var sourcesJar = inputTask.execute();
 
         cache.add("sources", sourcesJar);
 
-        if (outputJar.exists() && cache.isSame())
-            return outputJar;
-
-        Mavenizer.assertNotCacheOnly();
+        if (Mavenizer.checkCache(output, cache))
+            return output;
 
         File jdk;
         try {
@@ -80,9 +78,9 @@ public final class RecompileTask implements Task {
             throw new IllegalStateException("JDK not found: " + javaTarget, e);
         }
 
-        ProcessUtils.recompileJar(jdk, this.classpath.get(), sourcesJar, outputJar, this.build);
+        ProcessUtils.recompileJar(jdk, this.classpath.get(), sourcesJar, output);
 
         cache.save();
-        return outputJar;
+        return output;
     }
 }

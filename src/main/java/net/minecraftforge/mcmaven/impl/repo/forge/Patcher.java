@@ -356,10 +356,8 @@ public class Patcher implements Supplier<Task> {
         var cache = HashStore.fromFile(output);
         cache.add("data", this.data);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         if (output.exists())
             output.delete();
@@ -404,10 +402,8 @@ public class Patcher implements Supplier<Task> {
         var cache = HashStore.fromFile(target);
         cache.add("data", this.data);
 
-        if (target.exists() && cache.isSame())
+        if (Mavenizer.checkCache(target, cache))
             return target;
-
-        Mavenizer.assertNotCacheOnly();
 
         try (var zip = new ZipFile(this.data)) {
             var entry = zip.getEntry(value);
@@ -441,10 +437,8 @@ public class Patcher implements Supplier<Task> {
         cache.add("input", input);
         cache.add("cfg", cfg);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         var args = List.of(
             "--inJar", input.getAbsolutePath(),
@@ -477,10 +471,8 @@ public class Patcher implements Supplier<Task> {
         cache.add("input", input);
         cache.add("cfg", cfg);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         var args = new ArrayList<String>();
         args.add("--strip");
@@ -558,10 +550,8 @@ public class Patcher implements Supplier<Task> {
             }
         }
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         var args = new ArrayList<String>();
         for (var arg : data.getArgs())
@@ -600,10 +590,8 @@ public class Patcher implements Supplier<Task> {
         cache.add("input", input);
         cache.add("data", this.data);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         var builder = PatchOperation.builder()
             .logTo(LOGGER::error)
@@ -665,10 +653,8 @@ public class Patcher implements Supplier<Task> {
         cache.add("input", input);
         cache.add("sources", sources);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         try {
             FileUtils.mergeJars(output, false,

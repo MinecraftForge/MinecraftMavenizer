@@ -93,6 +93,7 @@ public record MinecraftMaven(
         LOGGER.info("  JDK Cache:          " + cache.jdks().root().getAbsolutePath());
         LOGGER.info("  Offline:            " + Mavenizer.isOffline());
         LOGGER.info("  Cache Only:         " + Mavenizer.isCacheOnly());
+        LOGGER.info("  Ignore Cache:       " + Mavenizer.ignoreCache());
         LOGGER.info("  Mappings:           " + mappings);
         if (!foreignRepositories.isEmpty())
             LOGGER.info("  Foreign Repos:      [" + String.join(", ", foreignRepositories.values()) + ']');
@@ -119,8 +120,8 @@ public record MinecraftMaven(
         LOGGER.info("Processing Minecraft dependency: %s:%s".formatted(module, version));
         Map<String, Supplier<String>> outputJson = null;
         if (outputJsonFile != null) {
-        	outputJson = new HashMap<>();
-        	outputJson.put("spec", () -> "1");
+            outputJson = new HashMap<>();
+            outputJson.put("spec", () -> "1");
         }
 
         var mcprepo = new MCPConfigRepo(this.cache, dependenciesOnly);
@@ -134,19 +135,19 @@ public record MinecraftMaven(
         }
 
         if (outputJson != null) {
-        	var finalized = new TreeMap<String, String>();
-        	for (var entry : outputJson.entrySet())
-        		finalized.put(entry.getKey(), entry.getValue().get());
+            var finalized = new TreeMap<String, String>();
+            for (var entry : outputJson.entrySet())
+                finalized.put(entry.getKey(), entry.getValue().get());
 
-        	var parent = outputJsonFile.getParentFile();
-        	if (parent != null && !parent.exists())
-        		parent.mkdirs();
+            var parent = outputJsonFile.getParentFile();
+            if (parent != null && !parent.exists())
+                parent.mkdirs();
 
             try (var writer = new FileWriter(outputJsonFile)) {
                 Util.GSON.toJson(finalized, writer);
             } catch (IOException e) {
-            	LOGGER.error("Failed to write output json file: " + outputJsonFile.getAbsolutePath(), e);
-            	Util.sneak(e);
+                LOGGER.error("Failed to write output json file: " + outputJsonFile.getAbsolutePath(), e);
+                Util.sneak(e);
             }
         }
     }
@@ -160,8 +161,8 @@ public record MinecraftMaven(
             throw new IllegalArgumentException("No version specified for Forge");
 
         if ("all".equals(version)) {
-        	if (outputJson != null)
-        		throw new IllegalArgumentException("Output Json does not support bulk operations");
+            if (outputJson != null)
+                throw new IllegalArgumentException("Output Json does not support bulk operations");
 
             var versions = this.cache.maven().getVersions(artifact);
             var mappingCache = new HashMap<String, Mappings>();
@@ -195,8 +196,8 @@ public record MinecraftMaven(
             throw new IllegalArgumentException("No version specified for Forge");
 
         if ("all".equals(version)) {
-        	if (outputJson != null)
-        		throw new IllegalArgumentException("Output Json does not support bulk operations");
+            if (outputJson != null)
+                throw new IllegalArgumentException("Output Json does not support bulk operations");
 
             var manifestFile = mcprepo.getLauncherManifestTask().execute();
             var manifest = JsonData.launcherManifest(manifestFile);
@@ -322,7 +323,7 @@ public record MinecraftMaven(
                 var cache = HashStore.fromFile(varTarget)
                     .add("source", source);
 
-                if (!varTarget.exists() || !cache.isSame()) {
+                if (!Mavenizer.checkCache(varTarget, cache)) {
                     variants.add(Artifact.from(artifact.getGroup(), artifact.getName(), artifact.getVersion()));
                     try {
                         GradleModule.Variant[] data = JsonData.fromJson(source, GradleModule.Variant[].class);
@@ -377,6 +378,8 @@ public record MinecraftMaven(
         } else {
             write = !target.exists() || !cache.isSame();
         }
+        if (Mavenizer.ignoreCache())
+            write = true;
 
         if (write) {
             try {
@@ -399,7 +402,7 @@ public record MinecraftMaven(
             .add("tool", tool)
             .add("source", source);
 
-        if (target.exists() && cache.isSame())
+        if (Mavenizer.checkCache(target, cache))
             return;
 
         File jdk;
@@ -431,7 +434,7 @@ public record MinecraftMaven(
             .add(accessTransformer)
             .add("source", source);
 
-        if (target.exists() && cache.isSame())
+        if (Mavenizer.checkCache(target, cache))
             return;
 
         File jdk;
@@ -483,7 +486,7 @@ public record MinecraftMaven(
             cache.add(input);
         }
 
-        if (target.exists() && cache.isSame())
+        if (Mavenizer.checkCache(target, cache))
             return;
 
         var module = GradleModule.of(artifact);

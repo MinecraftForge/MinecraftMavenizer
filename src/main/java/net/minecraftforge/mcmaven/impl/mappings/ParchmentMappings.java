@@ -21,6 +21,7 @@ import java.util.zip.ZipOutputStream;
 
 import de.siegmar.fastcsv.writer.CsvWriter;
 import de.siegmar.fastcsv.writer.LineDelimiter;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
@@ -34,11 +35,11 @@ import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
 
 public class ParchmentMappings extends Mappings {
-	private final ParchmentVersion parsedVersion;
+    private final ParchmentVersion parsedVersion;
     private Task downloadTask;
 
     public ParchmentMappings(String version) {
-    	this(ParchmentVersion.parse(version));
+        this(ParchmentVersion.parse(version));
     }
     private ParchmentMappings(ParchmentVersion version) {
         super("parchment", version.toFriendly());
@@ -53,18 +54,18 @@ public class ParchmentMappings extends Mappings {
     // Maybe download the maven-metadata.xml for the MC version and pick the latest one?
     @Override
     public Mappings withMCVersion(String mcVer) {
-    	if (mcVer == null)
-    		throw new IllegalArgumentException("Minecraft Version can not be null");
+        if (mcVer == null)
+            throw new IllegalArgumentException("Minecraft Version can not be null");
 
-    	if (mcVer.equals(this.parsedVersion.mcVersion()))
-    		return this;
+        if (mcVer.equals(this.parsedVersion.mcVersion()))
+            return this;
 
-    	return new ParchmentMappings(this.parsedVersion.withMinecraft(mcVer));
+        return new ParchmentMappings(this.parsedVersion.withMinecraft(mcVer));
     }
 
     @Override
     public Artifact getArtifact(MCPSide side) {
-    	return this.parsedVersion.getMappingArtifact(side.getMCP().getName().getVersion());
+        return this.parsedVersion.getMappingArtifact(side.getMCP().getName().getVersion());
     }
 
     @Override
@@ -120,7 +121,7 @@ public class ParchmentMappings extends Mappings {
             .add("codever", "1"); // 1 - Fixed class names being in internals names, instead of FG6's pseudo source names (pkg.Outer$Inner)
 
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
 
         ParchmentData json = null;

@@ -24,6 +24,7 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
+
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import javax.xml.parsers.ParserConfigurationException;
@@ -221,10 +222,8 @@ public final class ForgeRepo extends Repo {
                 .add(versionProperties)
                 .add("data", patcher.getDataHash())
                 .addKnown("version", "1");
-            if (output.exists() && cache.isSame())
+            if (Mavenizer.checkCache(output, cache))
                 return output;
-
-            Mavenizer.assertNotCacheOnly();
 
             try {
                 FileUtils.ensureParent(output);
@@ -274,10 +273,8 @@ public final class ForgeRepo extends Repo {
                 .addKnown("code-version", "1")
                 ;
 
-            if (output.exists() && cache.isSame())
+            if (Mavenizer.checkCache(output, cache))
                 return output;
-
-            Mavenizer.assertNotCacheOnly();
 
             var builder = new POMBuilder("net.minecraftforge", "forge", version).preferGradleModule().dependencies(dependencies -> {
                 if (clientExtra != null)

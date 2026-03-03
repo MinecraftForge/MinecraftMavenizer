@@ -274,13 +274,11 @@ public class MCPTaskFactory {
         var filename = idx == -1 ? value : value.substring(idx);
         var target = new File(this.build, "data/" + key + '/' + filename);
 
-        var cache = HashStore.fromFile(target);
-        cache.add("mcp", getData());
+        var cache = HashStore.fromFile(target)
+            .add("mcp", getData());
 
-        if (target.exists() && cache.isSame())
+        if (Mavenizer.checkCache(target, cache))
             return target;
-
-        Mavenizer.assertNotCacheOnly();
 
         try (var zip = new ZipFile(getData())) {
             var entry = zip.getEntry(value);
@@ -305,9 +303,9 @@ public class MCPTaskFactory {
     private File extractFolder(String key, String value) {
         var base = new File(this.build, "data/" + key);
 
-        var cache = new HashStore(base).load(new File(this.build, "data/" + key + ".cache"));
-        cache.add("mcp", getData());
-        boolean same = cache.isSame();
+        var cache = HashStore.fromFile(base)
+            .add("mcp", getData());
+        boolean same = !Mavenizer.ignoreCache() && cache.isSame();
 
         var existing = new HashSet<>(FileUtils.listFiles(base));
 
@@ -414,14 +412,12 @@ public class MCPTaskFactory {
         var input = inputTask.execute();
         var mappings = this.mappings.execute();
 
-        var cache = HashStore.fromFile(output);
-        cache.add("input", input);
-        cache.add("mappings", mappings);
+        var cache = HashStore.fromFile(output)
+            .add("input", input)
+            .add("mappings", mappings);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         if (output.exists())
             output.delete();
@@ -467,15 +463,13 @@ public class MCPTaskFactory {
     private File inject(Task inputTask, Task injectTask, File packages, File output) {
         var input = inputTask.execute();
         var inject = injectTask.execute();
-        var cache = HashStore.fromFile(output);
-        cache.add("input", input);
-        cache.add("inject", inject);
-        cache.addKnown("codever", "1");
+        var cache = HashStore.fromFile(output)
+            .add("input", input)
+            .add("inject", inject)
+            .addKnown("codever", "1");
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         if (output.exists())
             output.delete();
@@ -542,14 +536,12 @@ public class MCPTaskFactory {
 
     private File patch(Task inputTask, File output, File rejects) {
         var input = inputTask.execute();
-        var cache = HashStore.fromFile(output);
-        cache.add("input", input);
-        cache.add("data", this.getData());
+        var cache = HashStore.fromFile(output)
+            .add("input", input)
+            .add("data", this.getData());
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         var patches = this.cfg.getData(this.side.getName()).get("patches");
 
@@ -621,13 +613,15 @@ public class MCPTaskFactory {
 
         var libsVarCache = new File(output.getAbsoluteFile().getParentFile(), "libraries.txt");
 
-        var cache = HashStore.fromFile(output).add(jsonF).add(libsVarCache);
+        var cache = HashStore.fromFile(output)
+            .add(jsonF)
+            .add(libsVarCache);
         for (var lib : libs) {
             if (lib.dl != null) // Sometimes natives don't have a main download
                 cache.addKnown(lib.coord, lib.dl.sha1);
         }
 
-        if (output.exists() && libsVarCache.exists() && cache.isSame()) {
+        if (Mavenizer.checkCache(output, cache) && libsVarCache.exists()) {
             try {
                 this.libraries = JsonData.<List<Lib.Cached>>fromJson(libsVarCache, new TypeToken<>() { }).stream().map(Lib.Cached::resolve).toList();
                 return output;
@@ -743,14 +737,14 @@ public class MCPTaskFactory {
                 libs.add(new LibLine(pts[0], Artifact.from(pts[1]),  pts[2]));
             }
 
-            var cache = HashStore.fromFile(output).add(bundle);
+            var cache = HashStore.fromFile(output)
+                .add(bundle);
             for (var lib : libs)
                 cache.add(lib.artifact().toString(), new File(libraries, lib.path()));
 
-            if (output.exists() && cache.isSame())
+            if (Mavenizer.checkCache(output, cache))
                 return output;
 
-            Mavenizer.assertNotCacheOnly();
             cache.clear().add(bundle);
 
             var buf = new StringBuilder();
@@ -805,14 +799,12 @@ public class MCPTaskFactory {
 
         var output = new File(this.build, "extra.jar");
 
-        var cache = HashStore.fromFile(output);
-        cache.add("prestrip", prestrip);
-        cache.add("mappings", mappings);
+        var cache = HashStore.fromFile(output)
+            .add("prestrip", prestrip)
+            .add("mappings", mappings);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         try {
             var whitelist = IMappingFile
@@ -882,18 +874,16 @@ public class MCPTaskFactory {
 
         var isDecompile = isDecompiler(name, toolA);
 
-        var cache = HashStore.fromFile(output);
-        cache.add("tool", tool);
-        cache.add("jvm-args", jvmArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));
-        cache.add("run-args", runArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));
+        var cache = HashStore.fromFile(output)
+            .add("tool", tool)
+            .add("jvm-args", jvmArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")))
+            .add("run-args", runArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));
         var tasks = new HashMap<Task, String>();
         var jvm = resolveArgs(cache, tasks, jvmArgs);
         var run = resolveArgs(cache, tasks, runArgs);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         // Make sure the output directory exists, some old tools don't do it themselves.
         var parent = output.getParentFile();

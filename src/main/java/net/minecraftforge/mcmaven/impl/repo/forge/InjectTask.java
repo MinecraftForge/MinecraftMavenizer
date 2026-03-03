@@ -74,15 +74,11 @@ public final class InjectTask implements Task {
             }
         }
 
-        if (outputJar.exists() && cache.isSame())
+        if (Mavenizer.checkCache(outputJar, cache))
             return outputJar;
-
-        Mavenizer.assertNotCacheOnly();
-        cache.clear().add("recompiled", recompiledJar);
 
         try {
             var jars = new ArrayList<>(universals);
-            universals.forEach(cache::add);
 
             jars.add(recompiledJar);
 

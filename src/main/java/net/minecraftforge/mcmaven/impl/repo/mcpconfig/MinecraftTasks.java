@@ -90,7 +90,7 @@ public class MinecraftTasks {
         var cache = HashStore.fromFile(target);
         cache.add("manifest", manifestF);
 
-        if (target.exists() && cache.isSame())
+        if (!Mavenizer.ignoreCache() && target.exists() && cache.isSame())
             return target;
 
         // The manifest doesn't contain anything we can key off off, so this happens often
@@ -139,10 +139,9 @@ public class MinecraftTasks {
         var cache = HashStore.fromFile(target);
         cache.add("manifest", manifestF);
 
-        if (target.exists() && cache.isSame())
+        if (Mavenizer.checkCache(target, cache))
             return target;
 
-        Mavenizer.assertNotCacheOnly();
         Mavenizer.assertOnline();
 
         var manifest = JsonData.minecraftVersion(manifestF);
@@ -172,14 +171,11 @@ public class MinecraftTasks {
         var output = new File(this.cacheRoot, "joined_mappings.tsrg.gz");
         var client = clientTask.execute();
         var server = serverTask.execute();
-        var cache = HashStore
-            .fromFile(output)
+        var cache = HashStore.fromFile(output)
             .add(client, server);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         try {
             var off2obfClient = IMappingFile.load(client);
@@ -225,10 +221,8 @@ public class MinecraftTasks {
         cache.add("mappings", mappings);
         cache.add("input", jar);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         var args = List.of(
             "--input", jar.getAbsolutePath(),
@@ -270,10 +264,8 @@ public class MinecraftTasks {
         var cache = HashStore.fromFile(output)
             .add("json", json);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         var meta = JsonData.minecraftVersion(json);
 
@@ -309,10 +301,8 @@ public class MinecraftTasks {
         var cache = HashStore.fromFile(output)
             .add("jar", jarFile);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         var libs = listBundleArtifacts(jarFile);
         var builder = new POMBuilder("net.minecraft", "server", version)

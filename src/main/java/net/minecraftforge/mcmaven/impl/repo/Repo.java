@@ -193,10 +193,8 @@ public abstract class Repo {
         return Task.named("pom[" + artifact.getName() + ']', () -> {
             var output = new File(build, artifact.getName() + '-' + artifact.getVersion() + ".pom");
             var cache = HashStore.fromFile(output);
-            if (output.exists() && cache.isSame())
+            if (Mavenizer.checkCache(output, cache))
                 return output;
-
-            Mavenizer.assertNotCacheOnly();
 
             var builder = new POMBuilder(artifact.getGroup(), artifact.getName(), artifact.getVersion());
 
@@ -259,14 +257,14 @@ public abstract class Repo {
         var m2o = pending("Mappings map2obf", mappings.getMapped2Obf(side), coords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
         var m2s = pending("Mappings map2srg", mappings.getMapped2Srg(side), coords.withClassifier("map2srg").withExtension("tsrg.gz"), false);
         if (outputJson != null) {
-        	outputJson.put("mappings.channel", mappings::channel);
-        	outputJson.put("mappings.version", mappings::version);
-        	outputJson.put("mappings.csv.artifact", csvs.artifact()::toString);
-        	outputJson.put("mappings.csv.file", csvs.task().filePathSupplier());
-        	outputJson.put("mappings.obf.artifact", m2o.artifact()::toString);
-        	outputJson.put("mappings.obf.file", m2o.task().filePathSupplier());
-        	outputJson.put("mappings.srg.artifact", m2s.artifact()::toString);
-        	outputJson.put("mappings.srg.file", m2s.task().filePathSupplier());
+            outputJson.put("mappings.channel", mappings::channel);
+            outputJson.put("mappings.version", mappings::version);
+            outputJson.put("mappings.csv.artifact", csvs.artifact()::toString);
+            outputJson.put("mappings.csv.file", csvs.task().filePathSupplier());
+            outputJson.put("mappings.obf.artifact", m2o.artifact()::toString);
+            outputJson.put("mappings.obf.file", m2o.task().filePathSupplier());
+            outputJson.put("mappings.srg.artifact", m2s.artifact()::toString);
+            outputJson.put("mappings.srg.file", m2s.task().filePathSupplier());
         }
         return List.of(csvs, pom, m2o, m2s);
     }

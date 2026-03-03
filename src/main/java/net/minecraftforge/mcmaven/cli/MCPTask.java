@@ -7,6 +7,7 @@ package net.minecraftforge.mcmaven.cli;
 import java.io.File;
 import java.io.IOException;
 import joptsimple.OptionParser;
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.MCPSetupFiles;
@@ -165,7 +166,7 @@ class MCPTask {
                 LOGGER.pop(indent);
             }
 
-            if (!output.exists() || !cache.isSame()) {
+            if (!Mavenizer.checkCache(output, cache)) {
                 try {
                     org.apache.commons.io.FileUtils.copyFile(raw, output);
                     if (outputFiles != null)
@@ -231,7 +232,7 @@ class MCPTask {
             cache.add("renamed", sources);
         }
 
-        if (!output.exists() || !cache.isSame()) {
+        if (!Mavenizer.checkCache(output, cache)) {
             try {
                 org.apache.commons.io.FileUtils.copyFile(sources, output);
                 if (outputFiles != null)

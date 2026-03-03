@@ -25,7 +25,6 @@ import java.util.Set;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
-
 /**
  * Takes a input jar file filled with SRG named sources.
  * Applies mappings provided by a ziped csv file to them and returns the new sources.
@@ -81,16 +80,14 @@ public final class RenameTask implements Task {
         var mappings = mappingsTask.execute();
         var srg = srgTask == null ? null : srgTask.execute();
 
-        var cache = HashStore.fromFile(output);
-        cache.add("input", input);
-        cache.add("mappings", mappings);
+        var cache = HashStore.fromFile(output)
+            .add("input", input)
+            .add("mappings", mappings);
         if (srg != null)
             cache.add("whitelist", srg);
 
-        if (output.exists() && cache.isSame())
+        if (Mavenizer.checkCache(output, cache))
             return output;
-
-        Mavenizer.assertNotCacheOnly();
 
         try {
             var names = MCPNames.load(mappings);

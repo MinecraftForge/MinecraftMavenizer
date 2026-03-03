@@ -21,6 +21,7 @@ import java.io.StringWriter;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -115,7 +116,7 @@ public final class ProcessUtils {
      * @return The exit code of the process
      */
     public static int runCommand(File workDir, Consumer<String> lines, String... args) {
-    	return runCommand(workDir, lines, null, args);
+        return runCommand(workDir, lines, null, args);
     }
 
     /**
@@ -155,11 +156,11 @@ public final class ProcessUtils {
                         lines.accept(line);
 
                     if (logHandler != null && forcedExit == 0) {
-                    	forcedExit = logHandler.applyAsInt(line);
+                        forcedExit = logHandler.applyAsInt(line);
 
-                		// We don't want to exit here, because we want to log the rest of the output before exiting.
-                    	if (forcedExit != 0)
-                    		process.destroy();
+                        // We don't want to exit here, because we want to log the rest of the output before exiting.
+                        if (forcedExit != 0)
+                            process.destroy();
                     }
                 }
             } catch (IOException e) {
@@ -206,7 +207,7 @@ public final class ProcessUtils {
      * @return The exit code of the process
      */
     public static Result runJar(File javaHome, File workDir, File logFile, File tool, List<String> jvm, List<String> run) {
-    	return runJar(javaHome, workDir, logFile, tool, jvm, run, null);
+        return runJar(javaHome, workDir, logFile, tool, jvm, run, null);
     }
 
     /**
@@ -267,12 +268,19 @@ public final class ProcessUtils {
         }
     }
 
-    public static File recompileJar(File javaHome, List<File> classpath, File sourcesJar, File outputJar, File workDir) {
+    public static File recompileJar(File javaHome, List<File> classpath, File sourcesJar, File outputJar) {
         // classpath arg
         var classpathString = makeClasspathString(classpath);
 
+        File temp;
+        try {
+            temp = Files.createTempDirectory("recompileSources").toFile();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to create temp directory to recompile: " + sourcesJar.getAbsolutePath(), e);
+        }
+
         // unzip sources jar
-        var sourcesOutput = new File(workDir, "recompileSources");
+        var sourcesOutput = new File(temp, "sources").getAbsoluteFile();
         try {
             // Ensure the output directory exists
             FileUtils.ensureParent(sourcesOutput);
@@ -293,7 +301,7 @@ public final class ProcessUtils {
                 }
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Failed to extract source jar: " + sourcesJar.getAbsolutePath(), e);
         }
 
         // track source files
@@ -314,7 +322,7 @@ public final class ProcessUtils {
             }
         }
 
-        var outputClasses = new File(workDir, "classes");
+        var outputClasses = new File(temp, "classes");
         FileUtils.ensure(outputClasses);
         var args = List.of(
             "-nowarn",
@@ -323,17 +331,22 @@ public final class ProcessUtils {
             sourcePath.toString()
         );
 
-        var process = ProcessUtils.runJavac(javaHome, workDir, new File(outputJar.getAbsolutePath() + ".log"), args);
+        var process = ProcessUtils.runJavac(javaHome, temp, new File(outputJar.getAbsolutePath() + ".log"), args);
         if (process.exitCode != 0) {
             LOGGER.error("Javac failed to execute! Exit code " + process.exitCode);
             LOGGER.error("--- BEGIN JAVAC LOG ---");
             process.lines.forEach(LOGGER::error);
             LOGGER.error("--- END JAVAC LOG ---");
-            throw new RuntimeException("Javac failed to execute! Exit code " + process.exitCode);
+            throw new RuntimeException("Javac failed to execute! Exit code " + process.exitCode + " Source Jar: " + sourcesJar.getAbsolutePath());
         }
 
         try {
-            return FileUtils.makeJar(outputClasses, sourcesOutput, nonSourceFiles, outputJar);
+            var ret = FileUtils.makeJar(outputClasses, sourcesOutput, nonSourceFiles, outputJar);
+            if (!Util.attemptCleanupDirectory(sourcesOutput))
+                LOGGER.debug("Failed to cleanup source directory, Will attempt to cleanup when JVM exits");
+            if (!Util.attemptCleanupDirectory(outputClasses))
+                LOGGER.debug("Failed to cleanup classes directory, Will attempt to cleanup when JVM exits");
+            return ret;
         } finally {
             FileUtils.deleteOnExit(sourcesOutput);
             FileUtils.deleteOnExit(outputClasses);
