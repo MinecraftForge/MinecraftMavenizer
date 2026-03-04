@@ -78,6 +78,11 @@ class MavenTask {
             .availableUnless(cacheOnlyO);
         cacheOnlyO.availableUnless(ignoreCacheO);
 
+        // Add extra memory to the java decompile and recompile tasks
+        var decompileMemoryO = parser.accepts("decompile-memory",
+            "Overrides the -Xmx argument passed into the decompile sub-processes")
+            .withRequiredArg();
+
         var mappingsO = parser.accepts("mappings",
             "Mappings to use for this artifact. Formatted as channel:version")
             .withRequiredArg().ofType(String.class).defaultsTo("official");
@@ -154,6 +159,8 @@ class MavenTask {
             Mavenizer.setCacheOnly();
         if (options.has(ignoreCacheO))
             Mavenizer.setIgnoreCache();
+        if (options.has(decompileMemoryO))
+            Mavenizer.setDecompileMemory(options.valueOf(decompileMemoryO));
 
         var output = options.valueOf(outputO);
         var cache = options.valueOf(cacheO);

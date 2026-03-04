@@ -5,6 +5,10 @@
 package net.minecraftforge.mcmaven.impl;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.jetbrains.annotations.Nullable;
 
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.util.logging.Logger;
@@ -64,5 +68,25 @@ public final class Mavenizer {
             return true;
         Mavenizer.assertNotCacheOnly();
         return false;
+    }
+
+    private static @Nullable String decompileMemory = null;
+    public static void setDecompileMemory(String value) {
+        decompileMemory = value;
+    }
+    public static List<String> fillDecompileJvmArgs(List<String> args) {
+        return fillJvmArgs(decompileMemory, args);
+    }
+    private static List<String> fillJvmArgs(@Nullable String mx, List<String> args) {
+        if (mx == null)
+            return args;
+        var ret = new ArrayList<String>();
+        ret.add("-Xmx" + mx);
+        for (var arg : args) {
+            if (arg.startsWith("-Xmx"))
+                continue;
+            ret.add(arg);
+        }
+        return ret;
     }
 }

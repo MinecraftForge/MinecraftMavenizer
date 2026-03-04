@@ -413,7 +413,6 @@ public final class ProcessUtils {
             };
 
             int ret = runCommand(workDir, lines, command.toArray(String[]::new));
-            System.currentTimeMillis();
 
             log.flush();
             return new Result(consoleLog, ret);

@@ -98,6 +98,15 @@ class MCPTask {
         var parchmentO = parser.accepts("parchment",
             "Version of parchment mappings to use, snapshots are not supported")
             .availableIf(mappingsO).withRequiredArg();
+
+        // ignore caches, currently only invalidates HashStore entries
+        var ignoreCacheO = parser.accepts("ignore-cache",
+            "Forces all cache checks to fail, which results in all tasks re-running");
+
+        // Add extra memory to the java decompile and recompile tasks
+        var decompileMemoryO = parser.accepts("decompile-memory",
+            "Overrides the -Xmx argument passed into the decompile sub-processes")
+            .withRequiredArg();
         //@formatter:on
 
         if (getParser)
@@ -109,6 +118,11 @@ class MCPTask {
             LOGGER.release();
             return parser;
         }
+
+        if (options.has(ignoreCacheO))
+            Mavenizer.setIgnoreCache();
+        if (options.has(decompileMemoryO))
+            Mavenizer.setDecompileMemory(options.valueOf(decompileMemoryO));
 
         var output = options.valueOf(outputO);
         var outputFiles = options.valueOf(outputFilesO);

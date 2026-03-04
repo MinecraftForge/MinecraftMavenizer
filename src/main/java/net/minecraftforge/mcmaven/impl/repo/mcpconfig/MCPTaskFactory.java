@@ -899,6 +899,9 @@ public class MCPTaskFactory {
             throw new IllegalStateException("Failed to find JDK for version " + java_version, e);
         }
 
+        if (isDecompile)
+            jvm = Mavenizer.fillDecompileJvmArgs(jvm);
+
         var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, jvm, run, isDecompile ? MCPTaskFactory::parseDecompileLog : null);
         if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to run MCP Step (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
