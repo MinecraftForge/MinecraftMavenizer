@@ -31,7 +31,7 @@ dependencyResolutionManagement.versionCatalogs.register('libs') {
     library 'gson',     'com.google.code.gson', 'gson'             version '2.10.1'
     library 'jopt',     'net.sf.jopt-simple',   'jopt-simple'      version '6.0-alpha-3'
     library 'jver',     'net.minecraftforge',   'java-provisioner' version '2.0.2'
-    library 'srgutils', 'net.minecraftforge',   'srgutils'         version '0.6.0'
+    library 'srgutils', 'net.minecraftforge',   'srgutils'         version '0.6.1'
     library 'diff',     'io.codechicken',       'DiffPatch'        version '2.0.0.36' // Fuzzy patching
 
     library 'fastcsv',   'de.siegmar', 'fastcsv'    version '3.4.0'
@@ -41,7 +41,7 @@ dependencyResolutionManagement.versionCatalogs.register('libs') {
     library 'utils-download', 'net.minecraftforge', 'download-utils'  version '0.4.0'
     library 'utils-files',    'net.minecraftforge', 'file-utils'      version '0.3.3'
     library 'utils-hash',     'net.minecraftforge', 'hash-utils'      version '0.1.13'
-    library 'utils-data',     'net.minecraftforge', 'json-data-utils' version '0.4.1'
+    library 'utils-data',     'net.minecraftforge', 'json-data-utils' version '0.4.3'
     library 'utils-logging',  'net.minecraftforge', 'log-utils'       version '0.5.1'
     library 'utils-os',       'net.minecraftforge', 'os-utils'        version '0.1.0'
     bundle 'utils', ['utils-download', 'utils-files', 'utils-hash', 'utils-data', 'utils-logging', 'utils-os']

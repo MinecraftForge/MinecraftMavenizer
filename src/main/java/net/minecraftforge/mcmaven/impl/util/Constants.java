@@ -21,7 +21,8 @@ public final class Constants {
 
     // TODO [MCMavenizer][Options] Change cache timeout timer
     public static final int CACHE_TIMEOUT = 1000 * 60 * 60 * 1; // 1 hour
-    public static final String LAUNCHER_MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest.json";
+    //public static final String LAUNCHER_MANIFEST = "https://piston-meta.mojang.com/mc/game/version_manifest.json";
+    public static final String LAUNCHER_MANIFEST = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
     public static final String MOJANG_MAVEN = "https://libraries.minecraft.net/";
 
     public static final Artifact ACCESS_TRANSFORMER = Artifact.from("net.minecraftforge:accesstransformers:8.2.1:fatjar");

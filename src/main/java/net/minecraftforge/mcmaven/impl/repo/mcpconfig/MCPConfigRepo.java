@@ -6,11 +6,13 @@ package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks.MCFile;
 import net.minecraftforge.mcmaven.impl.tasks.RecompileTask;
 import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
+import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
@@ -95,9 +97,15 @@ public final class MCPConfigRepo extends Repo {
         return this.downloadLauncherManifest;
     }
 
+    // Mojang stopped obfusciating their released with the 26.1-snapshot-1
+    private static final ComparableVersion LAST_OBFUSCATED = new ComparableVersion("1.21.11");
+    public boolean isObfuscated(String version) {
+        return new ComparableVersion(version).compareTo(LAST_OBFUSCATED) <= 0;
+    }
+
     private File downloadLauncherManifest() {
         var target = new File(this.cache.root(), "launcher_manifest.json");
-        if (!target.exists() || (!Mavenizer.isCacheOnly() && target.lastModified() < System.currentTimeMillis() - Constants.CACHE_TIMEOUT)) {
+        if (Mavenizer.ignoreCache() || !target.exists() || (!Mavenizer.isCacheOnly() && target.lastModified() < System.currentTimeMillis() - Constants.CACHE_TIMEOUT)) {
             try {
                 // Don't error on cache outdated, as we don't have a cache key for this.
                 if (Mavenizer.isCacheOnly())
@@ -197,14 +205,31 @@ public final class MCPConfigRepo extends Repo {
         var tasks = this.getMCTasks(artifact.getVersion());
         var cache = new File(this.cache.root(), "without_mcp");
 
+        if (outputJson != null) {
+            outputJson.put("mappings.channel", mappings::channel);
+            outputJson.put("mappings.version", mappings::version);
+        }
+
+        // For non-obfuscated versions, basically all we do is create the pom and extract the server if needed
+        if (!isObfuscated(artifact.getVersion())) {
+            if ("client".equals(artifact.getName())) {
+                var pom = pending("Maven POM", tasks.clientPom(), artifact.withExtension("pom"), false);
+                var jar = pending("Official Jar", tasks.versionFile(MCFile.CLIENT_JAR), artifact, false);
+                return List.of(pom, jar);
+            } else if ("server".equals(artifact.getName())) {
+                var pom = pending("Maven POM", tasks.serverPom(), artifact.withExtension("pom"), false);
+                var jar = pending("Official Jar", tasks.extractServer(), artifact, false);
+                return List.of(pom, jar);
+            }
+            throw new IllegalArgumentException("MCPConfigRepo does not support artifact: " + artifact);
+        }
+
         //net.minecraft:mappings_{CHANNEL}:{MCP_VERSION}[-{VERSION}]@zip
         var mapCoords = Artifact.from(Constants.MC_GROUP, "mappings_official", artifact.getVersion()).withExtension("zip");
         var mapPom = pending("Mappings POM", simplePom(cache, mapCoords), mapCoords.withExtension("pom"), false);
         var m2o = pending("Mappings map2obf", tasks.mergeMappings(), mapCoords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
 
         if (outputJson != null) {
-            outputJson.put("mappings.channel", mappings::channel);
-            outputJson.put("mappings.version", mappings::version);
             outputJson.put("mappings.obf.artifact", m2o.artifact()::toString);
             outputJson.put("mappings.obf.file", m2o.task().filePathSupplier());
         }

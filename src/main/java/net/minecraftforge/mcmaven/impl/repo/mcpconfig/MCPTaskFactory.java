@@ -364,8 +364,8 @@ public class MCPTaskFactory {
         switch (type) {
             case "downloadManifest": return mc.launcherManifest;
             case "downloadJson":     return mc.versionJson;
-            case "downloadClient":   return mc.versionFile(MinecraftTasks.Files.CLIENT_JAR);
-            case "downloadServer":   return mc.versionFile(MinecraftTasks.Files.SERVER_JAR);
+            case "downloadClient":   return mc.versionFile(MinecraftTasks.MCFile.CLIENT_JAR);
+            case "downloadServer":   return mc.versionFile(MinecraftTasks.MCFile.SERVER_JAR);
             case "strip":            return strip(name, step);
             case "inject":           return inject(name, step);
             case "patch":            return patch(name, step);
@@ -391,11 +391,11 @@ public class MCPTaskFactory {
     }
 
     public Task downloadClientMappings() {
-        return this.side.getMCP().getMinecraftTasks().versionFile(MinecraftTasks.Files.CLIENT_MAPPINGS);
+        return this.side.getMCP().getMinecraftTasks().versionFile(MinecraftTasks.MCFile.CLIENT_MAPPINGS);
     }
 
     public Task downloadServerMappings() {
-        return this.side.getMCP().getMinecraftTasks().versionFile(MinecraftTasks.Files.SERVER_MAPPINGS);
+        return this.side.getMCP().getMinecraftTasks().versionFile(MinecraftTasks.MCFile.SERVER_MAPPINGS);
     }
 
     private Task strip(String name, Map<String, String> step) {

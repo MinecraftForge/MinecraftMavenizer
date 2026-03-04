@@ -78,8 +78,8 @@ public class ParchmentMappings extends Mappings {
         var mc = side.getMCP().getMinecraftTasks();
         var srg = side.getTasks().getMappings();
 
-        var client = mc.versionFile(MinecraftTasks.Files.CLIENT_MAPPINGS);
-        var server = mc.versionFile(MinecraftTasks.Files.SERVER_MAPPINGS);
+        var client = mc.versionFile(MinecraftTasks.MCFile.CLIENT_MAPPINGS);
+        var server = mc.versionFile(MinecraftTasks.MCFile.SERVER_MAPPINGS);
         var data = downloadTask(side.getMCP());
 
         ret = Task.named("srg2names[" + this + ']',

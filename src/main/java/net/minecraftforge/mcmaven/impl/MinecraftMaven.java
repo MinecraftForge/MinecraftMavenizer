@@ -217,7 +217,7 @@ public record MinecraftMaven(
                 List<PendingArtifact> artifacts = null;
                 if (hasMcp(mcprepo, ver.id))
                     artifacts = mcprepo.process(versioned, mappings.withMCVersion(ver.id), outputJson);
-                else if (mappings.channel().equals("official") && hasOfficialMappings(mcprepo, ver.id))
+                else if (mappings.channel().equals("official") && (hasOfficialMappings(mcprepo, ver.id) || !mcprepo.isObfuscated(ver.id)))
                     artifacts = mcprepo.processWithoutMcp(versioned, mappings.withMCVersion(ver.id), outputJson);
                 else {
                     LOGGER.info("Skipping " + versioned + " no mcp config");
@@ -232,7 +232,7 @@ public record MinecraftMaven(
             List<PendingArtifact> artifacts = null;
             if (hasMcp(mcprepo, version))
                 artifacts = mcprepo.process(artifact, mappings, outputJson);
-            else if (mappings.channel().equals("official") && hasOfficialMappings(mcprepo, mcVersion))
+            else if (mappings.channel().equals("official") && (hasOfficialMappings(mcprepo, mcVersion) || !mcprepo.isObfuscated(mcVersion)))
                 artifacts = mcprepo.processWithoutMcp(artifact, mappings, outputJson);
             else
                 throw new IllegalStateException("Can not process " + artifact + " as it does not have a MCPConfig ror official mappings");
@@ -256,8 +256,8 @@ public record MinecraftMaven(
         var versionF = tasks.versionJson.execute();
         var json = JsonData.minecraftVersion(versionF);
 
-        return json.getDownload(MinecraftTasks.Files.CLIENT_MAPPINGS.key) != null ||
-            json.getDownload(MinecraftTasks.Files.SERVER_MAPPINGS.key) != null;
+        return json.getDownload(MinecraftTasks.MCFile.CLIENT_MAPPINGS.key) != null ||
+            json.getDownload(MinecraftTasks.MCFile.SERVER_MAPPINGS.key) != null;
     }
 
     private static String forgeToMcVersion(String version) {

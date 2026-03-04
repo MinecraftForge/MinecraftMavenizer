@@ -10,6 +10,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -34,9 +36,11 @@ import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.srgutils.IMappingFile.Format;
+import net.minecraftforge.srgutils.MinecraftVersion;
 
 /** Handles Minecraft-specific tasks, unrelated to the MCPConfig toolchain. */
 public class MinecraftTasks {
+    private static final MinecraftVersion BUNDLE_START = MinecraftVersion.from("21w39a");
     private final Cache cache;
     private final File cacheRoot;
     private final String version;
@@ -49,8 +53,9 @@ public class MinecraftTasks {
     private Task renameServer;
     private Task clientPom;
     private Task serverPom;
+    private Task extractServer;
 
-    public enum Files {
+    public enum MCFile {
         CLIENT_JAR("client", "jar"),
         CLIENT_MAPPINGS("client_mappings", "txt"),
         SERVER_JAR("server", "jar"),
@@ -59,7 +64,7 @@ public class MinecraftTasks {
         public final String key;
         public final String ext;
 
-        private Files(String key, String ext) {
+        private MCFile(String key, String ext) {
             this.key = key;
             this.ext = ext;
         }
@@ -86,14 +91,18 @@ public class MinecraftTasks {
     private File downloadVersionJson() {
         var target = new File(this.cacheRoot, "version.json");
         var manifestF = this.launcherManifest.execute();
+        var manifest = JsonData.launcherManifest(manifestF).getInfo(version);
 
         var cache = HashStore.fromFile(target);
-        cache.add("manifest", manifestF);
+        if (manifest != null && manifest.sha1 != null)
+            cache.addKnown("versionjson", manifest.sha1);
+        else
+            cache.add("manifest", manifestF);
 
         if (!Mavenizer.ignoreCache() && target.exists() && cache.isSame())
             return target;
 
-        // The manifest doesn't contain anything we can key off off, so this happens often
+        // The manifest v1 doesn't contain anything we can key off off, so this happens often
         // Do don't do the big warn if we get here.
         if (Mavenizer.isCacheOnly())
             Mavenizer.assertNotCacheOnly();
@@ -104,22 +113,20 @@ public class MinecraftTasks {
 
         Mavenizer.assertOnline();
 
-        var manifest = JsonData.launcherManifest(manifestF);
-        var url = manifest.getUrl(this.version);
-        if (url == null)
+        if (manifest == null)
             throw new IllegalStateException("Failed to find url for " + this.version + " version.json");
 
         try {
-            DownloadUtils.downloadFile(target, url.toExternalForm());
+            DownloadUtils.downloadFile(target, manifest.url.toExternalForm());
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to download " + url, e);
+            throw new IllegalStateException("Failed to download " + manifest.url, e);
         }
 
         cache.save();
         return target;
     }
 
-    public Task versionFile(Files file) {
+    public Task versionFile(MCFile file) {
         return versionFile(file.key, file.ext);
     }
 
@@ -161,13 +168,13 @@ public class MinecraftTasks {
 
     public Task mergeMappings() {
         if (this.mergeMappings == null)
-            this.mergeMappings = Task.named("merge_mappings[" + version + ']', Task.deps(versionFile(Files.CLIENT_MAPPINGS), versionFile(Files.SERVER_MAPPINGS)), this::mergeMappingsImpl);
+            this.mergeMappings = Task.named("merge_mappings[" + version + ']', Task.deps(versionFile(MCFile.CLIENT_MAPPINGS), versionFile(MCFile.SERVER_MAPPINGS)), this::mergeMappingsImpl);
         return this.mergeMappings;
     }
 
     private File mergeMappingsImpl() {
-        var clientTask = versionFile(Files.CLIENT_MAPPINGS);
-        var serverTask = versionFile(Files.SERVER_MAPPINGS);
+        var clientTask = versionFile(MCFile.CLIENT_MAPPINGS);
+        var serverTask = versionFile(MCFile.SERVER_MAPPINGS);
         var output = new File(this.cacheRoot, "joined_mappings.tsrg.gz");
         var client = clientTask.execute();
         var server = serverTask.execute();
@@ -192,8 +199,8 @@ public class MinecraftTasks {
 
     public Task renameClient() {
         if (this.renameClient == null) {
-            var jar = versionFile(Files.CLIENT_JAR);
-            var map = versionFile(Files.CLIENT_MAPPINGS);
+            var jar = versionFile(MCFile.CLIENT_JAR);
+            var map = versionFile(MCFile.CLIENT_MAPPINGS);
             this.renameClient = Task.named("rename[" + version + "][client]", Task.deps(jar, map), () -> renameJar("client", jar, map));
         }
         return this.renameClient;
@@ -201,8 +208,8 @@ public class MinecraftTasks {
 
     public Task renameServer() {
         if (this.renameServer == null) {
-            var jar = versionFile(Files.SERVER_JAR);
-            var map = versionFile(Files.SERVER_MAPPINGS);
+            var jar = this.extractServer();
+            var map = versionFile(MCFile.SERVER_MAPPINGS);
             this.renameServer = Task.named("rename[" + version + "][server]", Task.deps(jar, map), () -> renameJar("server", jar, map));
         }
         return this.renameServer;
@@ -290,13 +297,13 @@ public class MinecraftTasks {
 
     public Task serverPom() {
         if (this.serverPom == null)
-            this.serverPom = Task.named("pom[" + this.version + "][server]", Task.deps(versionFile(Files.SERVER_JAR)), this::serverPomImpl);
+            this.serverPom = Task.named("pom[" + this.version + "][server]", Task.deps(versionFile(MCFile.SERVER_JAR)), this::serverPomImpl);
         return this.serverPom;
     }
 
     private File serverPomImpl() {
         var output = new File(this.cacheRoot, "client.pom");
-        var jarFile = versionFile(Files.SERVER_JAR).execute();
+        var jarFile = versionFile(MCFile.SERVER_JAR).execute();
 
         var cache = HashStore.fromFile(output)
             .add("jar", jarFile);
@@ -318,6 +325,71 @@ public class MinecraftTasks {
 
         cache.save();
         return output;
+    }
+
+    public Task extractServer() {
+        if (this.extractServer == null) {
+            var self = MinecraftVersion.from(version);
+            var serverJar = versionFile(MCFile.SERVER_JAR);
+            if (self.compareTo(BUNDLE_START) >= 0)
+                this.extractServer = Task.named("extract[" + this.version +"][server]", Task.deps(serverJar), this::extractServerImpl);
+            else
+                this.extractServer = serverJar;
+        }
+        return this.extractServer;
+    }
+
+    private record BundleEntry(String sha, String version, String path) {}
+    private File extractServerImpl() {
+        var output = new File(this.cacheRoot, "server-extracted.jar");
+        var bundle = versionFile(MCFile.SERVER_JAR).execute().getAbsoluteFile();
+        var cache = HashStore.fromFile(output)
+            .add("bundle", bundle);
+
+        if (Mavenizer.checkCache(output, cache))
+            return output;
+
+        try (var jar = new JarFile(bundle)) {
+            var format = jar.getManifest().getMainAttributes().getValue("Bundler-Format");
+            if (format == null) // This is not a bundled jar file, but we expected it to be, so throw an exception
+                throw new RuntimeException("Server jar missing Bundler-Format: " + bundle);
+
+            if (!"1.0".equals(format))
+                throw new RuntimeException("Invalid bundle: `" + bundle + "` - Unsupported format " + format);
+
+            var entry = jar.getEntry("META-INF/versions.list");
+            if (entry == null)
+                throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/versions.list");
+
+            var entries = new ArrayList<BundleEntry>();
+            var reader = new BufferedReader(new InputStreamReader(jar.getInputStream(entry)));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                var pts = line.split("\t");
+                if (pts.length < 3)
+                    throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Invalid line: " + line);
+                entries.add(new BundleEntry(pts[0], pts[1], pts[2]));
+            }
+
+            if (entries.size() != 1)
+                throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Expected 1 entry in versions.list found " + entries.size());
+
+            Files.createDirectories(output.getParentFile().toPath());
+
+            var path = "META-INF/versions/" + entries.getFirst().path;
+            var jarEntry = jar.getEntry(path);
+            if (jarEntry == null)
+                throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing " + path);
+
+            Files.copy(jar.getInputStream(jarEntry), output.toPath(), StandardCopyOption.REPLACE_EXISTING);
+
+            cache.save();
+
+            return output;
+        } catch (IOException e) {
+            return Util.sneak(e);
+        }
+
     }
 
     private static List<Artifact> listBundleArtifacts(File bundle) {

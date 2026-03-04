@@ -154,8 +154,8 @@ public class Mappings {
 
         var mc = side.getMCP().getMinecraftTasks();
         var srg = side.getTasks().getMappings();
-        var client = mc.versionFile(MinecraftTasks.Files.CLIENT_MAPPINGS);
-        var server = mc.versionFile(MinecraftTasks.Files.SERVER_MAPPINGS);
+        var client = mc.versionFile(MinecraftTasks.MCFile.CLIENT_MAPPINGS);
+        var server = mc.versionFile(MinecraftTasks.MCFile.SERVER_MAPPINGS);
         ret = Task.named("srg2names[" + this + ']',
             Task.deps(srg, client, server),
             () -> getMappings(side, srg, client, server)

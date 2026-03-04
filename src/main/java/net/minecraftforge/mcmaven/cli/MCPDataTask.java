@@ -156,8 +156,8 @@ class MCPDataTask {
 
                 if (mcp.getConfig().official) {
                     var mc = mcp.getMinecraftTasks();
-                    var client = mc.versionFile(MinecraftTasks.Files.CLIENT_MAPPINGS);
-                    var server = mc.versionFile(MinecraftTasks.Files.SERVER_MAPPINGS);
+                    var client = mc.versionFile(MinecraftTasks.MCFile.CLIENT_MAPPINGS);
+                    var server = mc.versionFile(MinecraftTasks.MCFile.SERVER_MAPPINGS);
 
                     var obf2OffClient = IMappingFile.load(client.execute());
                     var obf2OffServer = IMappingFile.load(server.execute());
