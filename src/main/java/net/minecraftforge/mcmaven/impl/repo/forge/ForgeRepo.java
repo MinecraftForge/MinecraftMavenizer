@@ -53,6 +53,8 @@ public final class ForgeRepo extends Repo {
     // TODO: [MCMavenizer][FGVersion] Handle this as an edge-case in FGVersion
     private static final ComparableVersion USERDEV3_START = new ComparableVersion("1.12.2-14.23.5.2851");
     private static final ComparableVersion USERDEV3_END = new ComparableVersion("1.12.3"); //There is no 1.12.3, but I haven't disabled Userdev3 for 1.12.2 yet, so
+    private static final ComparableVersion PYTHON_START = new ComparableVersion("1.1-1.3.2.1");
+    private static final ComparableVersion PYTHON_END = new ComparableVersion("1.7.2-10.12.0.967");
 
     final MCPConfigRepo mcpconfig;
     final File globalBuild;
@@ -69,6 +71,11 @@ public final class ForgeRepo extends Repo {
         this.globalBuild = new File(cache.root(), "forge/.global");
     }
 
+    private static boolean isPython(String version) {
+        var ver = new ComparableVersion(version);
+        return ver.compareTo(PYTHON_START) >= 0 && ver.compareTo(PYTHON_END) < 0;
+    }
+
     @Override
     public List<PendingArtifact> process(Artifact artifact, Mappings mappings, Map<String, Supplier<String>> outputJson) {
         var module = artifact.getGroup() + ':' + artifact.getName();
@@ -80,8 +87,11 @@ public final class ForgeRepo extends Repo {
         LOGGER.info("Processing Minecraft Forge (userdev): " + version);
         var indent = LOGGER.push();
         try {
-            if (fg == null)
+            if (isPython(version))
                 throw new IllegalArgumentException("Python version unsupported!");
+
+            if (fg == null)
+                throw new IllegalArgumentException("Unknown Forge version " + version);
 
             // TODO [MCMavenizer][Backporting] You know what has to be done eventually...
             if (fg.ordinal() < FGVersion.v3.ordinal())
