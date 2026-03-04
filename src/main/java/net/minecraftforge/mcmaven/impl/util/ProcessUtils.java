@@ -158,9 +158,11 @@ public final class ProcessUtils {
                     if (logHandler != null && forcedExit == 0) {
                         forcedExit = logHandler.applyAsInt(line);
 
+                        /* We can't destroy the process here because we want to log everything. For some reason it doesn't finish logging if we do this.
                         // We don't want to exit here, because we want to log the rest of the output before exiting.
                         if (forcedExit != 0)
                             process.destroy();
+                        */
                     }
                 }
             } catch (IOException e) {
