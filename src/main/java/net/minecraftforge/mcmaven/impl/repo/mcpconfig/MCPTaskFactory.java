@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BiPredicate;
+import java.util.function.ToIntFunction;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
@@ -827,10 +828,23 @@ public class MCPTaskFactory {
             throw new IllegalStateException("Failed to find JDK for version " + java_version, e);
         }
 
-        if (isDecompile)
-            jvm = Mavenizer.fillDecompileJvmArgs(jvm);
+        ToIntFunction<String> logHandler = null;
+        if (isDecompile) {
+            jvm = Mavenizer.fillDecompileJvmArgs(jvm, true);
+            logHandler = MCPTaskFactory::parseDecompileLog;
+        }
 
-        var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, jvm, run, isDecompile ? MCPTaskFactory::parseDecompileLog : null);
+        var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, jvm, run, logHandler);
+        if (ret.exitCode == OUT_OF_MEMORY && isDecompile) {
+            var newJvm = Mavenizer.fillDecompileJvmArgs(resolveArgs(cache, tasks, jvmArgs), false);
+            if (!newJvm.equals(jvm)) {
+                LOGGER.error("First decompile failed with OutOfMemory using JVM Args: " + jvm);
+                LOGGER.error("Attempting again with: " + newJvm);
+                ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, newJvm, run, logHandler);
+                if (ret.exitCode == OUT_OF_MEMORY)
+                    LOGGER.error("Ran out of memory again, you can specify more manually using the --decompile-memory Mavenizer argument");
+            }
+        }
         if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to run MCP Step (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
 
@@ -891,6 +905,8 @@ public class MCPTaskFactory {
     // It also eagerly exits the process when something fails so as to not waste time.
     private static int parseDecompileLog(String line) {
         if (line.startsWith("java.lang.OutOfMemoryError:"))
+            return OUT_OF_MEMORY;
+        if (line.startsWith("Exception in thread") && line.contains("java.lang.OutOfMemoryError"))
             return OUT_OF_MEMORY;
         if (line.contains("ERROR:")) {
             // String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + cl.qualifiedName + " couldn't be written.";

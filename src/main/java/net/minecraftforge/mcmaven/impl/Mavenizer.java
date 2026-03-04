@@ -74,18 +74,61 @@ public final class Mavenizer {
     public static void setDecompileMemory(String value) {
         decompileMemory = value;
     }
-    public static List<String> fillDecompileJvmArgs(List<String> args) {
-        return fillJvmArgs(decompileMemory, args);
-    }
-    private static List<String> fillJvmArgs(@Nullable String mx, List<String> args) {
-        if (mx == null)
-            return args;
-        var ret = new ArrayList<String>();
-        ret.add("-Xmx" + mx);
-        for (var arg : args) {
-            if (arg.startsWith("-Xmx"))
+
+    // Default java argumetns are built build by the Image, and env variables
+    // https://github.com/openjdk/jdk/blob/08c8520b39083ec6354dc5df2f18c1f4c3588053/src/hotspot/share/runtime/arguments.cpp#L3628
+    private static final String[] DEFAULT_ARG_ENV = { "JAVA_OPTIONS", "_JAVA_OPTIONS", "JAVA_TOOL_OPIONS"};
+    private static final String[] MEMORY_FLAGS = {"-Xmx", "-XX:MaxHeapSize", "-Xms"};
+    private static void warnAboutMemory() {
+        var found = false;
+        for (var env : DEFAULT_ARG_ENV) {
+            var value = System.getenv(env);
+            if (value == null)
                 continue;
-            ret.add(arg);
+            for (var flag : MEMORY_FLAGS) {
+                if (value.contains(flag)) {
+                    LOGGER.warn("Detected Heap Size Argument(" + flag + ") in " + env + " environment variable.");
+                    found = true;
+                }
+            }
+        }
+        if (found)
+            LOGGER.warn("Please remove it if you run into memory related issues");
+    }
+
+    public static List<String> fillDecompileJvmArgs(List<String> args, boolean firstRun) {
+        if (!firstRun)
+            return args; // Use the unmodifed args from MCPConfig
+
+        var ret = stripMemoryJvmArgs(args);
+        // If we have an explicit memory size use it
+        if (decompileMemory != null) {
+            ret.add("-Xmx" + decompileMemory);
+        } else {
+            // Don't use any memory arguments and hope java picks the correct values
+            // By default it is 1/4th physical memory on modern JVMs
+            //     https://docs.oracle.com/en/java/javase/21/gctuning/ergonomics.html
+            // There are old JVMs that limit it to 1GB but there is no good way to detect if we're using one so just hope.
+            //     https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/ergonomics.html
+            // Best we can do is warn about memory argumetns if we see them.
+            warnAboutMemory();
+        }
+        return ret;
+    }
+
+    private static List<String> stripMemoryJvmArgs(List<String> args) {
+        var ret = new ArrayList<String>(args.size());
+
+        for (var arg : args) {
+            var skip = false;
+            for (var flag : MEMORY_FLAGS) {
+                if (arg.startsWith(flag)) {
+                    skip = true;
+                    break;
+                }
+            }
+            if (!skip)
+                ret.add(arg);
         }
         return ret;
     }
