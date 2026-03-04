@@ -158,7 +158,7 @@ public final class MCPConfigRepo extends Repo {
         var name = Artifact.from("net.minecraft", side, version);
 
         var pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"), false);
-        var metadata = pending("Metadata", metadata(build, mcpSide), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
+        var metadata = pending("Metadata", metadata(build, mcpSide.getName(), mcpSide.getMCP().getMinecraftTasks()), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
 
         if (dependenciesOnly) {
             return List.of(
@@ -204,22 +204,26 @@ public final class MCPConfigRepo extends Repo {
 
         var tasks = this.getMCTasks(artifact.getVersion());
         var cache = new File(this.cache.root(), "without_mcp");
+        var build = new File(cache, artifact.getVersion() + File.separator + artifact.getName());
 
         if (outputJson != null) {
             outputJson.put("mappings.channel", mappings::channel);
             outputJson.put("mappings.version", mappings::version);
         }
 
+        // This only contains the version json, but might as well share it
+        var metadata = pending("Metadata", metadata(build, artifact.getName(), tasks), artifact.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
+
         // For non-obfuscated versions, basically all we do is create the pom and extract the server if needed
         if (!isObfuscated(artifact.getVersion())) {
             if ("client".equals(artifact.getName())) {
                 var pom = pending("Maven POM", tasks.clientPom(), artifact.withExtension("pom"), false);
                 var jar = pending("Official Jar", tasks.versionFile(MCFile.CLIENT_JAR), artifact, false);
-                return List.of(pom, jar);
+                return List.of(metadata, pom, jar);
             } else if ("server".equals(artifact.getName())) {
                 var pom = pending("Maven POM", tasks.serverPom(), artifact.withExtension("pom"), false);
                 var jar = pending("Official Jar", tasks.extractServer(), artifact, false);
-                return List.of(pom, jar);
+                return List.of(metadata, pom, jar);
             }
             throw new IllegalArgumentException("MCPConfigRepo does not support artifact: " + artifact);
         }
@@ -235,15 +239,15 @@ public final class MCPConfigRepo extends Repo {
         }
 
         if ("mappings".equals(artifact.getName())) {
-            return List.of(mapPom, m2o);
+            return List.of(metadata, mapPom, m2o);
         } else if ("client".equals(artifact.getName())) {
             var pom = pending("Maven POM", tasks.clientPom(), artifact.withExtension("pom"), false);
             var jar = pending("Official Jar", tasks.renameClient(), artifact, false);
-            return List.of(mapPom, m2o, pom, jar);
+            return List.of(metadata, mapPom, m2o, pom, jar);
         } else if ("server".equals(artifact.getName())) {
             var pom = pending("Maven POM", tasks.serverPom(), artifact.withExtension("pom"), false);
             var jar = pending("Official Jar", tasks.renameServer(), artifact, false);
-            return List.of(mapPom, m2o, pom, jar);
+            return List.of(metadata, mapPom, m2o, pom, jar);
         } else {
             throw new IllegalArgumentException("MCPConfigRepo does not support artifact: " + artifact);
         }
@@ -292,8 +296,7 @@ public final class MCPConfigRepo extends Repo {
         });
     }
 
-    private static Task metadata(File build, MCPSide side) {
-        var minecraftTasks = side.getMCP().getMinecraftTasks();
+    private static Task metadata(File build, String side, MinecraftTasks minecraftTasks) {
         return Task.named("metadata[" + side + ']', Task.deps(minecraftTasks.versionJson), () -> {
             var output = new File(build, "metadata.zip");
 
