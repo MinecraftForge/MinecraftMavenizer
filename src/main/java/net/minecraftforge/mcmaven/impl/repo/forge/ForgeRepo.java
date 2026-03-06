@@ -241,7 +241,6 @@ public final class ForgeRepo extends Repo {
 
                 // version.properties
                 try (FileWriter writer = new FileWriter(versionProperties)) {
-                    // TODO [MCMavenizer][ForgeRepo] make this configurable later
                     writer.append("version=1").append('\n').flush();
                 }
 

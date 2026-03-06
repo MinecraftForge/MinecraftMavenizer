@@ -277,9 +277,8 @@ public class Patcher implements Supplier<Task> {
 
         // minecraft version.json libs + mcpconfig libs + userdev libs
         // also for module metadata (same order)
-        for (var lib : this.getMCP().getSide(MCPSide.JOINED).getTasks().getLibraries()) {
+        for (var lib : this.getMCP().getMinecraftTasks().getClientLibraries())
             classpath.add(lib.file());
-        }
 
         var cache = this.forge.getCache();
 

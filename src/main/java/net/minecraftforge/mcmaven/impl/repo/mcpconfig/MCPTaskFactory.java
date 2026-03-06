@@ -8,11 +8,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -32,7 +30,6 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
-import com.google.gson.reflect.TypeToken;
 import io.codechicken.diffpatch.cli.PatchOperation;
 import io.codechicken.diffpatch.util.LogLevel;
 import io.codechicken.diffpatch.util.PatchMode;
@@ -72,7 +69,6 @@ public class MCPTaskFactory {
     private final Task last;
 
     private final BiPredicate<File, String> injectFileFilter;
-    private @Nullable List<Lib> libraries = null;
 
     private MCPTaskFactory(MCPTaskFactory parent, File build, Task preDecomp) {
         this.parent = parent;
@@ -609,38 +605,22 @@ public class MCPTaskFactory {
                 libs.add(lib);
         }
 
-        var libsVarCache = new File(output.getAbsoluteFile().getParentFile(), "libraries.txt");
-
         // We don't want timestamps cuz this can be downlaoded multiple times, we care about contents, and the version json lists downloads with sha
         var cache = Util.cache(output)
-            .timestamps(false)
-            .add("version.json", jsonF);
-
-        var libsCache = Util.cache(libsVarCache)
             .timestamps(false)
             .add("version.json", jsonF);
 
         for (var lib : libs) {
             if (lib.dl != null) { // Sometimes natives don't have a main download
                 cache.addKnown(lib.coord, lib.dl.sha1);
-                libsCache.addKnown(lib.coord, lib.dl.sha1);
             }
         }
 
-        if (Mavenizer.checkCache(output, cache) && Mavenizer.checkCache(libsVarCache, libsCache)) {
-            try {
-                this.libraries = JsonData.<List<Lib.Cached>>fromJson(libsVarCache, new TypeToken<>() { }).stream().map(Lib.Cached::resolve).toList();
-                return output;
-            } catch (Exception e) {
-                LOGGER.error("Failed to load cached libraries, regenerating...");
-                LOGGER.error("Cached file: " + libsVarCache.getAbsolutePath());
-                e.printStackTrace(LOGGER.getError());
-            }
-        }
+        if (Mavenizer.checkCache(output, cache))
+            return output;
 
         var buf = new StringBuilder(20_000);
         var minecraft = this.side.getMCP().getCache().minecraft();
-        var downloadedLibs = new ArrayList<Lib>();
         for (var lib : libs) {
             // Sometimes natives don't have a main download
             if (lib.dl == null)
@@ -652,20 +632,7 @@ public class MCPTaskFactory {
             var target = minecraft.download(lib.dl);
 
             buf.append("-e=").append(target.getAbsolutePath()).append('\n');
-
-            var artifact = Artifact.from(lib.coord).withOS(lib.os);
-
-            downloadedLibs.add(new Lib(artifact, target));
         }
-
-        try {
-            FileUtils.ensureParent(libsVarCache);
-            JsonData.toJson(downloadedLibs.stream().map(Lib::cacheable).toList(), libsVarCache);
-            libsCache.save();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        this.libraries = downloadedLibs;
 
         FileUtils.ensureParent(output);
         try (var os = new FileOutputStream(output)) {
@@ -675,26 +642,6 @@ public class MCPTaskFactory {
         } catch (IOException e) {
             return Util.sneak(e);
         }
-    }
-
-    public record Lib(Artifact name, File file) {
-        public Cached cacheable() {
-            return new Cached(name, file.getAbsolutePath());
-        }
-
-        public record Cached(Artifact name, String file) implements Serializable {
-            public Lib resolve() {
-                return new Lib(name, new File(file));
-            }
-        }
-    }
-
-    public List<Lib> getLibraries() {
-        // no libraries? run the task to populate the field.
-        if (this.libraries == null)
-            this.findStep("listLibraries").execute();
-
-        return this.libraries;
     }
 
     private Task listLibrariesBundle(String name, Map<String, String> step) {
@@ -724,25 +671,22 @@ public class MCPTaskFactory {
                 libs.add(new LibLine(lib.hash(), Artifact.from(lib.name()), lib.path()));
 
             var cache = Util.cache(output)
-                .add(bundle);
+                .add("bundle", bundle);
             for (var lib : libs)
                 cache.add(lib.artifact().toString(), new File(libraries, lib.path()));
 
             if (Mavenizer.checkCache(output, cache))
                 return output;
 
-            cache.clear().add(bundle);
+            cache.clear().add("bundle", bundle);
 
             var buf = new StringBuilder();
-
-            var downloadedLibs = new ArrayList<Lib>();
 
             for (var lib : libs) {
                 var target = new File(libraries, lib.path());
                 var artifact = lib.artifact();
                 buf.append("-e=").append(target.getAbsolutePath()).append('\n');
 
-                downloadedLibs.add(new Lib(artifact, target));
                 if (!target.exists()) {
                     var entry = jar.getEntry("META-INF/libraries/" + lib.path());
                     if (entry == null)
@@ -756,10 +700,8 @@ public class MCPTaskFactory {
                     }
                 }
 
-                cache.add(target);
+                cache.add(artifact.toString(), target);
             }
-
-            this.libraries = Collections.unmodifiableList(downloadedLibs);
 
             FileUtils.ensureParent(output);
             try (var os = new FileOutputStream(output)) {

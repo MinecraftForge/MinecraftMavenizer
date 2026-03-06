@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -36,7 +37,7 @@ import net.minecraftforge.srgutils.MinecraftVersion;
 
 /** Handles Minecraft-specific tasks, unrelated to the MCPConfig toolchain. */
 public class MinecraftTasks {
-    private static final MinecraftVersion BUNDLE_START = MinecraftVersion.from("21w39a");
+    public static final MinecraftVersion BUNDLE_START = MinecraftVersion.from("21w39a");
     private final Cache cache;
     private final File cacheRoot;
     private final String version;
@@ -365,5 +366,65 @@ public class MinecraftTasks {
         } catch (IOException e) {
             return Util.sneak(e);
         }
+    }
+
+    public record ArtifactFile(Artifact artifact, File file) {}
+    private List<ArtifactFile> clientLibraries = null;
+    public List<ArtifactFile> getClientLibraries() {
+        if (clientLibraries == null) {
+            var ret = new ArrayList<ArtifactFile>();
+            var json = JsonData.minecraftVersion(this.versionJson.execute());
+            for (var lib : json.getLibs()) {
+                //Natives don't have main download
+                if (lib.dl == null)
+                    continue;
+                var artifact = Artifact.from(lib.coord).withOS(lib.os);
+                var file = this.cache.minecraft().download(artifact);
+                ret.add(new ArtifactFile(artifact, file));
+            }
+            clientLibraries = ret;
+        }
+        return clientLibraries;
+    }
+
+    private List<ArtifactFile> serverLibraries = null;
+    public List<ArtifactFile> getServerLibraries() {
+        if (serverLibraries == null) {
+            var self = MinecraftVersion.from(this.version);
+            // TODO: [Mavenizer] Server Libraries - Find 'extra' server jar somehow
+            if (self.compareTo(MinecraftTasks.BUNDLE_START) < 0)
+                serverLibraries = List.of();
+            else
+                serverLibraries = getServerLibrariesBundle();
+        }
+        return serverLibraries;
+    }
+
+    private List<ArtifactFile> getServerLibrariesBundle() {
+        var ret = new ArrayList<ArtifactFile>();
+        var bundle = this.versionFile(MCFile.SERVER_JAR).execute();
+        try (var jar = new JarFile(bundle)) {
+            var list = Util.readBundle(bundle, jar, "libraries");
+            var root = new File(this.cacheRoot, "libraries");
+            for (var lib : list) {
+                var target = new File(root, lib.path());
+                if (!target.exists()) {
+                    var entry = jar.getEntry("META-INF/libraries/" + lib.path());
+                    if (entry == null)
+                        throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries/" + lib.path());
+
+                    FileUtils.ensureParent(target);
+
+                    try (var os = new FileOutputStream(target);
+                         var is = jar.getInputStream(entry)) {
+                        is.transferTo(os);
+                    }
+                }
+                ret.add(new ArtifactFile(Artifact.from(lib.name()), target));
+            }
+        } catch (IOException e) {
+            Util.sneak(e);
+        }
+        return ret;
     }
 }
