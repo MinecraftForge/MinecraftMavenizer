@@ -4,12 +4,10 @@
  */
 package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -713,16 +711,7 @@ public class MCPTaskFactory {
         var bundle = bundleTask.execute();
 
         try (var jar = new JarFile(bundle)) {
-            var format = jar.getManifest().getMainAttributes().getValue("Bundler-Format");
-            if (format == null)
-                throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing format entry from manifest");
-
-            if (!"1.0".equals(format))
-                throw new RuntimeException("Invalid bundle: `" + bundle + "` - Unsupported format " + format);
-
-            var entry = jar.getEntry("META-INF/libraries.list");
-            if (entry == null)
-                throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries.list");
+            var list = Util.readBundle(bundle, jar, "libraries");
 
             record LibLine(String hash, Artifact artifact, String path) implements Comparable<LibLine> {
                 @Override
@@ -730,16 +719,9 @@ public class MCPTaskFactory {
                     return Util.compare(this.artifact, o.artifact);
                 }
             }
-            var libs = new TreeSet<LibLine>();
-
-            var reader = new BufferedReader(new InputStreamReader(jar.getInputStream(entry)));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                var pts = line.split("\t");
-                if (pts.length < 3)
-                    throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Invalid line: " + line);
-                libs.add(new LibLine(pts[0], Artifact.from(pts[1]),  pts[2]));
-            }
+            var libs = new ArrayList<LibLine>(list.size());
+            for (var lib : list)
+                libs.add(new LibLine(lib.hash(), Artifact.from(lib.name()), lib.path()));
 
             var cache = Util.cache(output)
                 .add(bundle);
@@ -762,9 +744,9 @@ public class MCPTaskFactory {
 
                 downloadedLibs.add(new Lib(artifact, target));
                 if (!target.exists()) {
-                    entry = jar.getEntry("META-INF/libraries/" + lib.path());
+                    var entry = jar.getEntry("META-INF/libraries/" + lib.path());
                     if (entry == null)
-                        throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries/" + lib);
+                        throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries/" + lib.path());
 
                     FileUtils.ensureParent(target);
 

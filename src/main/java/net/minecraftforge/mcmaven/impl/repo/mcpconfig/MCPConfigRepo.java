@@ -10,6 +10,7 @@ import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks.MCFile;
 import net.minecraftforge.mcmaven.impl.tasks.RecompileTask;
 import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
+import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
@@ -17,6 +18,7 @@ import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
+import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.file.FileUtils;
 
@@ -34,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import java.util.jar.JarFile;
 
 /*
  * Provides the following artifacts:
@@ -217,11 +220,11 @@ public final class MCPConfigRepo extends Repo {
         if (!isObfuscated(artifact.getVersion())) {
             if ("client".equals(artifact.getName())) {
                 var pom = pending("Maven POM", tasks.clientPom(), artifact.withExtension("pom"), false);
-                var jar = pending("Official Jar", tasks.versionFile(MCFile.CLIENT_JAR), artifact, false);
+                var jar = pending("Official Jar", tasks.versionFile(MCFile.CLIENT_JAR), artifact, false, () -> classVariantsClient(mappings, tasks));
                 return List.of(metadata, pom, jar);
             } else if ("server".equals(artifact.getName())) {
                 var pom = pending("Maven POM", tasks.serverPom(), artifact.withExtension("pom"), false);
-                var jar = pending("Official Jar", tasks.extractServer(), artifact, false);
+                var jar = pending("Official Jar", tasks.extractServer(), artifact, false, () -> classVariantsServer(mappings, tasks));
                 return List.of(metadata, pom, jar);
             }
             throw new IllegalArgumentException("MCPConfigRepo does not support artifact: " + artifact);
@@ -241,11 +244,11 @@ public final class MCPConfigRepo extends Repo {
             return List.of(metadata, mapPom, m2o);
         } else if ("client".equals(artifact.getName())) {
             var pom = pending("Maven POM", tasks.clientPom(), artifact.withExtension("pom"), false);
-            var jar = pending("Official Jar", tasks.renameClient(), artifact, false);
+            var jar = pending("Official Jar", tasks.renameClient(), artifact, false, () -> classVariantsClient(mappings, tasks));
             return List.of(metadata, mapPom, m2o, pom, jar);
         } else if ("server".equals(artifact.getName())) {
             var pom = pending("Maven POM", tasks.serverPom(), artifact.withExtension("pom"), false);
-            var jar = pending("Official Jar", tasks.renameServer(), artifact, false);
+            var jar = pending("Official Jar", tasks.renameServer(), artifact, false, () -> classVariantsServer(mappings, tasks));
             return List.of(metadata, mapPom, m2o, pom, jar);
         } else {
             throw new IllegalArgumentException("MCPConfigRepo does not support artifact: " + artifact);
@@ -386,5 +389,30 @@ public final class MCPConfigRepo extends Repo {
             cache.save();
             return output;
         });
+    }
+
+    private GradleModule.Variant[] classVariantsClient(Mappings mappings, MinecraftTasks tasks) {
+        var deps = new ArrayList<Artifact>();
+        var json = JsonData.minecraftVersion(tasks.versionJson.execute());
+        for (var lib : json.getLibs())
+            deps.add(Artifact.from(lib.coord).withOS(lib.os));
+        return classVariants(mappings, tasks.versionJson, deps, List.of());
+    }
+
+    private GradleModule.Variant[] classVariantsServer(Mappings mappings, MinecraftTasks tasks) {
+        var deps = new ArrayList<Artifact>();
+        var serverJar = tasks.versionFile(MCFile.SERVER_JAR).execute();
+        try (var jar = new JarFile(serverJar)) {
+            var format = jar.getManifest().getMainAttributes().getValue("Bundler-Format");
+            if (format != null) {
+                var list = Util.readBundle(serverJar, jar, "libraries");
+                for (var lib : list)
+                    deps.add(Artifact.from(lib.name()));
+            }
+            // TODO: [Mavenizer] Currently non-bundled server jars are not supported for non-mcpconfig setups
+        } catch (IOException e) {
+            return Util.sneak(e);
+        }
+        return classVariants(mappings, tasks.versionJson, deps, List.of());
     }
 }

@@ -4,15 +4,12 @@
  */
 package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -310,7 +307,7 @@ public class MinecraftTasks {
         if (Mavenizer.checkCache(output, cache))
             return output;
 
-        var libs = listBundleArtifacts(jarFile);
+        var libs = Util.listBundleArtifacts(jarFile);
         var builder = new POMBuilder("net.minecraft", "server", version)
             .preferGradleModule()
             .dependencies(deps -> libs.forEach(deps::add));
@@ -338,7 +335,6 @@ public class MinecraftTasks {
         return this.extractServer;
     }
 
-    private record BundleEntry(String sha, String version, String path) {}
     private File extractServerImpl() {
         var output = new File(this.cacheRoot, "server-extracted.jar");
         var bundle = versionFile(MCFile.SERVER_JAR).execute().getAbsoluteFile();
@@ -349,33 +345,14 @@ public class MinecraftTasks {
             return output;
 
         try (var jar = new JarFile(bundle)) {
-            var format = jar.getManifest().getMainAttributes().getValue("Bundler-Format");
-            if (format == null) // This is not a bundled jar file, but we expected it to be, so throw an exception
-                throw new RuntimeException("Server jar missing Bundler-Format: " + bundle);
-
-            if (!"1.0".equals(format))
-                throw new RuntimeException("Invalid bundle: `" + bundle + "` - Unsupported format " + format);
-
-            var entry = jar.getEntry("META-INF/versions.list");
-            if (entry == null)
-                throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/versions.list");
-
-            var entries = new ArrayList<BundleEntry>();
-            var reader = new BufferedReader(new InputStreamReader(jar.getInputStream(entry)));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                var pts = line.split("\t");
-                if (pts.length < 3)
-                    throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Invalid line: " + line);
-                entries.add(new BundleEntry(pts[0], pts[1], pts[2]));
-            }
+            var entries = Util.readBundle(bundle, jar, "versions");
 
             if (entries.size() != 1)
                 throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Expected 1 entry in versions.list found " + entries.size());
 
             Files.createDirectories(output.getParentFile().toPath());
 
-            var path = "META-INF/versions/" + entries.getFirst().path;
+            var path = "META-INF/versions/" + entries.getFirst().path();
             var jarEntry = jar.getEntry(path);
             if (jarEntry == null)
                 throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing " + path);
@@ -385,35 +362,6 @@ public class MinecraftTasks {
             cache.save();
 
             return output;
-        } catch (IOException e) {
-            return Util.sneak(e);
-        }
-
-    }
-
-    private static List<Artifact> listBundleArtifacts(File bundle) {
-        try (var jar = new JarFile(bundle)) {
-            var format = jar.getManifest().getMainAttributes().getValue("Bundler-Format");
-            if (format == null) // If this is not a bundle then it's the old 'fatjar' and already contains all deps
-                return List.of();
-
-            if (!"1.0".equals(format))
-                throw new RuntimeException("Invalid bundle: `" + bundle + "` - Unsupported format " + format);
-
-            var entry = jar.getEntry("META-INF/libraries.list");
-            if (entry == null)
-                throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing META-INF/libraries.list");
-
-            var ret = new ArrayList<Artifact>();
-            var reader = new BufferedReader(new InputStreamReader(jar.getInputStream(entry)));
-            String line;
-            while ((line = reader.readLine()) != null) {
-                var pts = line.split("\t");
-                if (pts.length < 3)
-                    throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Invalid line: " + line);
-                ret.add(Artifact.from(pts[1]));
-            }
-            return ret;
         } catch (IOException e) {
             return Util.sneak(e);
         }

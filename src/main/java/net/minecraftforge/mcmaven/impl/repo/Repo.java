@@ -126,11 +126,41 @@ public abstract class Repo {
     }
 
     // Classes needs a variant for each OS type so that we can have different natives
-    protected GradleModule.Variant[] classVariants(Mappings mappings, MCPSide side, Collection<Artifact> extraDeps, Collection<Artifact> extraCompileDeps, Collection<Artifact> extraRuntimeDeps) {
+    protected GradleModule.Variant[] classVariants(
+        Mappings mappings,
+        MCPSide side,
+        Collection<Artifact> extraDeps,
+        Collection<Artifact> extraCompileDeps,
+        Collection<Artifact> extraRuntimeDeps
+    ) {
+        var deps = new ArrayList<Artifact>();
+        deps.addAll(side.getMCLibraries());
+        deps.addAll(side.getMCPConfigLibraries());
+        deps.addAll(extraDeps);
+
+        // ExtraRuntimeDeps is never used.... Not sure where it was meant to go
+
+        return classVariants(
+            mappings,
+            side.getMCP().getMinecraftTasks().versionJson,
+            deps,
+            extraCompileDeps
+        );
+    }
+
+    protected GradleModule.Variant[] classVariants(
+        Mappings mappings,
+        Task jsonTask,
+        Collection<Artifact> deps,
+        Collection<Artifact> extraCompileDeps
+    ) {
         var all = new ArrayList<Artifact>();
         var natives = new HashMap<GradleAttributes.OperatingSystemFamily, List<Artifact>>();
 
-        for (var artifact : side.getMCLibraries()) {
+        for (var artifact : deps) {
+            if (artifact == null)
+                continue;
+
             var osVariants = EnumSet.noneOf(GradleAttributes.OperatingSystemFamily.class);
             for (var os : artifact.getOs()) {
                 var variant = GradleAttributes.OperatingSystemFamily.from(os);
@@ -147,17 +177,8 @@ public abstract class Repo {
             }
         }
 
-        all.addAll(side.getMCPConfigLibraries());
-
-        for (var extra : extraDeps) {
-            if (extra != null)
-                all.add(extra);
-        }
-
-        var java = Util.replace(
-            JsonData.minecraftVersion(side.getMCP().getMinecraftTasks().versionJson.execute()),
-            v -> v.javaVersion != null ? v.javaVersion.majorVersion : null
-        );
+        var json = JsonData.minecraftVersion(jsonTask.execute());
+        var java = json.javaVersion != null ? json.javaVersion.majorVersion : null;
 
         Consumer<GradleModule.Variant> common = v -> {
             v.attribute("org.gradle.status", "release")

@@ -4,14 +4,18 @@
  */
 package net.minecraftforge.mcmaven.impl.util;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.TimeZone;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.jar.JarFile;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 
@@ -152,6 +156,51 @@ public class Util {
 
         return success;
     }
+
+    public record BundleEntry(String hash, String name, String path) implements Comparable<BundleEntry> {
+        @Override
+        public int compareTo(BundleEntry o) {
+            return compare(this.name, o.name);
+        }
+    }
+    public static List<BundleEntry> readBundle(File bundle, JarFile jar, String list) throws IOException {
+        var format = jar.getManifest().getMainAttributes().getValue("Bundler-Format");
+        if (format == null)
+            throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing format entry from manifest");
+
+        if (!"1.0".equals(format))
+            throw new RuntimeException("Invalid bundle: `" + bundle + "` - Unsupported format " + format);
+
+        var path = "META-INF/" + list + ".list";
+        var entry = jar.getEntry(path);
+        if (entry == null)
+            throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Missing " + path);
+
+        var libs = new ArrayList<BundleEntry>();
+        var reader = new BufferedReader(new InputStreamReader(jar.getInputStream(entry)));
+        String line;
+        while ((line = reader.readLine()) != null) {
+            var pts = line.split("\t");
+            if (pts.length < 3)
+                throw new IllegalStateException("Invalid bundle: `" + bundle + "` - Invalid line: " + line);
+            libs.add(new BundleEntry(pts[0], pts[1], pts[2]));
+        }
+
+        return libs;
+    }
+
+    public static List<Artifact> listBundleArtifacts(File bundle) {
+        try (var jar = new JarFile(bundle)) {
+            var list = Util.readBundle(bundle, jar, "libraries");
+            var ret = new ArrayList<Artifact>(list.size());
+            for (var lib : list)
+                ret.add(Artifact.from(lib.name()));
+            return ret;
+        } catch (IOException e) {
+            return Util.sneak(e);
+        }
+    }
+
 
     public static HashStore cache(File file) {
         return HashStore.fromFile(file)
