@@ -22,7 +22,6 @@ import net.minecraftforge.srgutils.IRenamer;
 import net.minecraftforge.srgutils.IMappingFile.IField;
 import net.minecraftforge.srgutils.IMappingFile.IMethod;
 import net.minecraftforge.srgutils.IMappingFile.IParameter;
-import net.minecraftforge.util.logging.Logger;
 
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
@@ -30,9 +29,6 @@ import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 // its not the best, but I dont want to re-wrok INSTALLER_TOOLS to put the tsrg in the mappings zip
 class MCPDataTask {
     static OptionParser run(String[] args, boolean getParser) throws Exception {
-        // TODO [MCMavenizer] Make this into a --log [level] option
-        LOGGER.setEnabled(Logger.Level.INFO);
-
         var parser = new OptionParser();
         parser.allowsUnrecognizedOptions();
 

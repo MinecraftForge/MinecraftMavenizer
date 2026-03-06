@@ -16,15 +16,11 @@ import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.mappings.ParchmentMappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
-import net.minecraftforge.util.logging.Logger;
 
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 class MavenTask {
     static OptionParser run(String[] args, boolean getParser) throws Exception {
-        // TODO [MCMavenizer] Make this into a --log [level] option
-        LOGGER.setEnabled(Logger.Level.INFO);
-
         var parser = new OptionParser();
         parser.allowsUnrecognizedOptions();
 
@@ -120,6 +116,7 @@ class MavenTask {
             "forge",  Constants.FORGE_ARTIFACT,
             "fml",    Constants.FMLONLY_ARTIFACT,
             "mc",     "net.minecraft:joined",
+            "joined", "net.minecraft:joined",
             "client", "net.minecraft:client",
             "server", "net.minecraft:server",
             "mapping-data", "net.minecraft:mappings"
