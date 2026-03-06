@@ -19,7 +19,6 @@ import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.file.FileUtils;
-import net.minecraftforge.util.hash.HashStore;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
@@ -280,7 +279,7 @@ public final class MCPConfigRepo extends Repo {
             var output = new File(mappings.getFolder(build), "recompiled-extra.jar");
             var recompiledF = recompiled.execute();
             var extraF = extra.execute();
-            var cache = HashStore.fromFile(output)
+            var cache = Util.cache(output)
                 .add(recompiledF, extraF);
             if (Mavenizer.checkCache(output, cache))
                 return output;
@@ -308,7 +307,7 @@ public final class MCPConfigRepo extends Repo {
             var minecraftDir = new File(metadataDir, "minecraft");
             var versionJson = minecraftTasks.versionJson.execute();
 
-            var cache = HashStore.fromFile(output)
+            var cache = Util.cache(output)
                 .add(versionJson)
                 .add(versionProperties);
             if (Mavenizer.checkCache(output, cache))
@@ -347,7 +346,7 @@ public final class MCPConfigRepo extends Repo {
     private static Task pom(File build, String side, MCPSide mcpSide, String version) {
         return Task.named("pom[" + version + "][" + side + ']' , () -> {
             var output = new File(build, side + ".pom");
-            var cache = HashStore.fromFile(output)
+            var cache = Util.cache(output)
                 .add("mcp", mcpSide.getMCP().getData());
             if (Mavenizer.checkCache(output, cache))
                 return output;
@@ -371,7 +370,7 @@ public final class MCPConfigRepo extends Repo {
     private static Task pomExtra(File build, String side, String version) {
         return Task.named("pom[" + side + ']', () -> {
             var output = new File(build, side + ".pom");
-            var cache = HashStore.fromFile(output);
+            var cache = Util.cache(output);
             if (Mavenizer.checkCache(output, cache))
                 return output;
 

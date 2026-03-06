@@ -27,7 +27,6 @@ import net.minecraftforge.srgutils.IRenamer;
 import net.minecraftforge.srgutils.IMappingFile.IField;
 import net.minecraftforge.srgutils.IMappingFile.IMethod;
 import net.minecraftforge.srgutils.IMappingFile.IParameter;
-import net.minecraftforge.util.hash.HashStore;
 import org.jetbrains.annotations.Nullable;
 
 import de.siegmar.fastcsv.reader.CsvReader;
@@ -199,7 +198,7 @@ public class Mappings {
         var client = clientTask.execute();
         var server = serverTask.execute();
 
-        var cache = HashStore.fromFile(output);
+        var cache = Util.cache(output);
         cache.add("tool", tool);
         cache.add("mappings", mappings);
         cache.add("client", client);
@@ -243,7 +242,7 @@ public class Mappings {
         var srg = srgTask.execute();
         var csv = csvTask.execute();
 
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("srg", srg)
             .add("csv", csv);
 

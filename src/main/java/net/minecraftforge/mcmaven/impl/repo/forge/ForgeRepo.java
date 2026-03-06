@@ -23,7 +23,6 @@ import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
-import net.minecraftforge.util.hash.HashStore;
 
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
@@ -226,8 +225,7 @@ public final class ForgeRepo extends Repo {
             var minecraftDir = new File(metadataDir, "minecraft");
             var versionJson = patcher.getMCP().getMinecraftTasks().versionJson.execute();
 
-            var cache = HashStore
-                .fromFile(output)
+            var cache = Util.cache(output)
                 .add(versionJson)
                 .add(versionProperties)
                 .add("data", patcher.getDataHash())
@@ -276,7 +274,7 @@ public final class ForgeRepo extends Repo {
     private static Task pom(File build, Patcher patcher, String version, Artifact clientExtra, Artifact mappings) {
         return Task.named("pom[forge]", () -> {
             var output = new File(build, "forge.pom");
-            var cache = HashStore.fromFile(output)
+            var cache = Util.cache(output)
                 .addKnown("data", patcher.getDataHash())
                 .addKnown("extra", Util.replace(clientExtra, Object::toString))
                 .addKnown("mappings", Util.replace(mappings, Object::toString))

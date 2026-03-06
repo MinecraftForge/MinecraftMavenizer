@@ -33,7 +33,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
     private static final HashFunction[] DEFAULT_HASHES = {
         // can't use SHA256/512 as gradle doesn't always update those files. Depending on version used to publish
         //HashFunction.SHA256,
-        HashFunction.SHA1
+        HashFunction.sha1()
         //HashFunction.MD5
     };
 
@@ -89,10 +89,10 @@ public sealed class MavenCache permits MinecraftMavenCache {
     @SuppressWarnings("JavadocDeclaration") // IOException thrown by Util.sneak
     public final File download(Artifact artifact) {
         try {
-        	if (artifact.getVersion() == null)
-        		throw new IllegalArgumentException("Can not download artifact with null version: " + artifact);
+            if (artifact.getVersion() == null)
+                throw new IllegalArgumentException("Can not download artifact with null version: " + artifact);
 
-        	var resolved = resolve(artifact);
+            var resolved = resolve(artifact);
             return download(false, resolved.getPath());
         } catch (Exception e) {
             if (!this.foreignRepositories.isEmpty()) {
@@ -288,41 +288,41 @@ public sealed class MavenCache permits MinecraftMavenCache {
      * Try and resolve dynamic versions.
      */
     private Artifact resolve(Artifact artifact) {
-    	var version = artifact.getVersion();
-    	if (version == null)
-    		throw new IllegalArgumentException("Can not resolve null version: " + artifact);
+        var version = artifact.getVersion();
+        if (version == null)
+            throw new IllegalArgumentException("Can not resolve null version: " + artifact);
 
-    	if (version.endsWith("+")) {
-    		var versions = getVersions(artifact);
+        if (version.endsWith("+")) {
+            var versions = getVersions(artifact);
 
-    		if (version.length() > 1) {
-    			var prefix = version.substring(0, version.length() - 1);
-    			for (var itr = versions.iterator(); itr.hasNext(); ) {
-    				var v = itr.next();
-    				if (!v.startsWith(prefix))
-    					itr.remove();
-    			}
-    		}
+            if (version.length() > 1) {
+                var prefix = version.substring(0, version.length() - 1);
+                for (var itr = versions.iterator(); itr.hasNext(); ) {
+                    var v = itr.next();
+                    if (!v.startsWith(prefix))
+                        itr.remove();
+                }
+            }
 
-    		ComparableVersion ret = null;
-    		for (var ver : versions) {
-    			ComparableVersion comp = null;
-    			try {
-    				comp = new ComparableVersion(ver);
-    			} catch (Exception e) {
-    				LOGGER.debug("Failed to parse version " + ver + " while resolving " + artifact + ", skipping");
-    				continue;
-    			}
+            ComparableVersion ret = null;
+            for (var ver : versions) {
+                ComparableVersion comp = null;
+                try {
+                    comp = new ComparableVersion(ver);
+                } catch (Exception e) {
+                    LOGGER.debug("Failed to parse version " + ver + " while resolving " + artifact + ", skipping");
+                    continue;
+                }
 
-    			// Grab the highest version
-    			if (ret == null || ret.compareTo(comp) < 0)
-    				ret = comp;
-    		}
+                // Grab the highest version
+                if (ret == null || ret.compareTo(comp) < 0)
+                    ret = comp;
+            }
 
-    		if (ret != null)
-    			artifact = artifact.withVersion(ret.toString());
-    	}
+            if (ret != null)
+                artifact = artifact.withVersion(ret.toString());
+        }
 
-    	return artifact;
+        return artifact;
     }
 }

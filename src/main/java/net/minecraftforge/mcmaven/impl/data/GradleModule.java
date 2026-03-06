@@ -199,7 +199,7 @@ public class GradleModule {
                 this.name = this.url = name;
                 this.size = file.length();
                 try {
-                    var hashes = HashUtils.bulkHash(file, HashFunction.SHA1, HashFunction.SHA256, HashFunction.SHA512, HashFunction.MD5);
+                    var hashes = HashUtils.bulkHash(file, HashFunction.sha1(), HashFunction.sha256(), HashFunction.sha512(), HashFunction.md5());
                     this.sha1 = hashes[0];
                     this.sha256 = hashes[1];
                     this.sha512 = hashes[2];

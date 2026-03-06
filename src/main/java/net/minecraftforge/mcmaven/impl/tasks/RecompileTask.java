@@ -10,7 +10,7 @@ import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
-import net.minecraftforge.util.hash.HashStore;
+import net.minecraftforge.mcmaven.impl.util.Util;
 
 import java.io.File;
 import java.util.List;
@@ -62,7 +62,7 @@ public final class RecompileTask implements Task {
     }
 
     private File recompileSourcesImpl(Task inputTask, File output) {
-        var cache = HashStore.fromFile(output);
+        var cache = Util.cache(output);
         var javaTarget = this.mcp.getConfig().java_target;
         var sourcesJar = inputTask.execute();
 

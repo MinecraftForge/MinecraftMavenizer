@@ -27,7 +27,6 @@ import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.file.FileUtils;
-import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
@@ -93,7 +92,7 @@ public class MinecraftTasks {
         var manifestF = this.launcherManifest.execute();
         var manifest = JsonData.launcherManifest(manifestF).getInfo(version);
 
-        var cache = HashStore.fromFile(target);
+        var cache = Util.cache(target);
         if (manifest != null && manifest.sha1 != null)
             cache.addKnown("versionjson", manifest.sha1);
         else
@@ -143,7 +142,7 @@ public class MinecraftTasks {
         var target = new File(this.cacheRoot, key  + '.' + ext);
         var manifestF = this.versionJson.execute();
 
-        var cache = HashStore.fromFile(target);
+        var cache = Util.cache(target);
         cache.add("manifest", manifestF);
 
         if (Mavenizer.checkCache(target, cache))
@@ -178,7 +177,7 @@ public class MinecraftTasks {
         var output = new File(this.cacheRoot, "joined_mappings.tsrg.gz");
         var client = clientTask.execute();
         var server = serverTask.execute();
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add(client, server);
 
         if (Mavenizer.checkCache(output, cache))
@@ -223,7 +222,7 @@ public class MinecraftTasks {
         var mappings = mapTask.execute();
         var jar = jarTask.execute();
 
-        var cache = HashStore.fromFile(output);
+        var cache = Util.cache(output);
         cache.add("tool", tool);
         cache.add("mappings", mappings);
         cache.add("input", jar);
@@ -268,7 +267,7 @@ public class MinecraftTasks {
         var output = new File(this.cacheRoot, "client.pom");
         var json = this.versionJson.execute();
 
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("json", json);
 
         if (Mavenizer.checkCache(output, cache))
@@ -305,7 +304,7 @@ public class MinecraftTasks {
         var output = new File(this.cacheRoot, "client.pom");
         var jarFile = versionFile(MCFile.SERVER_JAR).execute();
 
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("jar", jarFile);
 
         if (Mavenizer.checkCache(output, cache))
@@ -343,7 +342,7 @@ public class MinecraftTasks {
     private File extractServerImpl() {
         var output = new File(this.cacheRoot, "server-extracted.jar");
         var bundle = versionFile(MCFile.SERVER_JAR).execute().getAbsoluteFile();
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("bundle", bundle);
 
         if (Mavenizer.checkCache(output, cache))

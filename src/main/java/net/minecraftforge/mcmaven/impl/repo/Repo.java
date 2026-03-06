@@ -16,7 +16,6 @@ import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
-import net.minecraftforge.util.hash.HashStore;
 
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
@@ -24,6 +23,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
@@ -91,9 +91,17 @@ public abstract class Repo {
             var variants = supplier.get();
 
             var variantFile = new File(parent.execute().getAbsolutePath() + ".variants");
+            var json = JsonData.toJson(variants);
+            var cache = Util.cache(variantFile)
+                .add("data", json);
+
+            if (Mavenizer.checkCache(variantFile, cache))
+                return variantFile;
+
             try {
                 FileUtils.ensureParent(variantFile);
-                JsonData.toJson(variants, variantFile);
+                Files.writeString(variantFile.toPath(), json, StandardCharsets.UTF_8);
+                cache.save();
             } catch (Throwable t) {
                 throw new RuntimeException("Failed to write artifact variants: %s".formatted(variantFile), t);
             }
@@ -192,7 +200,7 @@ public abstract class Repo {
     protected static Task simplePom(File build, Artifact artifact) {
         return Task.named("pom[" + artifact.getName() + ']', () -> {
             var output = new File(build, artifact.getName() + '-' + artifact.getVersion() + ".pom");
-            var cache = HashStore.fromFile(output);
+            var cache = Util.cache(output);
             if (Mavenizer.checkCache(output, cache))
                 return output;
 

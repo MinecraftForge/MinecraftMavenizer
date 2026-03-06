@@ -23,7 +23,6 @@ import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.hash.HashFunction;
-import net.minecraftforge.util.hash.HashStore;
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import net.minecraftforge.util.logging.Logger;
@@ -165,7 +164,7 @@ class MCPTask {
 
         if (options.has(rawO)) {
             var searge = options.has(seargeO);
-            var cache = HashStore.fromFile(output)
+            var cache = Util.cache(output)
                 .addKnown("obfuscation", searge ? "srg" : "notch");
 
             Task rawTask = searge ? side.getTasks().getSrgJar() : side.getTasks().getRawJar();
@@ -197,7 +196,7 @@ class MCPTask {
         var sourcesTask = side.getSources();
 
         if (ats != null || sas != null) {
-            var hash = Util.hash(HashFunction.SHA1, ats, sas);
+            var hash = Util.hash(HashFunction.sha1(), ats, sas);
             var dir = new File(side.getBuildFolder(), hash);
 
             var predecomp = side.getTasks().getPreDecompile();
@@ -226,7 +225,7 @@ class MCPTask {
             }
         }
 
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("sources", sources);
 
         if (options.has(mappingsO)) {

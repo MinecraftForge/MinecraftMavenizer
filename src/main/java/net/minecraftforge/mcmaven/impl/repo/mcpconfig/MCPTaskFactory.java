@@ -274,7 +274,7 @@ public class MCPTaskFactory {
         var filename = idx == -1 ? value : value.substring(idx);
         var target = new File(this.build, "data/" + key + '/' + filename);
 
-        var cache = HashStore.fromFile(target)
+        var cache = Util.cache(target)
             .add("mcp", getData());
 
         if (Mavenizer.checkCache(target, cache))
@@ -303,7 +303,7 @@ public class MCPTaskFactory {
     private File extractFolder(String key, String value) {
         var base = new File(this.build, "data/" + key);
 
-        var cache = HashStore.fromFile(base)
+        var cache = Util.cache(base)
             .add("mcp", getData());
         boolean same = !Mavenizer.ignoreCache() && cache.isSame();
 
@@ -412,7 +412,7 @@ public class MCPTaskFactory {
         var input = inputTask.execute();
         var mappings = this.mappings.execute();
 
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("input", input)
             .add("mappings", mappings);
 
@@ -463,7 +463,7 @@ public class MCPTaskFactory {
     private File inject(Task inputTask, Task injectTask, File packages, File output) {
         var input = inputTask.execute();
         var inject = injectTask.execute();
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("input", input)
             .add("inject", inject)
             .addKnown("codever", "1");
@@ -536,7 +536,7 @@ public class MCPTaskFactory {
 
     private File patch(Task inputTask, File output, File rejects) {
         var input = inputTask.execute();
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("input", input)
             .add("data", this.getData());
 
@@ -591,7 +591,7 @@ public class MCPTaskFactory {
 
     private Task listLibraries(String name, Map<String, String> step) {
         var output = new File(this.build, name + ".txt");
-        var json = this.findStep("downloadJson");
+        var json = this.side.getMCP().getMinecraftTasks().versionJson;
         return Task.named(name,
             Task.deps(json),
             () -> listLibraries(json, output)
@@ -613,15 +613,23 @@ public class MCPTaskFactory {
 
         var libsVarCache = new File(output.getAbsoluteFile().getParentFile(), "libraries.txt");
 
-        var cache = HashStore.fromFile(output)
-            .add(jsonF)
-            .add(libsVarCache);
+        // We don't want timestamps cuz this can be downlaoded multiple times, we care about contents, and the version json lists downloads with sha
+        var cache = Util.cache(output)
+            .timestamps(false)
+            .add("version.json", jsonF);
+
+        var libsCache = Util.cache(libsVarCache)
+            .timestamps(false)
+            .add("version.json", jsonF);
+
         for (var lib : libs) {
-            if (lib.dl != null) // Sometimes natives don't have a main download
+            if (lib.dl != null) { // Sometimes natives don't have a main download
                 cache.addKnown(lib.coord, lib.dl.sha1);
+                libsCache.addKnown(lib.coord, lib.dl.sha1);
+            }
         }
 
-        if (Mavenizer.checkCache(output, cache) && libsVarCache.exists()) {
+        if (Mavenizer.checkCache(output, cache) && Mavenizer.checkCache(libsVarCache, libsCache)) {
             try {
                 this.libraries = JsonData.<List<Lib.Cached>>fromJson(libsVarCache, new TypeToken<>() { }).stream().map(Lib.Cached::resolve).toList();
                 return output;
@@ -631,9 +639,6 @@ public class MCPTaskFactory {
                 e.printStackTrace(LOGGER.getError());
             }
         }
-
-        Mavenizer.assertNotCacheOnly();
-        cache.clear().add(jsonF);
 
         var buf = new StringBuilder(20_000);
         var minecraft = this.side.getMCP().getCache().minecraft();
@@ -653,13 +658,12 @@ public class MCPTaskFactory {
             var artifact = Artifact.from(lib.coord).withOS(lib.os);
 
             downloadedLibs.add(new Lib(artifact, target));
-            cache.add(lib.coord, target);
         }
 
         try {
             FileUtils.ensureParent(libsVarCache);
             JsonData.toJson(downloadedLibs.stream().map(Lib::cacheable).toList(), libsVarCache);
-            cache.add(libsVarCache);
+            libsCache.save();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -737,7 +741,7 @@ public class MCPTaskFactory {
                 libs.add(new LibLine(pts[0], Artifact.from(pts[1]),  pts[2]));
             }
 
-            var cache = HashStore.fromFile(output)
+            var cache = Util.cache(output)
                 .add(bundle);
             for (var lib : libs)
                 cache.add(lib.artifact().toString(), new File(libraries, lib.path()));
@@ -799,7 +803,7 @@ public class MCPTaskFactory {
 
         var output = new File(this.build, "extra.jar");
 
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("prestrip", prestrip)
             .add("mappings", mappings);
 
@@ -874,7 +878,7 @@ public class MCPTaskFactory {
 
         var isDecompile = isDecompiler(name, toolA);
 
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("tool", tool)
             .add("jvm-args", jvmArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")))
             .add("run-args", runArgs.stream().map(TaskOrArg::name).collect(Collectors.joining(" ")));

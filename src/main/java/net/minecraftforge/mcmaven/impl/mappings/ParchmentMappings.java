@@ -32,7 +32,6 @@ import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.file.FileUtils;
-import net.minecraftforge.util.hash.HashStore;
 
 public class ParchmentMappings extends Mappings {
     private final ParchmentVersion parsedVersion;
@@ -113,7 +112,7 @@ public class ParchmentMappings extends Mappings {
 
         var root = getFolder(new File(mcp.getBuildFolder(), "data/mapings"));
         var output = new File(root, "parchment-" + version() + ".zip");
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("srg", srg)
             .add("client", client)
             .add("server", server)

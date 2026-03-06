@@ -38,7 +38,6 @@ import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.data.json.PatcherConfig;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
-import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
@@ -86,7 +85,7 @@ public class Patcher implements Supplier<Task> {
         if (!this.data.exists())
             throw new IllegalStateException("Failed to download " + name);
 
-        this.dataHash = HashFunction.SHA1.sneakyHash(this.data);
+        this.dataHash = Util.sneak(() -> HashFunction.sha1().hash(this.data));
         this.config = loadConfig(this.data);
         validateConfig();
 
@@ -126,7 +125,7 @@ public class Patcher implements Supplier<Task> {
         if (ats != null || sass != null) {
             var mcpver = this.getMCP().getName().getVersion();
 
-            var hash = Util.hash(HashFunction.SHA1, ats, sass);
+            var hash = Util.hash(HashFunction.sha1(), ats, sass);
             var dir = new File(this.forge.globalBuild, "mcp/" + mcpver + '/' + this.name.getName() + '/' + hash);
             var cache = this.forge.getCache();
 
@@ -353,7 +352,7 @@ public class Patcher implements Supplier<Task> {
             return null;
 
         var output = new File(this.build, filename);
-        var cache = HashStore.fromFile(output);
+        var cache = Util.cache(output);
         cache.add("data", this.data);
 
         if (Mavenizer.checkCache(output, cache))
@@ -399,7 +398,7 @@ public class Patcher implements Supplier<Task> {
         var filename = idx == -1 ? value : value.substring(idx);
         var target = new File(this.build, "data/" + key + '/' + filename);
 
-        var cache = HashStore.fromFile(target);
+        var cache = Util.cache(target);
         cache.add("data", this.data);
 
         if (Mavenizer.checkCache(target, cache))
@@ -432,7 +431,7 @@ public class Patcher implements Supplier<Task> {
         var output = new File(globalBase, "modifyAccess.jar");
         var log    = new File(globalBase, "modifyAccess.log");
 
-        var cache = HashStore.fromFile(output);
+        var cache = Util.cache(output);
         cache.add("tool", tool);
         cache.add("input", input);
         cache.add("cfg", cfg);
@@ -466,7 +465,7 @@ public class Patcher implements Supplier<Task> {
         var tool = dlCache.maven().download(Constants.SIDE_STRIPPER);
         var output = new File(globalBase, "stripSides.jar");
         var log    = new File(globalBase, "stripSides.log");
-        var cache = HashStore.fromFile(output);
+        var cache = Util.cache(output);
         cache.add("tool", tool);
         cache.add("input", input);
         cache.add("cfg", cfg);
@@ -530,7 +529,7 @@ public class Patcher implements Supplier<Task> {
         var toolA = Artifact.from(data.version);
         var tool = maven.download(toolA);
 
-        var cache = HashStore.fromFile(output);
+        var cache = Util.cache(output);
         cache.add("data", this.data);
         cache.add("tool", tool);
         cache.add("input", input);
@@ -586,7 +585,7 @@ public class Patcher implements Supplier<Task> {
     private File patch(Task inputTask, File output, File rejects) {
         var input = inputTask.execute();
 
-        var cache = HashStore.fromFile(output);
+        var cache = Util.cache(output);
         cache.add("input", input);
         cache.add("data", this.data);
 
@@ -649,7 +648,7 @@ public class Patcher implements Supplier<Task> {
         var input = inputTask.execute();
         var sources = this.downloadSources.execute();
 
-        var cache = HashStore.fromFile(output);
+        var cache = Util.cache(output);
         cache.add("input", input);
         cache.add("sources", sources);
 

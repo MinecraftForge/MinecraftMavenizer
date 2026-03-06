@@ -20,7 +20,7 @@ import net.minecraftforge.util.os.OS;
 public final class MinecraftMavenCache extends MavenCache {
     private static final HashFunction[] KNOWN_HASHES = {
         // Can't use MD5 or SHA256 as Mojang doesn't seem to provide them.
-        HashFunction.SHA1
+        HashFunction.sha1()
     };
 
     private static final File LOCAL_MCLIBS = new File(MCJsonUtils.getMCDir(OS.current()), "libraries");

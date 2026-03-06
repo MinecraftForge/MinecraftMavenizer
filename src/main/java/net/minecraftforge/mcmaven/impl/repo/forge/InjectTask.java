@@ -9,7 +9,6 @@ import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.file.FileUtils;
-import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 
@@ -60,7 +59,7 @@ public final class InjectTask implements Task {
     }
 
     private File injectDataImpl(Task inputTask, File outputJar) {
-        var cache = HashStore.fromFile(outputJar);
+        var cache = Util.cache(outputJar);
 
         var recompiledJar = inputTask.execute();
         cache.add("recompiled", recompiledJar);

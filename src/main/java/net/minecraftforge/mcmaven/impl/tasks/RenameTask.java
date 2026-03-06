@@ -9,8 +9,8 @@ import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
-import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.Task;
+import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.hash.HashUtils;
 import org.apache.commons.io.IOUtils;
@@ -80,7 +80,7 @@ public final class RenameTask implements Task {
         var mappings = mappingsTask.execute();
         var srg = srgTask == null ? null : srgTask.execute();
 
-        var cache = HashStore.fromFile(output)
+        var cache = Util.cache(output)
             .add("input", input)
             .add("mappings", mappings);
         if (srg != null)
@@ -121,7 +121,7 @@ public final class RenameTask implements Task {
                 }
             }
 
-            HashUtils.updateHash(output, HashFunction.SHA1);
+            HashUtils.updateHash(output, HashFunction.sha1());
         } catch (IOException e) {
             throw new RuntimeException("Failed to rename sources for " + input.getAbsolutePath(), e);
         }

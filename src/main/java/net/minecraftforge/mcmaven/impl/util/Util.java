@@ -8,13 +8,17 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.TimeZone;
+import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 
+import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.util.hash.HashFunction;
+import net.minecraftforge.util.hash.HashStore;
+
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
@@ -50,6 +54,23 @@ public class Util {
     @SuppressWarnings("unchecked")
     public static <R, E extends Throwable> R sneak(Throwable t) throws E {
         throw (E) t;
+    }
+
+    /**
+     * Allows calling a function without neeing to handle the checked exception.
+     *
+     * @param factory   The throwable
+     * @param <R> The type of the return from the factory
+     * @param <E> The type of the throwable
+     * @throws E Unconditionally thrown
+     */
+    @SuppressWarnings("unchecked")
+    public static <R, E extends Throwable> R sneak(Callable<R> factory) throws E {
+        try {
+            return factory.call();
+        } catch (Exception e) {
+            throw (E)e;
+        }
     }
 
     public static <T> Supplier<T> supplyingSelf(T obj) {
@@ -130,5 +151,19 @@ public class Util {
             success = dirs.removeLast().delete() && success;
 
         return success;
+    }
+
+    public static HashStore cache(File file) {
+        return HashStore.fromFile(file)
+            .invalidate(Mavenizer.ignoreCache())
+            //.timestamps()
+            ;
+    }
+
+    public static HashStore cacheDir(File file) {
+        return HashStore.fromDir(file)
+            .invalidate(Mavenizer.ignoreCache())
+            //.timestamps()
+            ;
     }
 }

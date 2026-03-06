@@ -23,7 +23,6 @@ import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.MinecraftVersion;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.file.FileUtils;
-import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.util.hash.HashUtils;
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
@@ -320,7 +319,7 @@ public record MinecraftMaven(
             var varTarget = new File(this.output, artifact.getLocalPath() + ".variants");
             if (!disableGradle && pending.variants() != null) {
                 var source = pending.variants().execute();
-                var cache = HashStore.fromFile(varTarget)
+                var cache = Util.cache(varTarget)
                     .add("source", source);
 
                 if (!Mavenizer.checkCache(varTarget, cache)) {
@@ -366,7 +365,7 @@ public record MinecraftMaven(
             }
         }
 
-        var cache = HashStore.fromFile(target)
+        var cache = Util.cache(target)
             .add("source", source);
 
         var isPom = "pom".equals(artifact.getExtension());
@@ -398,7 +397,7 @@ public record MinecraftMaven(
 
     private void writeStub(File target, File source, Artifact artifact) {
         var tool = this.cache.maven().download(Constants.STUBIFY);
-        var cache = HashStore.fromFile(target)
+        var cache = Util.cache(target)
             .add("tool", tool)
             .add("source", source);
 
@@ -429,7 +428,7 @@ public record MinecraftMaven(
 
     private void writeAccessTransformed(File target, File source, Artifact artifact) {
         var tool = this.cache.maven().download(Constants.ACCESS_TRANSFORMER);
-        var cache = HashStore.fromFile(target)
+        var cache = Util.cache(target)
             .add("tool", tool)
             .add(accessTransformer)
             .add("source", source);
@@ -481,7 +480,7 @@ public record MinecraftMaven(
         }
 
         var target = new File(this.output, artifact.withExtension("module").getLocalPath());
-        var cache = HashStore.fromFile(target);
+        var cache = Util.cache(target);
         for (var input : inputs) {
             cache.add(input);
         }

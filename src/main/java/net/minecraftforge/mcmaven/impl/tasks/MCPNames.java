@@ -84,7 +84,7 @@ record MCPNames(String hash, Map<String, String> names, Map<String, String> docs
 
     static MCPNames load(File data) throws IOException {
         var loaded = loadData(data);
-        return new MCPNames(HashFunction.SHA1.hash(data), loaded.names, loaded.docs);
+        return new MCPNames(HashFunction.sha1().hash(data), loaded.names, loaded.docs);
     }
 
     // NOTE: this is a micro-optimization to avoid creating a new pattern for every line
