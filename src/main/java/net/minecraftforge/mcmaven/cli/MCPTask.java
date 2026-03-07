@@ -25,15 +25,11 @@ import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.hash.HashFunction;
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
-import net.minecraftforge.util.logging.Logger;
 import org.jetbrains.annotations.Nullable;
 
 // TODO [Mavenizer][MCPTask] Cleanup. Works well but is a mess.
 class MCPTask {
     static OptionParser run(String[] args, boolean getParser) throws Exception {
-        // TODO [MCMavenizer] Make this into a --log [level] option
-        LOGGER.setEnabled(Logger.Level.INFO);
-
         var parser = new OptionParser();
         parser.allowsUnrecognizedOptions();
 

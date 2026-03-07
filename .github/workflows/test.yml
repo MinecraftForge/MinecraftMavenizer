@@ -1,0 +1,44 @@
+name: Test
+
+on:
+  pull_request:
+  #push:
+  #  branches: [ 'master' ]
+  #  paths-ignore:
+  #    - '.github/workflows/**'
+  #    - 'README.md'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    continue-on-error: true
+    strategy:
+      matrix:
+        command: [
+            "--forge --version 1.21.11-61.1.0",
+            "--forge --version 1.20.1-47.4.0",
+            "--forge --version 1.12.2-14.23.5.2859 --mappings snapshot:20171003-1.12",
+            "--client --version 1.20.1",
+            "--server --version 1.20.1",
+            "--mc --version 1.20.1",
+            "--client --version 26.1-snapshot-1",
+            "--server --version 26.1-snapshot-1"
+        ]
+        
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+        with:
+          fetch-tags: true
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Test Run
+        run: ./gradlew run --args="--debug ${{ matrix.command }}"
