@@ -2,7 +2,7 @@ import org.gradle.api.plugins.jvm.JvmTestSuite
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    id 'java'
+    id 'application'
     id 'jvm-test-suite'
     id 'idea'
     id 'eclipse'
@@ -50,6 +50,10 @@ license {
     header = rootProject.file('LICENSE-header.txt')
     newLine false
     exclude '**/ComparableVersion.java' // Apache class used as source-level dep as to not need the hundred+ other classes the library pulls in
+}
+
+application {
+    mainClass = 'net.minecraftforge.mcmaven.cli.Main'
 }
 
 tasks.named('jar', Jar) {

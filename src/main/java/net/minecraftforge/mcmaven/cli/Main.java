@@ -46,6 +46,8 @@ public class Main {
             "Displays this help message and exits")
             .forHelp();
 
+        var debugO = parser.accepts("debug", "Sets the log level to DEBUG");
+
         for (var task : tasks)
             opts.add(parser.accepts(task.key, task.description));
 
@@ -57,6 +59,11 @@ public class Main {
         }
 
         var options = parser.parse(args);
+
+        if (options.has(debugO))
+            LOGGER.setEnabled(Logger.Level.DEBUG);
+        else
+            LOGGER.setEnabled(Logger.Level.INFO);
 
         for (var task : tasks) {
             if (options.has(task.key)) {

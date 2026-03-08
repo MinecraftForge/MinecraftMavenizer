@@ -57,15 +57,40 @@ public final class Mavenizer {
         if (cacheOnly) {
             throw new IllegalArgumentException("Cache is out of date! Please run without --cache-only");
         } else if (!cacheMiss) {
-            LOGGER.debug("Cache miss!", new Exception("Cache miss! Stacktrace for Information Only"));
+            LOGGER.info("Cache miss!", new Exception("Cache miss! Stacktrace for Information Only"));
             cacheMiss = true;
             LOGGER.release();
+        }
+    }
+
+    private static void debug(String header, String data) {
+        if (data.isEmpty())
+            LOGGER.debug(header);
+        else {
+            var lines = data.split("\n");
+            if (lines.length == 1)
+                LOGGER.debug(header + ' ' + lines[0]);
+            else {
+                LOGGER.debug(header);
+                LOGGER.push();
+                for (var line : lines)
+                    LOGGER.debug(line);
+                LOGGER.pop();
+            }
         }
     }
 
     public static boolean checkCache(File output, HashStore cache) {
         if (!ignoreCache && output.exists() && cache.isSame())
             return true;
+        if (LOGGER.isEnabled(Logger.Level.DEBUG)) {
+            LOGGER.debug("Cache miss: " + output.getAbsolutePath());
+            LOGGER.push();
+                LOGGER.debug("Exists: " + output.exists());
+                debug("Old:", cache.dumpOld());
+                debug("New:", cache.dump());
+            LOGGER.pop();
+        }
         Mavenizer.assertNotCacheOnly();
         return false;
     }
