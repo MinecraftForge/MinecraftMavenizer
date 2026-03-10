@@ -244,6 +244,10 @@ public class MCPTaskFactory {
         return ret;
     }
 
+    public @Nullable Task getTask(String name) {
+        return this.tasks.get(name);
+    }
+
     public Task findData(String name) {
         if (this.parent != null)
             return this.parent.findData(name);

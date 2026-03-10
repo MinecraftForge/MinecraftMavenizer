@@ -23,6 +23,8 @@ import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.hash.HashFunction;
+import net.minecraftforge.util.hash.HashStore;
+
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import org.jetbrains.annotations.Nullable;
@@ -87,12 +89,18 @@ class MCPTask {
             .availableUnless(rawO).withOptionalArg().ofType(File.class);
 
         var mappingsO = parser.accepts("mappings",
-            "Use to enable using official mappings")
-            .availableUnless(rawO);
+            "Mappings to use for this artifact. Formatted as channel:version")
+            .availableUnless(rawO)
+            .withRequiredArg().ofType(String.class).defaultsTo("official");
 
         var parchmentO = parser.accepts("parchment",
             "Version of parchment mappings to use, snapshots are not supported")
             .availableIf(mappingsO).withRequiredArg();
+
+        var unmappedOutputO = parser.accepts("unmapped-output",
+            "File to output the unmapped the final jar")
+            .availableIf(mappingsO, parchmentO)
+            .withRequiredArg().ofType(File.class).defaultsTo(new File("output-unmapped.jar"));
 
         // ignore caches, currently only invalidates HashStore entries
         var ignoreCacheO = parser.accepts("ignore-cache",
@@ -120,7 +128,8 @@ class MCPTask {
             Mavenizer.setDecompileMemory(options.valueOf(decompileMemoryO));
 
         var output = options.valueOf(outputO);
-        var outputFiles = options.valueOf(outputFilesO);
+        var outputUnmapped = options.has(unmappedOutputO) ? options.valueOf(unmappedOutputO) : null;
+        var outputFiles = options.has(outputFilesO) ? options.valueOf(outputFilesO) : null;
         var cacheRoot = options.valueOf(cacheO);
         var jdkCacheRoot = !options.has(cacheO) || options.has(jdkCacheO)
             ? options.valueOf(jdkCacheO)
@@ -134,6 +143,14 @@ class MCPTask {
         var pipeline = options.valueOf(pipelineO);
         var ats = options.has(atO) ? options.valueOf(atO) : null;
         var sas = options.has(sasO) ? options.valueOf(sasO) : null;
+        Mappings mappings = null;
+        if (options.has(mappingsO)) {
+            if (options.has(parchmentO))
+                mappings = new ParchmentMappings(options.valueOf(parchmentO));
+            else
+                mappings = Mappings.of(options.valueOf(mappingsO));
+            mappings = mappings.withMCVersion(MinecraftMaven.mcpToMcVersion(artifact.getVersion()));
+        }
 
         if (artifact == null) {
             LOGGER.error("Missing mcp --version or --artifact");
@@ -143,10 +160,16 @@ class MCPTask {
 
         var repo = new MCPConfigRepo(new Cache(cacheRoot, jdkCacheRoot), false);
         LOGGER.info("  Output:     " + output.getAbsolutePath());
+        if (outputUnmapped != null)
+            LOGGER.info("  Unmapped:   " + outputUnmapped.getAbsolutePath());
+        if (outputFiles != null)
+            LOGGER.info("  Json:       " + outputFiles.getAbsolutePath());
         LOGGER.info("  Cache:      " + cacheRoot.getAbsolutePath());
         LOGGER.info("  JDK Cache:  " + jdkCacheRoot.getAbsolutePath());
         LOGGER.info("  Artifact:   " + artifact);
         LOGGER.info("  Pipeline:   " + pipeline);
+        if (mappings != null)
+            LOGGER.info("  Mappings:   " + mappings.toString());
         if (options.has(rawO)) {
             LOGGER.info("  Raw Names:  " + (options.has(seargeO) ? "Searge" : "Notch"));
         } else {
@@ -211,11 +234,12 @@ class MCPTask {
         }
 
         File sources = null;
+        File unnamed = null;
         {
             LOGGER.info("Creating MCP Source Jar");
             var indent = LOGGER.push();
             try {
-                sources = sourcesTask.execute();
+                unnamed = sources = sourcesTask.execute();
             } finally {
                 LOGGER.pop(indent);
             }
@@ -224,35 +248,47 @@ class MCPTask {
         var cache = Util.cache(output)
             .add("sources", sources);
 
-        if (options.has(mappingsO)) {
+        if (mappings != null) {
             LOGGER.info("Renaming MCP Source Jar");
             var indent = LOGGER.push();
             try {
-                var mappings = options.has(parchmentO)
-                    ? new ParchmentMappings(options.valueOf(parchmentO))
-                    : new Mappings("official", null).withMCVersion(MinecraftMaven.mcpToMcVersion(artifact.getVersion()));
-
                 var renameTask = new RenameTask(side.getBuildFolder(), pipeline, side, sourcesTask, mappings, false);
                 sources = renameTask.execute();
             } finally {
                 LOGGER.pop(indent);
             }
-
             cache.add("renamed", sources);
         }
 
-        if (!Mavenizer.checkCache(output, cache)) {
-            try {
-                org.apache.commons.io.FileUtils.copyFile(sources, output);
-                if (outputFiles != null)
-                    writeFiles(side.getTasks(), outputFiles);
+        write(sources, output, cache, artifact);
+
+        if (outputFiles != null) {
+            cache = Util.cache(output)
+                .add("mcp", side.getMCP().getData());
+            if (!Mavenizer.checkCache(outputFiles, cache)) {
+                writeFiles(side.getTasks(), outputFiles);
                 cache.save();
-            } catch (Throwable t) {
-                throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
             }
         }
 
+        if (outputUnmapped != null && mappings != null) {
+            cache = Util.cache(outputUnmapped)
+                .add("source", unnamed);
+            write(unnamed, outputUnmapped, cache, artifact);
+        }
+
         return parser;
+    }
+
+    private static void write(File source, File target, HashStore cache, Artifact artifact) {
+        if (Mavenizer.checkCache(target, cache))
+            return;
+        try {
+            org.apache.commons.io.FileUtils.copyFile(source, target);
+            cache.save();
+        } catch (Throwable t) {
+            throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
+        }
     }
 
     // TODO [Mavenizer][Extra MCPTask Files] do this better
@@ -262,7 +298,7 @@ class MCPTask {
         files.versionJson = getTaskPath(mcpTaskFactory, "downloadJson");
         files.clientRaw = getTaskPath(mcpTaskFactory, "downloadClient");
         files.serverRaw = getTaskPath(mcpTaskFactory, "downloadServer");
-        files.serverExtracted = getTaskPath(mcpTaskFactory, "extractServer");
+        files.serverExtracted = getTaskPath(mcpTaskFactory, mcpTaskFactory.getTask("extractServer") != null ? "extractServer" : "stripServer");
         files.clientMappings = mcpTaskFactory.downloadClientMappings().execute().getAbsolutePath();
         files.serverMappings = mcpTaskFactory.downloadServerMappings().execute().getAbsolutePath();
         files.librariesList = getTaskPath(mcpTaskFactory, "listLibraries");
