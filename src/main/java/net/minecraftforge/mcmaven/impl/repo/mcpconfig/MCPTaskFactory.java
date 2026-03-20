@@ -834,19 +834,27 @@ public class MCPTaskFactory {
 
         ToIntFunction<String> logHandler = null;
         if (isDecompile) {
-            jvm = Mavenizer.fillDecompileJvmArgs(jvm, true);
+            jvm = Mavenizer.fillDecompileJvmArgs(jvm, true, true);
             logHandler = MCPTaskFactory::parseDecompileLog;
         }
 
         var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, jvm, run, logHandler);
-        if (ret.exitCode == OUT_OF_MEMORY && isDecompile) {
-            var newJvm = Mavenizer.fillDecompileJvmArgs(resolveArgs(cache, tasks, jvmArgs), false);
-            if (!newJvm.equals(jvm)) {
-                LOGGER.error("First decompile failed with OutOfMemory using JVM Args: " + jvm);
-                LOGGER.error("Attempting again with: " + newJvm);
-                ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, newJvm, run, logHandler);
-                if (ret.exitCode == OUT_OF_MEMORY)
-                    LOGGER.error("Ran out of memory again, you can specify more manually using the --decompile-memory Mavenizer argument");
+        if (isDecompile) {
+            if (ret.exitCode == NOT_ENOUGH_MEMORY) {
+                LOGGER.error("Failed to create JVM with Not Enough Memory issue, Modern minecraft requires atleast 4GB to decompile. Run it on a system with more ram.");
+            } else if (ret.exitCode == INVALID_INITAL_HEAP) {
+                LOGGER.error("Attempted to run decompile with JVM args: " + jvm + " resulted in Invalid Inital and Max heap settings.");
+                LOGGER.error("This is typically caused by you having a environement variable setting the global memory options, remove or set those variables to values higher then 4GB.");
+            }
+            if (ret.exitCode == OUT_OF_MEMORY || ret.exitCode == INVALID_INITAL_HEAP) {
+                var newJvm = Mavenizer.fillDecompileJvmArgs(resolveArgs(cache, tasks, jvmArgs), false, false);
+                if (!newJvm.equals(jvm)) {
+                    LOGGER.error("First decompile failed with OutOfMemory using JVM Args: " + jvm);
+                    LOGGER.error("Attempting again with: " + newJvm);
+                    ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, newJvm, run, logHandler);
+                    if (ret.exitCode == OUT_OF_MEMORY)
+                        LOGGER.error("Ran out of memory again, you can specify more manually using the --decompile-memory Mavenizer argument");
+                }
             }
         }
         if (ret.exitCode != 0)
@@ -904,10 +912,16 @@ public class MCPTaskFactory {
 
     private static final int OUT_OF_MEMORY = -1001;
     private static final int FAILED_DECOMPILE = -1002;
+    private static final int INVALID_INITAL_HEAP = -1003;
+    private static final int NOT_ENOUGH_MEMORY = -1004;
     // Yes this is slow as fuck, but this is only run during a decompile run which is already slow,
     // This is to check if Fernflower is broken and returning success when it really failed.
     // It also eagerly exits the process when something fails so as to not waste time.
     private static int parseDecompileLog(String line) {
+        if (line.startsWith("Initial heap size set to a larger value than the maximum heap size"))
+            return INVALID_INITAL_HEAP;
+        if (line.startsWith("Could not reserve enough space for object heap"))
+            return NOT_ENOUGH_MEMORY;
         if (line.startsWith("java.lang.OutOfMemoryError:"))
             return OUT_OF_MEMORY;
         if (line.startsWith("Exception in thread") && line.contains("java.lang.OutOfMemoryError"))

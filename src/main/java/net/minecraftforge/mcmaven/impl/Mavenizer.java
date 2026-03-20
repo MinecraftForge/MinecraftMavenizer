@@ -104,7 +104,7 @@ public final class Mavenizer {
     // https://github.com/openjdk/jdk/blob/08c8520b39083ec6354dc5df2f18c1f4c3588053/src/hotspot/share/runtime/arguments.cpp#L3628
     private static final String[] DEFAULT_ARG_ENV = { "JAVA_OPTIONS", "_JAVA_OPTIONS", "JAVA_TOOL_OPIONS"};
     private static final String[] MEMORY_FLAGS = {"-Xmx", "-XX:MaxHeapSize", "-Xms"};
-    private static void warnAboutMemory() {
+    private static boolean warnAboutMemory() {
         var found = false;
         for (var env : DEFAULT_ARG_ENV) {
             var value = System.getenv(env);
@@ -119,9 +119,10 @@ public final class Mavenizer {
         }
         if (found)
             LOGGER.warn("Please remove it if you run into memory related issues");
+        return found;
     }
 
-    public static List<String> fillDecompileJvmArgs(List<String> args, boolean firstRun) {
+    public static List<String> fillDecompileJvmArgs(List<String> args, boolean firstRun, boolean useDefaultGuess) {
         if (!firstRun)
             return args; // Use the unmodifed args from MCPConfig
 
@@ -135,8 +136,14 @@ public final class Mavenizer {
             //     https://docs.oracle.com/en/java/javase/21/gctuning/ergonomics.html
             // There are old JVMs that limit it to 1GB but there is no good way to detect if we're using one so just hope.
             //     https://docs.oracle.com/javase/8/docs/technotes/guides/vm/gctuning/ergonomics.html
-            // Best we can do is warn about memory argumetns if we see them.
+            // Best we can do is warn about memory arguments if we see them.
             warnAboutMemory();
+
+            // Lets try and pick a 'sensible' default minimum size, this number is arbitrary, and causes issues with systems with low amounts of ram
+            // I really hate just setting an arbitrary lower limit
+            // If someone has a better idea how to deal with this feel free to submit it.
+            if (useDefaultGuess)
+                ret.add("-Xms4G");
         }
         return ret;
     }
