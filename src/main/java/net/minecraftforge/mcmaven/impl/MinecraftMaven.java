@@ -100,13 +100,22 @@ public record MinecraftMaven(
         LOGGER.info("  Disable Gradle:     " + disableGradle);
         LOGGER.info("  Stub Jars:          " + stubJars);
         if (!accessTransformer.isEmpty()) {
-            LOGGER.getInfo().print("  Access Transformer: ");
+            var first = true;
             var itor = accessTransformer.iterator();
             while (itor.hasNext()) {
                 var file = itor.next();
+                if (first) {
+                    LOGGER.getInfo().print("  Access Transformer: ");
+                    first = false;
+                } else {
+                    LOGGER.getInfo().print("                      ");
+                }
                 LOGGER.getInfo().print(file.getAbsolutePath());
-                if (itor.hasNext())
-                    LOGGER.getInfo().print(", ");
+                if (!file.exists()) {
+                    LOGGER.getInfo().print(" SKIPPING DOESN'T EXIST");
+                    itor.remove();
+                }
+                LOGGER.getInfo().println();
             }
             LOGGER.getInfo().println();
         }
@@ -449,6 +458,8 @@ public record MinecraftMaven(
             "--outJar", target.getAbsolutePath()
         ));
         for (var file : accessTransformer) {
+            if (!file.exists())
+                throw new IllegalStateException("Access Transformer config does not exist: " + file.getAbsolutePath());
             args.add("--atfile");
             args.add(file.getAbsolutePath());
         }

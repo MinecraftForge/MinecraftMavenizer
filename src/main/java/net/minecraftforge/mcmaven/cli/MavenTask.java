@@ -5,6 +5,7 @@
 package net.minecraftforge.mcmaven.cli;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -199,7 +200,7 @@ class MavenTask {
             options.has(globalAuxiliaryVariantsO),
             options.has(disableGradleO),
             options.has(stubO),
-            options.valuesOf(accessTransformerO),
+            new ArrayList<>(options.valuesOf(accessTransformerO)),
             options.valueOf(outputJsonO)
         );
         mcmaven.run(artifact);
