@@ -64,8 +64,8 @@ public class MCPTaskFactory {
     private final Map<String, Task> tasks = new LinkedHashMap<>();
     private final Task preStrip;
     private final Task rawJar;
-    private final Task mappings;
-    private final Task srgJar;
+    private final @Nullable Task mappings;
+    private final @Nullable Task srgJar;
     private final Task preDecomp;
     private final Task last;
 
@@ -172,11 +172,13 @@ public class MCPTaskFactory {
         if (rawJar == null)
             throw except("Could not find `%s` task".formatted(MCPSide.JOINED.equals(side.getName()) ? "merge" : "strip"));
 
-        if (mappings == null)
-            throw except("Could not find `mappings` task");
+        if (MCPConfigRepo.isObfuscated(this.cfg.version)) {
+            if (mappings == null)
+                throw except("Could not find `mappings` task");
 
-        if (srgJar == null)
-            throw except("Could not find `rename` task");
+            if (srgJar == null)
+                throw except("Could not find `rename` task");
+        }
 
         if (predecomp == null)
             throw except("Could not find `decompile` step");
@@ -209,11 +211,11 @@ public class MCPTaskFactory {
         return this.rawJar;
     }
 
-    public Task getMappings() {
+    public @Nullable Task getMappings() {
         return this.mappings;
     }
 
-    public Task getSrgJar() {
+    public @Nullable Task getSrgJar() {
         return this.srgJar;
     }
 
@@ -409,11 +411,13 @@ public class MCPTaskFactory {
 
     private File strip(Task inputTask, boolean whitelist, File output) {
         var input = inputTask.execute();
-        var mappings = this.mappings.execute();
 
         var cache = Util.cache(output)
-            .add("input", input)
-            .add("mappings", mappings);
+            .add("input", input);
+
+        var mappings = this.mappings == null ? null : this.mappings.execute();
+        if (mappings != null)
+            cache.add("mappings", mappings);
 
         if (Mavenizer.checkCache(output, cache))
             return output;
@@ -424,17 +428,28 @@ public class MCPTaskFactory {
         FileUtils.ensureParent(output);
 
         try {
-            var map = IMappingFile.load(mappings);
             var classes = new HashSet<>();
-            for (var cls : map.getClasses())
-                classes.add(cls.getOriginal() + ".class");
+
+            if (mappings != null) {
+                var map = IMappingFile.load(mappings);
+                for (var cls : map.getClasses())
+                    classes.add(cls.getOriginal() + ".class");
+            }
 
             try (var is = new JarInputStream(new FileInputStream(input));
                 var os = new JarOutputStream(new FileOutputStream(output))) {
                JarEntry entry;
                while ((entry = is.getNextJarEntry()) != null) {
-                   if (entry.isDirectory() || classes.contains(entry.getName()) != whitelist)
+                   if (entry.isDirectory())
                        continue;
+                   // If we don't have any mappings, then we're in unobfed 26.1+ so we just want classes
+                   if (classes.isEmpty()) {
+                       if (!entry.getName().endsWith(".class"))
+                           continue;
+                   } else {
+                       if (classes.contains(entry.getName()) != whitelist)
+                           continue;
+                   }
                    os.putNextEntry(FileUtils.getStableEntry(entry));
                    is.transferTo(os);
                    os.closeEntry();
@@ -722,29 +737,50 @@ public class MCPTaskFactory {
     public Task getExtra() {
         return Task.named("extra[" + this.side.getName() + ']',
             Task.deps(this.preStrip, this.mappings),
-            () -> getExtra(this.preStrip, mappings)
+            () -> getExtra(this.preStrip, this.mappings)
         );
     }
 
-    private File getExtra(Task prestripTask, Task mappingsTask) {
+    private File getExtra(Task prestripTask, @Nullable Task mappingsTask) {
         var prestrip = prestripTask.execute();
-        var mappings = mappingsTask.execute();
 
         var output = new File(this.build, "extra.jar");
 
         var cache = Util.cache(output)
-            .add("prestrip", prestrip)
-            .add("mappings", mappings);
+            .add("prestrip", prestrip);
+
+        var mappings = mappingsTask == null ? null : mappingsTask.execute();
+        if (mappings != null)
+            cache.add("mappings", mappings);
 
         if (Mavenizer.checkCache(output, cache))
             return output;
 
         try {
-            var whitelist = IMappingFile
-                .load(mappings).getClasses().stream()
-                .map(IMappingFile.IClass::getOriginal)
-                .collect(Collectors.toSet());
-            FileUtils.splitJar(prestrip, whitelist, output, false, false);
+            if (!output.getParentFile().exists())
+                output.getParentFile().mkdirs();
+
+            // If we don't have mappings then we're in a non-obfed version (26.1+) so just strip out all classes
+            var whitelist = new HashSet<String>();
+            if (mappings != null) {
+                var map = IMappingFile.load(mappings);
+                for (var cls : map.getClasses())
+                    whitelist.add(cls.getOriginal());
+                FileUtils.splitJar(prestrip, whitelist, output, false, false);
+            } else {
+                try (var zin = new ZipInputStream(new FileInputStream(prestrip));
+                    var fos = new FileOutputStream(output);
+                    var out = new ZipOutputStream(fos)) {
+                    for (ZipEntry entry = null; (entry = zin.getNextEntry()) != null; ) {
+                        // Skip classes and directories (directories are optional in zips)
+                        if (entry.getName().endsWith(".class") || entry.getName().endsWith("/"))
+                            continue;
+                        out.putNextEntry(new ZipEntry(entry.getName()));
+                        zin.transferTo(out);
+                        out.closeEntry();
+                    }
+               }
+            }
         } catch (IOException e) {
             Util.sneak(e);
         }

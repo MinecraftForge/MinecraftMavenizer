@@ -5,16 +5,21 @@
 package net.minecraftforge.mcmaven.impl.mappings;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
@@ -153,12 +158,19 @@ public class Mappings {
 
         var mc = side.getMCP().getMinecraftTasks();
         var srg = side.getTasks().getMappings();
-        var client = mc.versionFile(MinecraftTasks.MCFile.CLIENT_MAPPINGS);
-        var server = mc.versionFile(MinecraftTasks.MCFile.SERVER_MAPPINGS);
-        ret = Task.named("srg2names[" + this + ']',
-            Task.deps(srg, client, server),
-            () -> getMappings(side, srg, client, server)
-        );
+
+        if (MCPConfigRepo.isObfuscated(mc.getVersion())) {
+            var client = mc.versionFile(MinecraftTasks.MCFile.CLIENT_MAPPINGS);
+            var server = mc.versionFile(MinecraftTasks.MCFile.SERVER_MAPPINGS);
+            ret = Task.named("srg2names[" + this + ']',
+                Task.deps(srg, client, server),
+                () -> getMappings(side, srg, client, server)
+            );
+        } else {
+            // Create an empty srg->mapped zip file when requested. This is needed by old MCPConfig setups until we bump it to a version that doesn't require the concept of mappings at all
+            ret = Task.named("srg2names[" + this + "][Empty]", () -> makeEmptyCsv(side));
+        }
+
         tasks.put(key, ret);
         return ret;
     }
@@ -185,6 +197,36 @@ public class Mappings {
         );
         tasks.put(key, ret);
         return ret;
+    }
+
+    private File makeEmptyCsv(MCPSide side) {
+        var root = getFolder(new File(side.getMCP().getBuildFolder(), "data/mapings"));
+        var output = new File(root, "official.zip");
+
+        var cache = Util.cache(output);
+
+        if (Mavenizer.checkCache(output, cache))
+            return output;
+
+        if (!output.getParentFile().exists())
+            output.getParentFile().mkdirs();
+
+        byte[] header = String.join(",", "searge", "name", "side", "desc").getBytes(StandardCharsets.UTF_8);
+
+        try (var fos = new FileOutputStream(output);
+             var out = new ZipOutputStream(fos)) {
+            out.putNextEntry(new ZipEntry("fields.csv"));
+            out.write(header);
+            out.closeEntry();
+            out.putNextEntry(new ZipEntry("methods.csv"));
+            out.write(header);
+            out.closeEntry();
+        } catch (IOException e) {
+            Util.sneak(e);
+        }
+
+        cache.save();
+        return output;
     }
 
     private File getMappings(MCPSide side, Task srgMappings, Task clientTask, Task serverTask) {

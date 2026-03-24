@@ -101,7 +101,7 @@ public final class MCPConfigRepo extends Repo {
 
     // Mojang stopped obfusciating their released with the 26.1-snapshot-1
     private static final ComparableVersion LAST_OBFUSCATED = new ComparableVersion("1.21.11");
-    public boolean isObfuscated(String version) {
+    public static boolean isObfuscated(String version) {
         return new ComparableVersion(version).compareTo(LAST_OBFUSCATED) <= 0;
     }
 

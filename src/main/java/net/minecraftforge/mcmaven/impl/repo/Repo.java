@@ -8,6 +8,7 @@ import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.GradleAttributes;
@@ -280,14 +281,23 @@ public abstract class Repo {
      * channel-verson-map2srg.tsrg.gz: gzip compressed tsrg file for mapped names to srg (intermediate) names
      */
     protected List<PendingArtifact> mappingArtifacts(File cache, Mappings mappings, MCPSide side, Map<String, Supplier<String>> outputJson) {
+        if (outputJson != null) {
+            outputJson.put("mappings.channel", mappings::channel);
+            outputJson.put("mappings.version", mappings::version);
+        }
+
+        // 26.1 has no mappings as they are not obfed, so just output the channel.
+        // In theory we need to add support for arbitrary mappings not just SRG.
+        // So i'll have to change this later, but we'll cross that bridge when we come to it.
+        if (!MCPConfigRepo.isObfuscated(side.getMCP().getMinecraftTasks().getVersion()))
+            return List.of();
+
         var coords = mappings.getArtifact(side);
         var csvs = pending("Mappings Zip", mappings.getCsvZip(side), coords, false);
         var pom = pending("Mappings POM", simplePom(cache, coords), coords.withExtension("pom"), false);
         var m2o = pending("Mappings map2obf", mappings.getMapped2Obf(side), coords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
         var m2s = pending("Mappings map2srg", mappings.getMapped2Srg(side), coords.withClassifier("map2srg").withExtension("tsrg.gz"), false);
         if (outputJson != null) {
-            outputJson.put("mappings.channel", mappings::channel);
-            outputJson.put("mappings.version", mappings::version);
             outputJson.put("mappings.csv.artifact", csvs.artifact()::toString);
             outputJson.put("mappings.csv.file", csvs.task().filePathSupplier());
             outputJson.put("mappings.obf.artifact", m2o.artifact()::toString);

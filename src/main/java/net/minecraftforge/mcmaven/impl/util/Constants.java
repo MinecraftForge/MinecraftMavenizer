@@ -25,16 +25,16 @@ public final class Constants {
     public static final String LAUNCHER_MANIFEST = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
     public static final String MOJANG_MAVEN = "https://libraries.minecraft.net/";
 
-    public static final Artifact ACCESS_TRANSFORMER = Artifact.from("net.minecraftforge:accesstransformers:8.2.1:fatjar");
+    public static final Artifact ACCESS_TRANSFORMER = Artifact.from("net.minecraftforge:accesstransformers:8.2.14:fatjar");
     public static final int ACCESS_TRANSFORMER_JAVA_VERSION = 8;
 
-    public static final Artifact SIDE_STRIPPER = Artifact.from("net.minecraftforge:mergetool:1.2.0:fatjar");
+    public static final Artifact SIDE_STRIPPER = Artifact.from("net.minecraftforge:mergetool:1.2.5:fatjar");
     public static final int SIDE_STRIPPER_JAVA_VERSION = 8;
 
-    public static final Artifact INSTALLER_TOOLS = Artifact.from("net.minecraftforge:installertools:1.4.3:fatjar");
+    public static final Artifact INSTALLER_TOOLS = Artifact.from("net.minecraftforge:installertools:1.4.5:fatjar");
     public static final int INSTALLER_TOOLS_JAVA_VERSION = 8;
 
-    public static final Artifact RENAMER = Artifact.from("net.minecraftforge:ForgeAutoRenamingTool:1.1.2:all");
+    public static final Artifact RENAMER = Artifact.from("net.minecraftforge:renamer:2.0.4:all");
     public static final int RENAMER_JAVA_VERSION = 8;
 
     public static final Artifact STUBIFY = Artifact.from("net.minecraftforge:jar-stubify:1.0.0");
