@@ -28,6 +28,9 @@ import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
+
+import org.jetbrains.annotations.Nullable;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
@@ -152,7 +155,9 @@ public final class ForgeRepo extends Repo {
         var classesTask = new InjectTask(build, this.cache, name, patcher, recompile, mappings);
 
         var extraCoords = Artifact.from(Constants.MC_GROUP, Constants.MC_CLIENT + "-extra", patcher.getMCP().getName().getVersion());
-        var mappingCoords = mappings.getArtifact(joined);
+
+        // If we are not obfuscated, don't add the csv zip as a extra artifact
+        var mappingCoords = patcher.isObfuscated() ? mappings.getArtifact(joined) : null;
 
         var mappingArtifacts = mappingArtifacts(build, mappings, joined, outputJson);
 
@@ -270,15 +275,18 @@ public final class ForgeRepo extends Repo {
         });
     }
 
-    private static Task pom(File build, Patcher patcher, String version, Artifact clientExtra, Artifact mappings) {
+    private static Task pom(File build, Patcher patcher, String version, @Nullable Artifact clientExtra, @Nullable Artifact mappings) {
         return Task.named("pom[forge]", () -> {
             var output = new File(build, "forge.pom");
             var cache = Util.cache(output)
                 .addKnown("data", patcher.getDataHash())
-                .addKnown("extra", Util.replace(clientExtra, Object::toString))
-                .addKnown("mappings", Util.replace(mappings, Object::toString))
-                .addKnown("code-version", "1")
-                ;
+                .addKnown("code-version", "1");
+
+            if (clientExtra != null)
+                cache.addKnown("extra", clientExtra.toString());
+
+            if (mappings != null)
+                cache.addKnown("mappings", mappings.toString());
 
             if (Mavenizer.checkCache(output, cache))
                 return output;

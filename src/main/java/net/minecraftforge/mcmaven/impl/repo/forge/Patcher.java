@@ -31,6 +31,7 @@ import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
@@ -195,6 +196,14 @@ public class Patcher implements Supplier<Task> {
     private void validateConfig() {
         if (this.config.parent == null && this.config.mcp == null)
             throw except("Missing parent or mcp entry");
+    }
+
+    /**
+     * @return Weither or not this patcher is for an obfuscated Minecraft version.
+     * AKA: 26.1+ For now this is based off Minecraft version, but in the future could be opt-in by a MCPConfig setting.
+     */
+    public boolean isObfuscated() {
+        return MCPConfigRepo.isObfuscated(getMCP().getMinecraftTasks().getVersion());
     }
 
     /** @return The instance of MCP used to decompile the game */
