@@ -286,15 +286,12 @@ public abstract class Repo {
             outputJson.put("mappings.version", mappings::version);
         }
 
-        // 26.1 has no mappings as they are not obfed, so just output the channel.
-        // In theory we need to add support for arbitrary mappings not just SRG.
-        // So i'll have to change this later, but we'll cross that bridge when we come to it.
-        if (!MCPConfigRepo.isObfuscated(side.getMCP().getMinecraftTasks().getVersion()))
-            return List.of();
-
         var coords = mappings.getArtifact(side);
         var csvs = pending("Mappings Zip", mappings.getCsvZip(side), coords, false);
         var pom = pending("Mappings POM", simplePom(cache, coords), coords.withExtension("pom"), false);
+        // Just create the zip and pom for unobfuscated versions.
+        if (!MCPConfigRepo.isObfuscated(side.getMCP().getMinecraftTasks().getVersion()))
+            return List.of(csvs, pom);
         var m2o = pending("Mappings map2obf", mappings.getMapped2Obf(side), coords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
         var m2s = pending("Mappings map2srg", mappings.getMapped2Srg(side), coords.withClassifier("map2srg").withExtension("tsrg.gz"), false);
         if (outputJson != null) {
