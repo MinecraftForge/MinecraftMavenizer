@@ -67,6 +67,7 @@ public final class RecompileTask implements Task {
         var sourcesJar = inputTask.execute();
 
         cache.add("sources", sourcesJar);
+        cache.addKnown("debug", "true");
 
         if (Mavenizer.checkCache(output, cache))
             return output;
@@ -78,7 +79,7 @@ public final class RecompileTask implements Task {
             throw new IllegalStateException("JDK not found: " + javaTarget, e);
         }
 
-        ProcessUtils.recompileJar(jdk, this.classpath.get(), sourcesJar, output);
+        ProcessUtils.recompileJar(jdk, this.classpath.get(), sourcesJar, output, true);
 
         cache.save();
         return output;
