@@ -19,6 +19,7 @@ import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
+import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.MinecraftVersion;
 import net.minecraftforge.util.data.json.JsonData;
@@ -71,17 +72,12 @@ public record MinecraftMaven(
     boolean stubJars,
     Set<String> mcpConfigVersions,
     List<File> accessTransformer,
+    List<File> facadeConfigs,
     @Nullable File outputJsonFile
 ) {
     // Only 1.14.4+ has official mappings, we can support more when we add more mappings
     private static final MinecraftVersion MIN_OFFICIAL_MAPPINGS = MinecraftVersion.from("1.14.4");
     private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.14.4");
-
-    public MinecraftMaven(File output, boolean dependenciesOnly, File cacheRoot, File jdkCacheRoot, Mappings mappings,
-        Map<String, String> foreignRepositories, boolean globalAuxiliaryVariants, boolean disableGradle, boolean stubJars,
-        List<File> accessTransformer, @Nullable File outputJsonFile) {
-        this(output, dependenciesOnly, new Cache(cacheRoot, jdkCacheRoot, foreignRepositories), mappings, foreignRepositories, globalAuxiliaryVariants, disableGradle, stubJars, new HashSet<>(), accessTransformer, outputJsonFile);
-    }
 
     public MinecraftMaven {
         LOGGER.info("  Output:             " + output.getAbsolutePath());
@@ -99,27 +95,31 @@ public record MinecraftMaven(
         LOGGER.info("  GradleVariantHack:  " + globalAuxiliaryVariants);
         LOGGER.info("  Disable Gradle:     " + disableGradle);
         LOGGER.info("  Stub Jars:          " + stubJars);
-        if (!accessTransformer.isEmpty()) {
-            var first = true;
-            var itor = accessTransformer.iterator();
-            while (itor.hasNext()) {
-                var file = itor.next();
-                if (first) {
-                    LOGGER.getInfo().print("  Access Transformer: ");
-                    first = false;
-                } else {
-                    LOGGER.getInfo().print("                      ");
-                }
-                LOGGER.getInfo().print(file.getAbsolutePath());
-                if (!file.exists()) {
-                    LOGGER.getInfo().print(" SKIPPING DOESN'T EXIST");
-                    itor.remove();
-                }
-                LOGGER.getInfo().println();
+        if (!accessTransformer.isEmpty())
+            filter("  Access Transformer: ", accessTransformer);
+        if (!facadeConfigs.isEmpty())
+            filter("  Facade Config:      ", facadeConfigs);
+        LOGGER.info();
+    }
+
+    private static void filter(String header, List<File> files) {
+        var prefix = header;
+        var itor = files.iterator();
+        while (itor.hasNext()) {
+            var file = itor.next();
+            LOGGER.getInfo().print(prefix);
+            if (prefix == header)
+                prefix = " ".repeat(header.length());
+
+            LOGGER.getInfo().print(file.getAbsolutePath());
+
+            if (!file.exists()) {
+                LOGGER.getInfo().print(" SKIPPING DOESN'T EXIST");
+                itor.remove();
             }
             LOGGER.getInfo().println();
         }
-        LOGGER.info();
+        LOGGER.getInfo().println();
     }
 
     public void run(Artifact artifact) {
@@ -225,13 +225,13 @@ public record MinecraftMaven(
                 List<PendingArtifact> artifacts = null;
                 if (hasMcp(mcprepo, ver.id))
                     artifacts = mcprepo.process(versioned, mappings.withMCVersion(ver.id), outputJson);
-                else if (mappings.channel().equals("official") && (hasOfficialMappings(mcprepo, ver.id) || !mcprepo.isObfuscated(ver.id)))
+                else if (mappings.channel().equals("official") && (hasOfficialMappings(mcprepo, ver.id) || !MCPConfigRepo.isObfuscated(ver.id)))
                     artifacts = mcprepo.processWithoutMcp(versioned, mappings.withMCVersion(ver.id), outputJson);
                 else {
                     LOGGER.info("Skipping " + versioned + " no mcp config");
                     continue;
                 }
-                finalize(artifact, mappings, artifacts);
+                finalize(versioned, mappings, artifacts);
             }
         } else {
             var mcVersion = mcpToMcVersion(version);
@@ -240,7 +240,7 @@ public record MinecraftMaven(
             List<PendingArtifact> artifacts = null;
             if (hasMcp(mcprepo, version))
                 artifacts = mcprepo.process(artifact, mappings, outputJson);
-            else if (mappings.channel().equals("official") && (hasOfficialMappings(mcprepo, mcVersion) || !mcprepo.isObfuscated(mcVersion)))
+            else if (mappings.channel().equals("official") && (hasOfficialMappings(mcprepo, mcVersion) || !MCPConfigRepo.isObfuscated(mcVersion)))
                 artifacts = mcprepo.processWithoutMcp(artifact, mappings, outputJson);
             else
                 throw new IllegalStateException("Can not process " + artifact + " as it does not have a MCPConfig ror official mappings");
@@ -300,11 +300,26 @@ public record MinecraftMaven(
             // Simplest case would be different mapping channels.
             // I haven't added an opt-in for making artifacts that use mappings, so just assume any artifact with variants
             var artifact = pending.artifact();
+            var isJar = "jar".equals(artifact.getExtension());
+            var isSources = "sources".equals(artifact.getClassifier());
 
-            if (stubJars && "jar".equals(artifact.getExtension())) {
+            if (isJar) {
                 // No sources allowed in stub repos
-                if ("sources".equals(artifact.getClassifier()))
+                if (stubJars && isSources)
                     continue;
+
+                // Only transform main artifacts - This should be the main artifact but that may be a breaking change
+                if (!accessTransformer.isEmpty() && artifact.getClassifier() == null)
+                    pending = pending.withTask(accessTransform(pending));
+
+                // The main artifact
+                if (artifact.equals(module)) {
+                    if (!facadeConfigs.isEmpty())
+                        pending = pending.withTask(facade(pending));
+                }
+
+                if (stubJars)
+                    pending = pending.withTask(stub(pending));
             }
 
             String suffix = null;
@@ -360,20 +375,6 @@ public record MinecraftMaven(
     }
 
     private void updateFile(File target, File source, Artifact artifact) {
-        var isJar = "jar".equals(artifact.getExtension());
-        if (isJar) {
-            if (stubJars) {
-                writeStub(target, source, artifact);
-                return;
-            }
-
-            // Only transform main artifacts
-            if (!accessTransformer.isEmpty() && artifact.getClassifier() == null) {
-                writeAccessTransformed(target, source, artifact);
-                return;
-            }
-        }
-
         var cache = Util.cache(target)
             .add("source", source);
 
@@ -404,59 +405,53 @@ public record MinecraftMaven(
         }
     }
 
-    private void writeStub(File target, File source, Artifact artifact) {
-        var tool = this.cache.maven().download(Constants.STUBIFY);
-        var cache = Util.cache(target)
-            .add("tool", tool)
-            .add("source", source);
-
-        if (Mavenizer.checkCache(target, cache))
-            return;
-
-        File jdk;
-        try {
-            jdk = this.cache.jdks().get(Constants.STUBIFY_JAVA_VERSION);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to find JDK for version " + Constants.STUBIFY_JAVA_VERSION, e);
-        }
-
-        var log = new File(source.getAbsolutePath() + ".stubify.log");
-        var ret = ProcessUtils.runJar(jdk, source.getParentFile(), log, tool, Collections.emptyList(),
-            List.of("--input", source.getAbsolutePath(), "--output", target.getAbsolutePath())
-        );
-        if (ret.exitCode != 0)
-            throw new IllegalStateException("Failed to stubify jar file (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
-
-        try {
-            cache.save();
-            HashUtils.updateHash(target);
-        } catch (Throwable t) {
-            throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
-        }
+    private Task stub(PendingArtifact pending) {
+        var input = pending.task();
+        return Task.named("stub", Task.deps(input), () -> stub(input, pending.artifact()));
     }
 
-    private void writeAccessTransformed(File target, File source, Artifact artifact) {
+    private File stub(Task inputTask, Artifact artifact) {
+        var tool = this.cache.maven().download(Constants.STUBIFY);
+        var target = new File(this.cache.localCache(), artifact.appendClassifier("stub").getLocalPath());
+        var input = inputTask.execute();
+
+        var cache = Util.cache(target)
+            .add("tool", tool)
+            .add("input", input);
+
+        if (Mavenizer.checkCache(target, cache))
+            return target;
+
+        var args = List.of("--input", input.getAbsolutePath(), "--output", target.getAbsolutePath());
+        execute("stubify", Constants.STUBIFY_JAVA_VERSION, tool, args, target);
+
+        cache.save();
+        return target;
+    }
+
+    private Task accessTransform(PendingArtifact pending) {
+        var input = pending.task();
+        return Task.named("access-transform", Task.deps(input), () -> accessTransform(input, pending.artifact()));
+    }
+
+    private File accessTransform(Task inputTask, Artifact artifact) {
         var tool = this.cache.maven().download(Constants.ACCESS_TRANSFORMER);
+        var target = new File(this.cache.localCache(), artifact.appendClassifier("ated").getLocalPath());
+        var input = inputTask.execute();
+
         var cache = Util.cache(target)
             .add("tool", tool)
             .add(accessTransformer)
-            .add("source", source);
+            .add("input", input);
 
         if (Mavenizer.checkCache(target, cache))
-            return;
+            return target;
 
-        File jdk;
-        try {
-            jdk = this.cache.jdks().get(Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to find JDK for version " + Constants.ACCESS_TRANSFORMER_JAVA_VERSION, e);
-        }
-
-        var log = new File(source.getAbsolutePath() + ".accesstransformer.log");
         var args = new ArrayList<>(List.of(
-            "--inJar", source.getAbsolutePath(),
+            "--inJar", input.getAbsolutePath(),
             "--outJar", target.getAbsolutePath()
         ));
+
         for (var file : accessTransformer) {
             if (!file.exists())
                 throw new IllegalStateException("Access Transformer config does not exist: " + file.getAbsolutePath());
@@ -464,21 +459,65 @@ public record MinecraftMaven(
             args.add(file.getAbsolutePath());
         }
 
+        execute("Access Transform", Constants.ACCESS_TRANSFORMER_JAVA_VERSION, tool, args, target);
+        cache.save();
+        return target;
+    }
+
+    private Task facade(PendingArtifact pending) {
+        var input = pending.task();
+        return Task.named("facade", Task.deps(input), () -> facade(input, pending.artifact()));
+    }
+
+    private File facade(Task inputTask, Artifact artifact) {
+        var tool = this.cache.maven().download(Constants.FACADE);
+        var target = new File(this.cache.localCache(), artifact.appendClassifier("facade").getLocalPath());
+        var input = inputTask.execute();
+
+        var cache = Util.cache(target)
+            .add("tool", tool)
+            .add(facadeConfigs)
+            .add("input", input);
+
+        if (Mavenizer.checkCache(target, cache))
+            return target;
+
+        var args = new ArrayList<>(List.of(
+            "--input", input.getAbsolutePath(),
+            "--output", target.getAbsolutePath()
+        ));
+
+        for (var file : facadeConfigs) {
+            if (!file.exists())
+                throw new IllegalStateException("Facade config does not exist: " + file.getAbsolutePath());
+            args.add("--config");
+            args.add(file.getAbsolutePath());
+        }
+
+        execute("facade ", Constants.FACAD_JAVA_VERSION, tool, args, target);
+        cache.save();
+        return target;
+    }
+
+    private void execute(String name, int javaVersion, File tool, List<String> args, File target) {
+        File jdk;
+        try {
+            jdk = this.cache.jdks().get(javaVersion);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to find JDK for version " + javaVersion, e);
+        }
+
         // Older versions of AT have a bug where it wont create the directories as needed.
         var parent = target.getParentFile();
         if (parent != null && !parent.exists())
             parent.mkdirs();
 
-        var ret = ProcessUtils.runJar(jdk, source.getParentFile(), log, tool, Collections.emptyList(), args);
-        if (ret.exitCode != 0)
-            throw new IllegalStateException("Failed to Access Transform jar file (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
 
-        try {
-            cache.save();
-            HashUtils.updateHash(target);
-        } catch (Throwable t) {
-            throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
-        }
+        var log = new File(target.getAbsolutePath() + ".log");
+        var ret = ProcessUtils.runJar(jdk, parent, log, tool, Collections.emptyList(), args);
+        if (ret.exitCode != 0)
+            throw new IllegalStateException("Failed to " + name + " file (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
+
     }
 
     private void updateVariants(Artifact artifact) {

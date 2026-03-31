@@ -278,6 +278,10 @@ public class Artifact implements Comparable<Artifact>, Serializable {
         return new Artifact(group, name, version, classifier, ext, os, arch);
     }
 
+    public Artifact appendClassifier(String classifier) {
+        return withClassifier(this.classifier == null ? classifier : this.classifier + '-' + classifier);
+    }
+
     public Artifact withExtension(String ext) {
         return new Artifact(group, name, version, classifier, ext, os, arch);
     }

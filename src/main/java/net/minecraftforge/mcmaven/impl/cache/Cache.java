@@ -10,7 +10,7 @@ import java.io.File;
 import java.util.Map;
 
 /** Represents the cache for this tool. */
-public record Cache(File root, JDKCache jdks, MavenCache maven, MinecraftMavenCache minecraft) {
+public record Cache(File root, File localCache, JDKCache jdks, MavenCache maven, MinecraftMavenCache minecraft) {
     /**
      * Makes a new cache with the given root and JDK cache directories.
      *
@@ -18,10 +18,15 @@ public record Cache(File root, JDKCache jdks, MavenCache maven, MinecraftMavenCa
      * @param jdkCache The JDK cache directory.
      */
     public Cache(File root, File jdkCache) {
-        this(root, jdkCache, Map.of());
+        this(root, new File(root, "local"), jdkCache, Map.of());
     }
 
-    public Cache(File root, File jdkCache, Map<String, String> foreignRepositories) {
-        this(root, new JDKCache(jdkCache), new MavenCache(Constants.FORGE_NAME, Constants.FORGE_MAVEN, root, foreignRepositories), new MinecraftMavenCache(root));
+    public Cache(File root, File localCache, File jdkCache, Map<String, String> foreignRepositories) {
+        this(root,
+            localCache,
+            new JDKCache(jdkCache),
+            new MavenCache(Constants.FORGE_NAME, Constants.FORGE_MAVEN, root, foreignRepositories),
+            new MinecraftMavenCache(root)
+        );
     }
 }

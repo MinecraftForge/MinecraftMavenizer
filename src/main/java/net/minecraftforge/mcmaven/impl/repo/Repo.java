@@ -272,6 +272,10 @@ public abstract class Repo {
         public PendingArtifact withVariants(Supplier<GradleModule.Variant[]> variants) {
             return new PendingArtifact(message, task, artifact, auxiliary, variantTask(task, variants));
         }
+
+        public PendingArtifact withTask(Task task) {
+            return new PendingArtifact(message, task, artifact, auxiliary, variants);
+        }
     }
 
     /*

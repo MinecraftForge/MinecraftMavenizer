@@ -7,12 +7,14 @@ package net.minecraftforge.mcmaven.cli;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSpecBuilder;
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.MinecraftMaven;
+import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.mappings.ParchmentMappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
@@ -35,6 +37,11 @@ class MavenTask {
         var cacheO = parser.accepts("cache",
             "Directory to store data needed for this program")
             .withRequiredArg().ofType(File.class).defaultsTo(new File("cache"));
+
+        // per-projct cache directory, This is where all the post processed files are cached
+        var localCacheO = parser.accepts("local-cache",
+            "Directory to store the project specific cache files, opposed to the global cache")
+            .withRequiredArg().ofType(File.class).defaultsTo(new File("cache/local"));
 
         // jdk cache directory
         var jdkCacheO = parser.accepts("jdk-cache",
@@ -104,9 +111,11 @@ class MavenTask {
 
         var accessTransformerO = parser.accepts("access-transformer",
             "An AccessTransformer config to apply to the artifacts have been built. This is a work around for Gradle's broken ArtifactTransformer system. https://github.com/MinecraftForge/ForgeGradle/issues/1023")
-            .availableUnless(stubO)
             .withRequiredArg().ofType(File.class);
-        stubO.availableUnless(accessTransformerO);
+
+        var facadeConfigO = parser.accepts("facade-config",
+            "A Facade Config, which allows injecting interfaces to the built artifacts.")
+            .withRequiredArg().ofType(File.class);
 
         var outputJsonO = parser.accepts("output-json",
             "File to write extended output data to. Not compatible with bulk operations.")
@@ -165,6 +174,9 @@ class MavenTask {
         var jdkCache = !options.has(cacheO) || options.has(jdkCacheO)
             ? options.valueOf(jdkCacheO)
             : new File(cache, "jdks");
+        var localCache = !options.has(cacheO) || options.has(localCacheO)
+            ? options.valueOf(localCacheO)
+            : new File(cache, "local");
 
         Artifact artifact = null;
         for (var entry : artifacts.entrySet()) {
@@ -193,14 +205,15 @@ class MavenTask {
         var mcmaven = new MinecraftMaven(
             output,
             options.has(dependenciesOnlyO),
-            cache,
-            jdkCache,
+            new Cache(cache, localCache, jdkCache, foreignRepositories),
             mappings,
             foreignRepositories,
             options.has(globalAuxiliaryVariantsO),
             options.has(disableGradleO),
             options.has(stubO),
+            new HashSet<>(),
             new ArrayList<>(options.valuesOf(accessTransformerO)),
+            new ArrayList<>(options.valuesOf(facadeConfigO)),
             options.valueOf(outputJsonO)
         );
         mcmaven.run(artifact);
