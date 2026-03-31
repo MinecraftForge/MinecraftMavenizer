@@ -11,7 +11,8 @@ import joptsimple.OptionParser;
 enum Tasks {
     MAVEN(MavenTask::run, "Generates a maven repository for Minecraft Artifacts"),
     MCP(MCPTask::run, "Generates a 'clean' sources jar from a MCPConfig pipeline"),
-    MCP_DATA(MCPDataTask::run, "Extracts a data file from a MCPConfig archive")
+    MCP_DATA(MCPDataTask::run, "Extracts a data file from a MCPConfig archive"),
+    MINECRAFT_DATA(MinecraftDataTask::run, "Gathers vanilla files")
     ;
 
     interface Callback {

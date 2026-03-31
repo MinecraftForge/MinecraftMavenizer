@@ -81,6 +81,10 @@ public class MinecraftTasks {
         this.versionJson = Task.named("downloadVersionJson[" + version + ']', Task.deps(this.launcherManifest), this::downloadVersionJson);
     }
 
+    public File versionCache() {
+        return this.cacheRoot;
+    }
+
     public String getVersion() {
         return this.version;
     }
