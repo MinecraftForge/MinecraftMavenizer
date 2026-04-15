@@ -335,7 +335,7 @@ public final class ProcessUtils {
         if (enableDebug)
             args.add("-g");
 
-        var process = ProcessUtils.runJavac(javaHome, temp, new File(outputJar.getAbsolutePath() + ".log"), args);
+        var process = ProcessUtils.runJavac(javaHome, temp, new File(outputJar.getAbsolutePath() + ".log"), args, sourcesJar);
         if (process.exitCode != 0) {
             LOGGER.error("Javac failed to execute! Exit code " + process.exitCode);
             LOGGER.error("--- BEGIN JAVAC LOG ---");
@@ -371,7 +371,7 @@ public final class ProcessUtils {
         return classpathArg.toString();
     }
 
-    private static Result runJavac(File javaHome, File workDir, File logFile, List<String> args) {
+    private static Result runJavac(File javaHome, File workDir, File logFile, List<String> args, File sourceArchive) {
         FileUtils.ensureParent(logFile);
         try (var log = new PrintWriter(new FileWriter(logFile), true)) {
             var argsAll = Util.make(new StringBuilder(), s -> {
@@ -398,8 +398,9 @@ public final class ProcessUtils {
                 LOGGER.quiet(line);
                 log.println(line);
             };
-            lines.accept("Java Compiler: " + launcher.getAbsolutePath());
-            lines.accept("Argument File: " + argsFile.getAbsolutePath());
+            lines.accept("Java Compiler:  " + launcher.getAbsolutePath());
+            lines.accept("Argument File:  " + argsFile.getAbsolutePath());
+            lines.accept("Source Archive: " + sourceArchive.getAbsolutePath());
             log.println("Arguments:");
             log.println(argsAll);
             lines.accept("====================================");

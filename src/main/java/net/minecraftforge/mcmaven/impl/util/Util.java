@@ -22,6 +22,7 @@ import java.util.zip.ZipEntry;
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashStore;
+import net.minecraftforge.util.logging.Logger;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNullByDefault;
@@ -214,5 +215,24 @@ public class Util {
             .invalidate(Mavenizer.ignoreCache())
             //.timestamps()
             ;
+    }
+
+    public static void filter(Logger logger, String header, List<File> files) {
+        var prefix = header;
+        var itor = files.iterator();
+        while (itor.hasNext()) {
+            var file = itor.next();
+            logger.getInfo().print(prefix);
+            if (prefix == header)
+                prefix = " ".repeat(header.length());
+
+            logger.getInfo().print(file.getAbsolutePath());
+
+            if (!file.exists()) {
+                logger.getInfo().print(" SKIPPING DOESN'T EXIST");
+                itor.remove();
+            }
+            logger.getInfo().println();
+        }
     }
 }

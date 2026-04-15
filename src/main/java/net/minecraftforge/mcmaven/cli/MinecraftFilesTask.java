@@ -45,8 +45,8 @@ import org.apache.commons.io.FileUtils;
  *
  *   "server.extracted": <path> -- equal to "server" if the server jar is not a bundle
  *
- *   "client.libraries": [<path>] -- List of all client libraries, reguardless of OS
- *   "server.libraries": [<path>] -- Empty if the server jar is not a bundle.
+ *   "client.libraries": <path> -- File containing a list of all client libraries, reguardless of OS
+ *   "server.libraries": <path> -- File containing a list of all server libraries, empty if the server jar is not a bundle.
  *
  *   "client.mappings": <path>
  *   "server.mappings": <path> -- Official mappings file, null if none specified in version json
@@ -55,7 +55,7 @@ import org.apache.commons.io.FileUtils;
  *   //"client.assets": <path> -- Path to the root 'assets' directory, only if asked for using --assets
  * }
  */
-class MinecraftDataTask {
+class MinecraftFilesTask {
     static OptionParser run(String[] args, boolean getParser) throws Exception {
         var parser = new OptionParser();
         parser.allowsUnrecognizedOptions();
@@ -101,12 +101,12 @@ class MinecraftDataTask {
         var version = options.valueOf(versionO);
 
         LOGGER.info("  Output:     " + output.getAbsolutePath());
-        LOGGER.info("  Output-Dir: " + outputDir == null ? "null" : outputDir.getAbsolutePath());
+        LOGGER.info("  Output-Dir: " + (outputDir == null ? "null" : outputDir.getAbsolutePath()));
         LOGGER.info("  Version:    " + version);
         LOGGER.info("  Cache:      " + cacheRoot.getAbsolutePath());
         LOGGER.info();
 
-        var task = new MinecraftDataTask(output, outputDir, version, cacheRoot);
+        var task = new MinecraftFilesTask(output, outputDir, version, cacheRoot);
         task.run();
 
         return parser;
@@ -118,7 +118,7 @@ class MinecraftDataTask {
     private final MCPConfigRepo repo;
     private final MinecraftTasks tasks;
 
-    private MinecraftDataTask(File output, File outputDir, String version, File cacheRoot) {
+    private MinecraftFilesTask(File output, File outputDir, String version, File cacheRoot) {
         this.output = output;
         this.outputDir = outputDir;
         this.version = version;

@@ -96,30 +96,10 @@ public record MinecraftMaven(
         LOGGER.info("  Disable Gradle:     " + disableGradle);
         LOGGER.info("  Stub Jars:          " + stubJars);
         if (!accessTransformer.isEmpty())
-            filter("  Access Transformer: ", accessTransformer);
+            Util.filter(LOGGER, "  Access Transformer: ", accessTransformer);
         if (!facadeConfigs.isEmpty())
-            filter("  Facade Config:      ", facadeConfigs);
+            Util.filter(LOGGER, "  Facade Config:      ", facadeConfigs);
         LOGGER.info();
-    }
-
-    private static void filter(String header, List<File> files) {
-        var prefix = header;
-        var itor = files.iterator();
-        while (itor.hasNext()) {
-            var file = itor.next();
-            LOGGER.getInfo().print(prefix);
-            if (prefix == header)
-                prefix = " ".repeat(header.length());
-
-            LOGGER.getInfo().print(file.getAbsolutePath());
-
-            if (!file.exists()) {
-                LOGGER.getInfo().print(" SKIPPING DOESN'T EXIST");
-                itor.remove();
-            }
-            LOGGER.getInfo().println();
-        }
-        LOGGER.getInfo().println();
     }
 
     public void run(Artifact artifact) {

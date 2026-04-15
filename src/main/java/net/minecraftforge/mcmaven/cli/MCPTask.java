@@ -6,17 +6,23 @@ package net.minecraftforge.mcmaven.cli;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import joptsimple.OptionParser;
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
-import net.minecraftforge.mcmaven.impl.data.MCPSetupFiles;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
-import net.minecraftforge.mcmaven.impl.mappings.ParchmentMappings;
 import net.minecraftforge.mcmaven.impl.repo.forge.Patcher;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
-import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPTaskFactory;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Task;
@@ -27,9 +33,40 @@ import net.minecraftforge.util.hash.HashStore;
 
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
+import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.Nullable;
 
-// TODO [Mavenizer][MCPTask] Cleanup. Works well but is a mess.
+/**
+ * Executes a MCPConfig task tree, and provides information from its output.
+ * Optionally applies a specific mapping to the resulting source file.
+ *
+ * Output: {
+ *   "config": <MCPConfig Artifact>
+ *   "pipeline": "[client|server|joined]"
+ *   "output": <path> -- The final patched and optionally renamed sources, or classes
+ *   "classes.raw": <path> -- The 'raw' jar file, this is defined as the output
+ *                      of the 'merge' or 'strip' tasks. Used to retrieve the obfuscated, but 'cleaned up' jar files
+ *   "dependencies": <dep[,dep..]> -- Comma seperated list of depenencies.
+ *   "extra": <path> -- The 'extra' jar, which is typically just the data files for Minecraft. But for older servers could contain the library classes.
+ *
+ *   Only available if there is a 'rename' step.
+ *      "classes.srg": <path> -- The 'srg' jar file, this is defined as the output of the 'rename' task.
+ *      "mappings.channel": "string"
+ *      "mappings.version": "string"
+ *      "mappings.obf2srg": <path> -- The mappings file used in the MCP 'rename' step.
+ *
+ *   Only available if Mappings specified and there is a 'rename' step:
+ *     "mappings.zip": <path>
+ *     "mappings.map2obf": <path>
+ *     "mappings.map2srg": <path>
+ *
+ *   Only available if decompile is not disabled:
+ *     "sources.srg": <path> -- Patched unremaped sources
+ *
+ *   Only available if decompile not not disabled, and Mappings specified:
+ *     "sources.named": <path> -- Patched and mapped sources
+ * }
+ */
 class MCPTask {
     static OptionParser run(String[] args, boolean getParser) throws Exception {
         var parser = new OptionParser();
@@ -51,15 +88,24 @@ class MCPTask {
             "Directory to store jdks downloaded from the disoco api")
             .withRequiredArg().ofType(File.class).defaultsTo(new File("cache/jdks"));
 
-        // mcp artifact output
-        var outputO = parser.accepts("output",
-            "File to output the final jar")
-            .withRequiredArg().ofType(File.class).defaultsTo(new File("output.jar"));
+        // ignore caches, currently only invalidates HashStore entries
+        var ignoreCacheO = parser.accepts("ignore-cache",
+            "Forces all cache checks to fail, which results in all tasks re-running");
+
+        // Add extra memory to the java decompile and recompile tasks
+        var decompileMemoryO = parser.accepts("decompile-memory",
+            "Overrides the -Xmx argument passed into the decompile sub-processes")
+            .withRequiredArg();
 
         // mcp artifact output
-        var outputFilesO = parser.accepts("output-files",
+        var outputO = parser.accepts("output",
+                "File to output a JSON containing paths to extra files")
+            .withRequiredArg().ofType(File.class).defaultsTo(new File("output.json"));
+
+        // mcp artifact output
+        var outputDirO = parser.accepts("output-dir",
             "File to output a JSON containing paths to extra files")
-            .withRequiredArg().ofType(File.class).defaultsTo(new File("files.json"));
+            .withRequiredArg().ofType(File.class).defaultsTo(new File("output"));
 
         var artifactO = parser.accepts("artifact",
             "MCPConfig artifact coordinates")
@@ -73,43 +119,24 @@ class MCPTask {
             "MCPConfig pipeline to run, typically [client|server|joined]")
             .withRequiredArg().defaultsTo("joined");
 
-        var rawO = parser.accepts("raw",
-            "Use to output a raw jar file without any MCPConfig transformations.");
+        var disableDecompileO = parser.accepts("disable-decompile",
+            "Stops processing before the decompile step, useful for getting base of binpatches");
 
-        var seargeO = parser.accepts("searge",
-            "Use with --raw to output the raw jar file renamed with SRG names")
-            .availableIf(rawO);
-
+        // Predecompile transformers
         var atO = parser.accepts("at",
             "Access Transformer config file to apply")
-            .availableUnless(rawO).withOptionalArg().ofType(File.class);
+            .withOptionalArg().ofType(File.class);
 
         var sasO = parser.accepts("sas",
             "Side Annotation Stripper confg file to apply")
-            .availableUnless(rawO).withOptionalArg().ofType(File.class);
+            .withOptionalArg().ofType(File.class);
 
+        // Mappings to apply to the decompiled source, if we get that far
         var mappingsO = parser.accepts("mappings",
             "Mappings to use for this artifact. Formatted as channel:version")
-            .availableUnless(rawO)
+            .availableUnless(disableDecompileO)
             .withRequiredArg().ofType(String.class).defaultsTo("official");
 
-        var parchmentO = parser.accepts("parchment",
-            "Version of parchment mappings to use, snapshots are not supported")
-            .availableIf(mappingsO).withRequiredArg();
-
-        var unmappedOutputO = parser.accepts("unmapped-output",
-            "File to output the unmapped the final jar")
-            .availableIf(mappingsO, parchmentO)
-            .withRequiredArg().ofType(File.class).defaultsTo(new File("output-unmapped.jar"));
-
-        // ignore caches, currently only invalidates HashStore entries
-        var ignoreCacheO = parser.accepts("ignore-cache",
-            "Forces all cache checks to fail, which results in all tasks re-running");
-
-        // Add extra memory to the java decompile and recompile tasks
-        var decompileMemoryO = parser.accepts("decompile-memory",
-            "Overrides the -Xmx argument passed into the decompile sub-processes")
-            .withRequiredArg();
         //@formatter:on
 
         if (getParser)
@@ -128,8 +155,7 @@ class MCPTask {
             Mavenizer.setDecompileMemory(options.valueOf(decompileMemoryO));
 
         var output = options.valueOf(outputO);
-        var outputUnmapped = options.has(unmappedOutputO) ? options.valueOf(unmappedOutputO) : null;
-        var outputFiles = options.has(outputFilesO) ? options.valueOf(outputFilesO) : null;
+        var outputDir = options.has(outputDirO) ? options.valueOf(outputDirO) : null;
         var cacheRoot = options.valueOf(cacheO);
         var jdkCacheRoot = !options.has(cacheO) || options.has(jdkCacheO)
             ? options.valueOf(jdkCacheO)
@@ -141,182 +167,166 @@ class MCPTask {
             null;
 
         var pipeline = options.valueOf(pipelineO);
-        var ats = options.has(atO) ? options.valueOf(atO) : null;
-        var sas = options.has(sasO) ? options.valueOf(sasO) : null;
-        Mappings mappings = null;
-        if (options.has(mappingsO)) {
-            if (options.has(parchmentO))
-                mappings = new ParchmentMappings(options.valueOf(parchmentO));
-            else
-                mappings = Mappings.of(options.valueOf(mappingsO));
-            mappings = mappings.withMCVersion(MinecraftMaven.mcpToMcVersion(artifact.getVersion()));
-        }
+
+        var disableDecompile = options.has(disableDecompileO);
+        var ats = new ArrayList<>(options.valuesOf(atO));
+        var sas = new ArrayList<>(options.valuesOf(sasO));
 
         if (artifact == null) {
             LOGGER.error("Missing mcp --version or --artifact");
             LOGGER.release();
             return parser;
-        }
 
-        var repo = new MCPConfigRepo(new Cache(cacheRoot, jdkCacheRoot), false);
+        }
+        var mappings = !options.has(mappingsO) ? null :
+            Mappings.of(options.valueOf(mappingsO)).withMCVersion(MinecraftMaven.mcpToMcVersion(artifact.getVersion()));
+
         LOGGER.info("  Output:     " + output.getAbsolutePath());
-        if (outputUnmapped != null)
-            LOGGER.info("  Unmapped:   " + outputUnmapped.getAbsolutePath());
-        if (outputFiles != null)
-            LOGGER.info("  Json:       " + outputFiles.getAbsolutePath());
+        LOGGER.info("  Output Dir: " + (outputDir == null ? null : outputDir.getAbsolutePath()));
+        LOGGER.info("  Decompile:  " + !disableDecompile);
         LOGGER.info("  Cache:      " + cacheRoot.getAbsolutePath());
         LOGGER.info("  JDK Cache:  " + jdkCacheRoot.getAbsolutePath());
         LOGGER.info("  Artifact:   " + artifact);
         LOGGER.info("  Pipeline:   " + pipeline);
-        if (mappings != null)
-            LOGGER.info("  Mappings:   " + mappings.toString());
-        if (options.has(rawO)) {
-            LOGGER.info("  Raw Names:  " + (options.has(seargeO) ? "Searge" : "Notch"));
-        } else {
-            LOGGER.info("  Access:     " + (ats == null ? null : ats.getAbsolutePath()));
-            LOGGER.info("  SAS:        " + (sas == null ? null : sas.getAbsolutePath()));
-        }
+        LOGGER.info("  Mappings:   " + (mappings == null ? null : mappings.toString()));
+        if (!ats.isEmpty())
+            Util.filter(LOGGER, "  Access:     ", ats);
+        if (!sas.isEmpty())
+            Util.filter(LOGGER, "  SAS:        ", sas);
         LOGGER.info();
 
-        var mcp = repo.get(artifact);
-        var side = mcp.getSide(pipeline);
+        var task = new MCPTask(outputDir, new Cache(cacheRoot, jdkCacheRoot), artifact, pipeline);
+        var ret = task.classes();
+        if(mappings != null)
+            task.mappings(mappings);
+        if (!disableDecompile)
+            ret = task.decompile(mappings, ats, sas);
+        task.data.put("output", ret);
 
-        if (options.has(rawO)) {
-            var searge = options.has(seargeO);
-            var cache = Util.cache(output)
-                .addKnown("obfuscation", searge ? "srg" : "notch");
-
-            Task rawTask = searge ? side.getTasks().getSrgJar() : side.getTasks().getRawJar();
-            File raw;
-
-            LOGGER.info("Creating Raw Jar");
-            var indent = LOGGER.push();
-            try {
-                raw = rawTask.execute();
-                cache.add("raw", raw);
-            } finally {
-                LOGGER.pop(indent);
-            }
-
-            if (!Mavenizer.checkCache(output, cache)) {
-                try {
-                    org.apache.commons.io.FileUtils.copyFile(raw, output);
-                    if (outputFiles != null)
-                        writeFiles(side.getTasks(), outputFiles);
-                    cache.save();
-                } catch (Throwable t) {
-                    throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
-                }
-            }
-
-            return parser;
+        try {
+            JsonData.toJson(task.data, output);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to generate file: %s".formatted(output.getAbsolutePath()), e);
         }
 
+        return parser;
+
+    }
+
+    private final @Nullable File outputDir;
+
+    private Map<String, String> data = new LinkedHashMap<>();
+    private final MCPConfigRepo repo;
+    private final MCP mcp;
+    private final MCPSide side;
+    private final String prefix;
+
+    private MCPTask(@Nullable File outputDir, Cache cache, Artifact artifact, String pipeline) {
+        this.outputDir = outputDir;
+
+        this.repo = new MCPConfigRepo(cache, false);
+        this.mcp = repo.get(artifact);
+        this.side = mcp.getSide(pipeline);
+
+        this.data.put("config", artifact.toString());
+        this.data.put("pipeline", pipeline);
+        this.prefix = "mcp/" + artifact.getVersion() + '/' + pipeline;
+
+        var deps = new TreeSet<String>();
+        this.side.forAllLibraries(art -> deps.add(art.getDescriptor()));
+        this.data.put("dependencies", deps.stream().collect(Collectors.joining(",")));
+
+        this.data.put("extra", local(side.getTasks().getExtra().execute(), prefix + "/extra.jar"));
+    }
+
+    private String classes() {
+        this.data.put("classes.raw", local(side.getTasks().getRawJar().execute(), prefix + "/classes.raw.jar"));
+        if (side.getTasks().getSrgJar() == null)
+            return this.data.get("classes.raw");
+
+        this.data.put("classes.srg", local(side.getTasks().getSrgJar().execute(), prefix + "/classes.srg.jar"));
+        this.data.put("mappings.obf2srg", local(side.getTasks().getMappings().execute(), prefix + "/mappings.obf2srg.tsrg"));
+        return this.data.get("classes.srg");
+    }
+
+    private void mappings(@Nullable Mappings mappings) {
+        this.data.put("mappings.channel", mappings.channel());
+        this.data.put("mappings.version", mappings.version());
+        this.data.put("mappings.zip", local(mappings.getCsvZip(side).execute(), prefix + "/mappings.zip"));
+        this.data.put("mappings.map2obf", local(mappings.getMapped2Obf(side).execute(), prefix + "/mappings.map2obf.tsrg.gz"));
+        this.data.put("mappings.map2srg", local(mappings.getMapped2Srg(side).execute(), prefix + "/mappings.map2srg.tsrg.gz"));
+    }
+
+    private String decompile(@Nullable Mappings mappings, List<File> ats, List<File> sas) {
         var sourcesTask = side.getSources();
 
-        if (ats != null || sas != null) {
-            var hash = Util.hash(HashFunction.sha1(), ats, sas);
+        if (!ats.isEmpty() || !sas.isEmpty()) {
+            var hash = Util.sneak(() -> HashFunction.sha1().hash(Stream.concat(ats.stream(), sas.stream()).toList()));
             var dir = new File(side.getBuildFolder(), hash);
 
             var predecomp = side.getTasks().getPreDecompile();
-            if (ats != null) {
+            for (var cfg : ats) {
                 var tmp = predecomp;
-                predecomp = Task.named("modifyAccess", Task.deps(tmp), () -> Patcher.modifyAccess(dir, tmp, ats, repo.getCache()));
+                predecomp = Task.named("modifyAccess[" + cfg.getName() + ']', Task.deps(tmp),
+                    () -> Patcher.modifyAccess(dir, tmp, cfg, repo.getCache())
+                );
             }
 
-            if (sas != null) {
+            for (var cfg : sas) {
                 var tmp = predecomp;
-                predecomp = Task.named("stripSides", Task.deps(tmp), () -> Patcher.stripSides(dir, tmp, sas, repo.getCache()));
+                predecomp = Task.named("stripSides[" + cfg.getName() + ']', Task.deps(tmp),
+                    () -> Patcher.stripSides(dir, tmp, cfg, repo.getCache())
+                );
             }
 
             var factory = side.getTasks().child(dir, predecomp);
             sourcesTask = factory.getLastTask();
         }
 
-        File sources = null;
-        File unnamed = null;
-        {
-            LOGGER.info("Creating MCP Source Jar");
-            var indent = LOGGER.push();
-            try {
-                unnamed = sources = sourcesTask.execute();
-            } finally {
-                LOGGER.pop(indent);
-            }
+        LOGGER.info("Creating MCP Source Jar");
+        var indent = LOGGER.push();
+        try {
+            this.data.put("sources.srg", local(sourcesTask.execute(), prefix + "/sources.srg.jar"));
+        } finally {
+            LOGGER.pop(indent);
         }
 
-        var cache = Util.cache(output)
-            .add("sources", sources);
+        if (mappings == null)
+            return this.data.get("sources.srg");
 
-        if (mappings != null) {
-            LOGGER.info("Renaming MCP Source Jar");
-            var indent = LOGGER.push();
-            try {
-                var renameTask = new RenameTask(side.getBuildFolder(), pipeline, side, sourcesTask, mappings, false);
-                sources = renameTask.execute();
-            } finally {
-                LOGGER.pop(indent);
-            }
-            cache.add("renamed", sources);
+        LOGGER.info("Renaming MCP Source Jar");
+        indent = LOGGER.push();
+        try {
+            var renameTask = new RenameTask(side.getBuildFolder(), side.getName(), side, sourcesTask, mappings, false);
+            this.data.put("sources.named", local(renameTask.execute(), prefix + "/sources.named.jar"));
+        } finally {
+            LOGGER.pop(indent);
         }
-
-        write(sources, output, cache, artifact);
-
-        if (outputFiles != null) {
-            cache = Util.cache(output)
-                .add("mcp", side.getMCP().getData());
-            if (!Mavenizer.checkCache(outputFiles, cache)) {
-                writeFiles(side.getTasks(), outputFiles);
-                cache.save();
-            }
-        }
-
-        if (outputUnmapped != null && mappings != null) {
-            cache = Util.cache(outputUnmapped)
-                .add("source", unnamed);
-            write(unnamed, outputUnmapped, cache, artifact);
-        }
-
-        return parser;
+        return this.data.get("sources.named");
     }
 
-    private static void write(File source, File target, HashStore cache, Artifact artifact) {
+    private String local(File source, String relative) {
+        if (outputDir == null)
+            return source.getAbsolutePath();
+
+        var target = new File(outputDir, relative);
+
+        // Incase the output dir is the shared cache
+        if (target.getAbsoluteFile().equals(source.getAbsoluteFile()))
+            return relative;
+
+        var cache = HashStore.fromFile(target)
+            .add("source", source);
         if (Mavenizer.checkCache(target, cache))
-            return;
+            return relative;
         try {
+            FileUtils.createParentDirectories(target);
             org.apache.commons.io.FileUtils.copyFile(source, target);
             cache.save();
         } catch (Throwable t) {
-            throw new RuntimeException("Failed to generate artifact: %s".formatted(artifact), t);
+            throw new RuntimeException("Failed to generate file: %s".formatted(target.getAbsolutePath()), t);
         }
+        return relative;
     }
 
-    // TODO [Mavenizer][Extra MCPTask Files] do this better
-    private static void writeFiles(MCPTaskFactory mcpTaskFactory, File output) {
-        var files = new MCPSetupFiles();
-        files.versionManifest = getTaskPath(mcpTaskFactory, "downloadManifest");
-        files.versionJson = getTaskPath(mcpTaskFactory, "downloadJson");
-        files.clientRaw = getTaskPath(mcpTaskFactory, "downloadClient");
-        files.serverRaw = getTaskPath(mcpTaskFactory, "downloadServer");
-        files.serverExtracted = getTaskPath(mcpTaskFactory, mcpTaskFactory.getTask("extractServer") != null ? "extractServer" : "stripServer");
-        files.clientMappings = mcpTaskFactory.downloadClientMappings().execute().getAbsolutePath();
-        files.serverMappings = mcpTaskFactory.downloadServerMappings().execute().getAbsolutePath();
-        files.librariesList = getTaskPath(mcpTaskFactory, "listLibraries");
-
-        try {
-            JsonData.toJson(files, output);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to write extra files data: " + output.getPath(), e);
-        }
-    }
-
-    // TODO Do this better
-    private static @Nullable String getTaskPath(MCPTaskFactory mcpTaskFactory, String step) {
-        try {
-            return mcpTaskFactory.findStep(step).execute().getAbsolutePath();
-        } catch (Exception e) {
-            LOGGER.error("Cannot serialize output path for MCP step: " + step, e);
-            return null;
-        }
-    }
 }
