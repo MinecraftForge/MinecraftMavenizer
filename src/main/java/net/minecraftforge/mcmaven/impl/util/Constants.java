@@ -40,6 +40,6 @@ public final class Constants {
     public static final Artifact STUBIFY = Artifact.from("net.minecraftforge:jar-stubify:1.0.0");
     public static final int STUBIFY_JAVA_VERSION = 25;
 
-    public static final Artifact FACADE = Artifact.from("net.minecraftforge:facade:1.0.1");
+    public static final Artifact FACADE = Artifact.from("net.minecraftforge:facade:1.0.2");
     public static final int FACAD_JAVA_VERSION = 25;
 }
