@@ -6,6 +6,7 @@ package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks.ArtifactFile;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
+import net.minecraftforge.mcmaven.impl.util.StupidHacks;
 import net.minecraftforge.mcmaven.impl.util.Task;
 
 import org.jetbrains.annotations.Nullable;
@@ -93,7 +94,7 @@ public class MCPSide {
         var artifacts = new ArrayList<Artifact>();
 
         for (var lib : this.mcp.getConfig().getLibraries(this.side)) {
-            var artifact = Artifact.from(lib);
+            var artifact = StupidHacks.fixLegacyTools(Artifact.from(lib));
             artifacts.add(artifact);
         }
 

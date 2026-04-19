@@ -47,6 +47,7 @@ import net.minecraftforge.util.data.json.MinecraftVersion;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
+import net.minecraftforge.mcmaven.impl.util.StupidHacks;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
@@ -838,7 +839,7 @@ public class MCPTaskFactory {
     private File execute(String name, List<TaskOrArg> jvmArgs, List<TaskOrArg> runArgs, MCPConfig.Function func, File log, File output) {
         // First download the tool
         var maven = new MavenCache("mcp-tools", func.repo, this.side.getMCP().getCache().root());
-        var toolA = Artifact.from(func.version);
+        var toolA = StupidHacks.fixLegacyTools(Artifact.from(func.version));
         var tool = maven.download(toolA);
 
         var isDecompile = isDecompiler(name, toolA);
