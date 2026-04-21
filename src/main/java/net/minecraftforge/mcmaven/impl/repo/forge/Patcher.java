@@ -5,9 +5,11 @@
 package net.minecraftforge.mcmaven.impl.repo.forge;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -16,10 +18,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Stack;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 
 import io.codechicken.diffpatch.cli.PatchOperation;
 import io.codechicken.diffpatch.util.LogLevel;
@@ -70,6 +77,7 @@ public class Patcher implements Supplier<Task> {
     private final Task downloadSources;
     private final Task predecomp;
     private final Task last;
+    private final Task filterBinaryInjections;
 
     /**
      * Creates a new Patcher for the given Forge repo.
@@ -162,6 +170,17 @@ public class Patcher implements Supplier<Task> {
         }
 
         this.last = last;
+
+        var needsFilter = false;
+        for (var p : this.getStack()) {
+            if (p.config.inject != null || p.config.universalFilters != null) {
+                needsFilter = true;
+                break;
+            }
+        }
+
+        this.filterBinaryInjections = needsFilter ? null :
+            Task.named("filterBinaryInjections[" + this.name.getName() + ']', this::filterBinaryInjectionsImpl);
     }
 
     private RuntimeException except(String message) {
@@ -213,6 +232,14 @@ public class Patcher implements Supplier<Task> {
 
     public MCPSide getMCPSide() {
         return this.mcpSide == null ? this.parent.getMCPSide() : this.mcpSide;
+    }
+
+    public String getName() {
+        return this.name.getName();
+    }
+
+    public Artifact getArtifact() {
+        return this.name;
     }
 
     public String getDataHash() {
@@ -668,6 +695,101 @@ public class Patcher implements Supplier<Task> {
                 (file, path) -> file != sources || !path.startsWith("patches/"),
                 sources, input
             );
+        } catch (IOException e) {
+            return Util.sneak(e);
+        }
+
+        cache.save();
+        return output;
+    }
+
+    public @Nullable Task filterBinaryInjections() {
+        return this.filterBinaryInjections;
+    }
+
+    private File filterBinaryInjectionsImpl() {
+        var output = new File(this.build, "binary-injections.jar");
+        var cache = Util.cache(output);
+        cache.addKnown("data", this.getDataHash());
+
+        record Info(File file, Artifact artifact, Predicate<String> filter, Function<String, String> renamer) {}
+        var files = new ArrayList<Info>();
+
+        for (var p : getStack()) {
+            var prefix = p.config.inject;
+            if (prefix != null) {
+                cache.addKnown("parent-" + p.getName(), p.getDataHash());
+                files.add(new Info(p.data, p.getArtifact(),
+                    name -> name.length() <= prefix.length() || !name.startsWith(prefix),
+                    name -> name.substring(prefix.length())
+                ));
+            }
+
+            if (p.config.universal != null && p.config.universalFilters != null) {
+                var artifact = Artifact.from(p.config.universal);
+                var file = this.forge.getCache().maven().download(artifact);
+                cache.add("universal-" + p.getName(), file);
+
+                Predicate<String> filter = null;
+                for (var line : p.config.universalFilters) {
+                    var pattern = Pattern.compile(line);
+                    Predicate<String> matcher = s -> !pattern.matcher(s).matches();
+                    if (filter == null)
+                        filter = matcher;
+                    else
+                        filter = filter.or(matcher);
+                }
+                files.add(new Info(file, artifact, filter, Function.identity()));
+            }
+        }
+
+        if (Mavenizer.checkCache(output, cache))
+            return output;
+
+        if (output.getParentFile() != null)
+            output.getParentFile().mkdirs();
+
+        try (var zos = new ZipOutputStream(new FileOutputStream(output))) {
+            var servicesLists = new HashMap<String, List<String>>();
+            var seen = new HashSet<String>();
+            for (var info : files) {
+                try (var zin = new ZipInputStream(new FileInputStream(this.data))) {
+                    ZipEntry entry;
+                    while ((entry = zin.getNextEntry()) != null) {
+                        if (FileUtils.isBlockOrSF(entry.getName()))
+                            continue;
+                        if (info.filter().test(entry.getName()))
+                            continue;
+
+                        String name = info.renamer.apply(entry.getName());
+
+                        if (name.startsWith("META-INF/services/") && !entry.isDirectory()) {
+                            var existing = servicesLists.computeIfAbsent(name, _ -> new ArrayList<>());
+                            if (existing.size() > 0) {
+                                existing.add("");
+                                existing.add("# " + info.artifact());
+                            }
+                            existing.add(new String(zin.readAllBytes(), StandardCharsets.UTF_8));
+                        } else if (seen.add(name)) {
+                            var _new = new ZipEntry(name);
+                            _new.setTime(0);
+                            zos.putNextEntry(_new);
+                            zin.transferTo(zos);
+                        }
+                    }
+                }
+            }
+
+            for(var kv : servicesLists.entrySet()) {
+                String name = kv.getKey();
+                ZipEntry _new = new ZipEntry(name);
+                _new.setTime(0);
+                zos.putNextEntry(_new);
+                for (var line : kv.getValue()) {
+                    zos.write(line.getBytes(StandardCharsets.UTF_8));
+                    zos.write('\n');
+                }
+            }
         } catch (IOException e) {
             return Util.sneak(e);
         }

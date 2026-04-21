@@ -53,7 +53,7 @@ public final class InjectTask implements Task {
 
     private Task injectData(Task input) {
         return Task.named("injectData[" + this.name.getName() + "][" + mappings + ']',
-            Task.deps(input),
+            Task.deps(input, this.patcher.filterBinaryInjections()),
             () -> injectDataImpl(input, new File(this.build, "injected.jar"))
         );
     }
@@ -66,12 +66,17 @@ public final class InjectTask implements Task {
 
         var universals = new ArrayList<File>();
         for (var p : this.patcher.getStack()) {
-            if (p.config.universal != null) {
+            if (p.config.universal != null && p.config.universalFilters == null) {
                 var universal = this.cache.maven().download(Artifact.from(p.config.universal));
                 universals.add(universal);
                 cache.add(universal);
             }
         }
+
+        var injectTask = this.patcher.filterBinaryInjections();
+        var inject = injectTask != null ? injectTask.execute() : null;
+        if (inject != null)
+            cache.add("inject", inject);
 
         if (Mavenizer.checkCache(outputJar, cache))
             return outputJar;
@@ -80,8 +85,10 @@ public final class InjectTask implements Task {
             var jars = new ArrayList<>(universals);
 
             jars.add(recompiledJar);
+            if (inject != null)
+                jars.add(inject);
 
-            FileUtils.mergeJars(outputJar, true, (file, name) -> file == recompiledJar || !name.endsWith(".class"), jars.toArray(File[]::new));
+            FileUtils.mergeJars(outputJar, true, (file, name) -> (file == recompiledJar || file == inject) || !name.endsWith(".class"), jars.toArray(File[]::new));
         } catch (IOException e) {
             return Util.sneak(e);
         }
