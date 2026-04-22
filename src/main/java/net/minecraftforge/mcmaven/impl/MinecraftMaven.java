@@ -34,6 +34,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -375,7 +377,8 @@ public record MinecraftMaven(
                 if (disableGradle && isPom) {
                     makeNonGradlePom(source, target);
                 } else {
-                    org.apache.commons.io.FileUtils.copyFile(source, target);
+                    FileUtils.ensureParent(target);
+                    Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 }
                 HashUtils.updateHash(target);
                 cache.save();
@@ -562,7 +565,8 @@ public record MinecraftMaven(
         }
 
         if (!modified) {
-            org.apache.commons.io.FileUtils.copyFile(source, target);
+            FileUtils.ensureParent(target);
+            Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
             return;
         }
 

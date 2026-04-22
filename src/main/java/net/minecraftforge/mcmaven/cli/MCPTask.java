@@ -6,6 +6,8 @@ package net.minecraftforge.mcmaven.cli;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,12 +30,12 @@ import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.data.json.JsonData;
+import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashStore;
 
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
-import org.apache.commons.io.FileUtils;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -320,8 +322,8 @@ class MCPTask {
         if (Mavenizer.checkCache(target, cache))
             return relative;
         try {
-            FileUtils.createParentDirectories(target);
-            org.apache.commons.io.FileUtils.copyFile(source, target);
+            FileUtils.ensureParent(target);
+            Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
             cache.save();
         } catch (Throwable t) {
             throw new RuntimeException("Failed to generate file: %s".formatted(target.getAbsolutePath()), t);

@@ -48,7 +48,11 @@ record MCPNames(String hash, Map<String, String> names, Map<String, String> docs
         CLASS_JAVADOC_PATTERN       = Pattern.compile("^(?<indent> *|\\t*)([\\w|@]*\\s)*(class|interface|@interface|enum) (?<name>[\\w]+)"),
         CLOSING_CURLY_BRACE         = Pattern.compile("^(?<indent> *|\\t*)}"),
         PACKAGE_DECL                = Pattern.compile("^[\\s]*package(\\s)*(?<name>[\\w|.]+);$"),
-        LAMBDA_DECL                 = Pattern.compile("\\((?<args>(?:(?:, ){0,1}p_[\\w]+_\\d+_\\b)+)\\) ->");
+        LAMBDA_DECL                 = Pattern.compile("\\((?<args>(?:(?:, ){0,1}p_[\\w]+_\\d+_\\b)+)\\) ->"),
+    // Legacy, FG2.3
+        //LEGACY_SRG_FINDER             = Pattern.compile("func_[0-9]+_[a-zA-Z_]+|field_[0-9]+_[a-zA-Z_]+|p_[\\w]+_\\d+_\\b"),
+        LEGACY_METHOD_JAVADOC_PATTERN = Pattern.compile("^(?<indent>(?: {4})+|\\t+)(?!return)(?:\\w+\\s+)*(?<generic><[\\w\\W]*>\\s+)?(?<return>\\w+[\\w$.]*(?:<[\\w\\W]*>)?[\\[\\]]*)\\s+(?<name>func_[0-9]+_[a-zA-Z_]+)\\("),
+        LEGACY_FIELD_JAVADOC_PATTERN  = Pattern.compile("^(?<indent>(?: {4})+|\\t+)(?!return)(?:\\w+\\s+)*(?:\\w+[\\w$.]*(?:<[\\w\\W]*>)?[\\[\\]]*)\\s+(?<name>field_[0-9]+_[a-zA-Z_]+) *(?:=|;)");
     //@formatter:on
 
     private record Data(Map<String, String> names, Map<String, String> docs) { }
@@ -94,26 +98,17 @@ record MCPNames(String hash, Map<String, String> names, Map<String, String> docs
         return this.names.getOrDefault(entry, entry);
     }
 
-    String rename(InputStream stream, boolean javadocs) throws IOException {
+    List<String> rename(InputStream stream, boolean javadocs) throws IOException {
         return this.rename(stream, javadocs, true, StandardCharsets.UTF_8);
     }
 
-    String rename(InputStream stream, boolean javadocs, boolean lambdas) throws IOException {
+    List<String> rename(InputStream stream, boolean javadocs, boolean lambdas) throws IOException {
         return this.rename(stream, javadocs, lambdas, StandardCharsets.UTF_8);
     }
 
-    String rename(InputStream stream, boolean javadocs, boolean lambdas, Charset sourceFileCharset) throws IOException {
-        var data = IOUtils.toString(stream, sourceFileCharset);
-        var input = IOUtils.readLines(new StringReader(data));
-
-        // Return early on empty files
-        if (data.isEmpty()) return "";
-
-        // Reader doesn't give us the empty line if the file ends with a newline... so add one.
-        if (data.charAt(data.length() - 1) == '\r' || data.charAt(data.length() - 1) == '\n')
-            input.add("");
-
-        var lines = new ArrayList<String>();
+    List<String> rename(InputStream stream, boolean javadocs, boolean lambdas, Charset sourceFileCharset) throws IOException {
+        var input = loadList(stream, sourceFileCharset);
+        var lines = new ArrayList<String>(input.size());
         var innerClasses = new LinkedList<Pair<String, Integer>>(); //pair of inner class name & indentation
         var _package = ""; //default package
         var blacklist = new HashSet<String>();
@@ -136,9 +131,53 @@ record MCPNames(String hash, Map<String, String> names, Map<String, String> docs
                 if (!injectJavadoc(lines, line, _package, innerClasses))
                     javadocs = false;
             }
+
             lines.add(replaceInLine(line, blacklist));
         }
-        return String.join(LINE_SEPERATOR, lines);
+        return lines;
+    }
+
+    List<String> renameLegacy(InputStream stream, boolean javadocs, Charset sourceFileCharset) throws IOException {
+        var input = loadList(stream, sourceFileCharset);
+        var lines = new ArrayList<String>(input.size());
+
+        if (!javadocs) {
+            for (var line : input)
+                lines.add(replaceInLine(line, null));
+            return lines;
+        }
+
+        for (var line : input) {
+            var matcher = LEGACY_METHOD_JAVADOC_PATTERN.matcher(line);
+            if (matcher.find()) {
+                var javadoc = this.docs.get(matcher.group("name"));
+                if (javadoc != null && !javadoc.isEmpty())
+                    insertAboveAnnotations(lines, JavadocAdder.buildJavadoc(matcher.group("indent"), javadoc, true));
+            } else {
+                matcher = LEGACY_FIELD_JAVADOC_PATTERN.matcher(line);
+                if (matcher.find()) {
+                    var javadoc = this.docs.get(matcher.group("name"));
+                    if (javadoc != null && !javadoc.isEmpty())
+                        insertAboveAnnotations(lines, JavadocAdder.buildJavadoc(matcher.group("indent"), javadoc, false));
+                }
+            }
+            lines.add(replaceInLine(line, null));
+        }
+
+        return lines;
+    }
+
+    private List<String> loadList(InputStream stream, Charset sourceFileCharset) throws IOException {
+        var data = IOUtils.toString(stream, sourceFileCharset);
+        var input = IOUtils.readLines(new StringReader(data));
+
+        // Return early on empty files
+        if (data.isEmpty()) return List.of();
+
+        // Reader doesn't give us the empty line if the file ends with a newline... so add one.
+        if (data.charAt(data.length() - 1) == '\r' || data.charAt(data.length() - 1) == '\n')
+            input.add("");
+        return input;
     }
 
     /**

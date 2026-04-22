@@ -9,11 +9,11 @@ import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
+import net.minecraftforge.mcmaven.impl.util.StupidHacks;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.hash.HashUtils;
-import org.apache.commons.io.IOUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -69,13 +69,14 @@ public final class RenameTask implements Task {
         var output = new File(outputDir, !this.javadocs ? "remapped.jar" : "remapped-javadoc.jar");
         var mappings = provider.getCsvZip(side);
         var srg = this.javadocs ? side.getTasks().getMappings() : null;
+        var legacy = StupidHacks.isLegacyRenamer(side.getMCP().getMinecraftTasks().getVersion());
         return Task.named("remap[" + this.name + "][" + provider + ']' + (!this.javadocs ? "" : "[javadoc]"),
             Task.deps(input, mappings, srg),
-            () -> remapSourcesImpl(input, mappings, output, srg)
+            () -> remapSourcesImpl(input, mappings, output, srg, legacy)
         );
     }
 
-    private static File remapSourcesImpl(Task inputTask, Task mappingsTask, File output, Task srgTask) {
+    private static File remapSourcesImpl(Task inputTask, Task mappingsTask, File output, Task srgTask, boolean legacy) {
         var input = inputTask.execute();
         var mappings = mappingsTask.execute();
         var srg = srgTask == null ? null : srgTask.execute();
@@ -85,6 +86,8 @@ public final class RenameTask implements Task {
             .add("mappings", mappings);
         if (srg != null)
             cache.add("whitelist", srg);
+        if (legacy)
+            cache.addKnown("legacy", "true");
 
         if (Mavenizer.checkCache(output, cache))
             return output;
@@ -113,10 +116,18 @@ public final class RenameTask implements Task {
                     if (entry.getName().endsWith(".java")) {
                         // We only care about injecting javadocs into decompiled classes, patcher classes should have their own docs
                         var javadocs = vanillaClasses != null && vanillaClasses.contains(entry.getName());
-                        var mapped = names.rename(zin, javadocs, javadocs);
-                        IOUtils.write(mapped, zout, StandardCharsets.UTF_8);
+                        var mapped = legacy
+                            ? names.renameLegacy(zin, javadocs, StandardCharsets.UTF_8)
+                            : names.rename(zin, javadocs, javadocs);
+
+                        for (var itr = mapped.iterator(); itr.hasNext(); ) {
+                            var line = itr.next();
+                            zout.write(line.getBytes(StandardCharsets.UTF_8));
+                            if (itr.hasNext())
+                                zout.write('\n');
+                        }
                     } else {
-                        IOUtils.copy(zin, zout);
+                        zin.transferTo(zout);
                     }
                 }
             }

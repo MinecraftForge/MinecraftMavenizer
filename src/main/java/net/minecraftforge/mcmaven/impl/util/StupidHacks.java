@@ -4,6 +4,8 @@
  */
 package net.minecraftforge.mcmaven.impl.util;
 
+import net.minecraftforge.srgutils.MinecraftVersion;
+
 /*
  * Here be stupid hacks that help us support old versions,
  * I've decided to stick them all in one place so we can just call
@@ -17,6 +19,17 @@ public class StupidHacks {
         if ("net.minecraftforge".equals(artifact.getGroup()) && "mergetool".equals(artifact.getName()) && "0.2.3.2".equals(artifact.getVersion()))
             return artifact.withVersion("0.2.3.3");
         return artifact;
+    }
+
+    private static final MinecraftVersion MC_1_12_2 = MinecraftVersion.from("1.12.2");
+    public static boolean isLegacyRenamer(String version) {
+        try {
+            var current = MinecraftVersion.from(version);
+            return current.compareTo(MC_1_12_2) <= 0;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+
     }
 
 }

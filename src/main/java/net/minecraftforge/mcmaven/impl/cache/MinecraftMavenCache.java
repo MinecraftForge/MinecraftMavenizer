@@ -7,6 +7,7 @@ package net.minecraftforge.mcmaven.impl.cache;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.data.MCJsonUtils;
@@ -63,7 +64,7 @@ public final class MinecraftMavenCache extends MavenCache {
             FileUtils.ensureParent(target);
             // TODO: [MCMavenizer] Check hashes for local minecraft archive
             try {
-                Files.copy(local.toPath(), target.toPath());
+                Files.copy(local.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 Util.sneak(e);
             }

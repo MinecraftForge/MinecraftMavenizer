@@ -7,7 +7,6 @@ package net.minecraftforge.mcmaven.impl.util;
 import net.minecraftforge.util.os.OS;
 import net.minecraftforge.util.file.FileUtils;
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
-import org.apache.commons.io.IOUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -297,7 +296,7 @@ public final class ProcessUtils {
                         entryFile.mkdirs();
                     } else {
                         try (FileOutputStream fos = new FileOutputStream(entryFile)) {
-                            IOUtils.copy(zin, fos);
+                            zin.transferTo(fos);
                         }
                     }
                 }
