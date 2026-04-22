@@ -179,8 +179,7 @@ public class Patcher implements Supplier<Task> {
             }
         }
 
-        this.filterBinaryInjections = needsFilter ? null :
-            Task.named("filterBinaryInjections[" + this.name.getName() + ']', this::filterBinaryInjectionsImpl);
+        this.filterBinaryInjections = needsFilter ? Task.named("filterBinaryInjections[" + this.name.getName() + ']', this::filterBinaryInjectionsImpl) : null;
     }
 
     private RuntimeException except(String message) {

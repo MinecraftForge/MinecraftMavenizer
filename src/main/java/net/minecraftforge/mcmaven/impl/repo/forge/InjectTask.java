@@ -69,7 +69,7 @@ public final class InjectTask implements Task {
             if (p.config.universal != null && p.config.universalFilters == null) {
                 var universal = this.cache.maven().download(Artifact.from(p.config.universal));
                 universals.add(universal);
-                cache.add(universal);
+                cache.add("universal-" + p.getName(), universal);
             }
         }
 
