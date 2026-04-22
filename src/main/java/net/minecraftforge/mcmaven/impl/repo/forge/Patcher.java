@@ -47,6 +47,7 @@ import net.minecraftforge.util.data.json.PatcherConfig;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
+import net.minecraftforge.mcmaven.impl.util.StupidHacks;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
@@ -301,6 +302,7 @@ public class Patcher implements Supplier<Task> {
 
         for (var lib : this.config.libraries) {
             var artifact = Artifact.from(lib);
+            artifact = StupidHacks.fixLegacyForgeDeps(artifact);
             artifacts.add(artifact);
         }
 
