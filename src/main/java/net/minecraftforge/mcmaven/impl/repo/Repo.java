@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -90,6 +91,7 @@ public abstract class Repo {
     protected static Task variantTask(Task parent, Supplier<GradleModule.Variant[]> supplier) {
         return Task.named(parent.name() + "[variants]", Task.deps(parent), () -> {
             var variants = supplier.get();
+            Arrays.sort(variants, (a,b) -> a.name.compareTo(b.name)); // Sort names to make output stable
 
             var variantFile = new File(parent.execute().getAbsolutePath() + ".variants");
             var json = JsonData.toJson(variants);

@@ -515,7 +515,7 @@ public record MinecraftMaven(
         var target = new File(this.output, artifact.withExtension("module").getLocalPath());
         var cache = Util.cache(target);
         for (var input : inputs) {
-            cache.add(input);
+            cache.add(input.getName(), input);
         }
 
         if (Mavenizer.checkCache(target, cache))

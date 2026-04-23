@@ -754,7 +754,7 @@ public class Patcher implements Supplier<Task> {
             var servicesLists = new HashMap<String, List<String>>();
             var seen = new HashSet<String>();
             for (var info : files) {
-                try (var zin = new ZipInputStream(new FileInputStream(this.data))) {
+                try (var zin = new ZipInputStream(new FileInputStream(info.file))) {
                     ZipEntry entry;
                     while ((entry = zin.getNextEntry()) != null) {
                         if (FileUtils.isBlockOrSF(entry.getName()))
