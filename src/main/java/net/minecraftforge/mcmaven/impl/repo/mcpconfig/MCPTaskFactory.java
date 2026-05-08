@@ -20,7 +20,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BiPredicate;
-import java.util.function.ToIntFunction;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
@@ -39,6 +38,7 @@ import io.codechicken.diffpatch.util.Output.MultiOutput;
 import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
+import net.minecraftforge.mcmaven.impl.cache.MinecraftMavenCache;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.data.json.JsonData;
@@ -609,11 +609,11 @@ public class MCPTaskFactory {
         var json = this.side.getMCP().getMinecraftTasks().versionJson;
         return Task.named(name,
             Task.deps(json),
-            () -> listLibraries(json, output)
+            () -> listLibraries(json, output, this.side.getMCP().getCache().minecraft())
         );
     }
 
-    private File listLibraries(Task jsonTask, File output) {
+    public static File listLibraries(Task jsonTask, File output, MinecraftMavenCache minecraft) {
         var jsonF = jsonTask.execute();
         var json = JsonData.minecraftVersion(jsonF);
 
@@ -641,7 +641,6 @@ public class MCPTaskFactory {
             return output;
 
         var buf = new StringBuilder(20_000);
-        var minecraft = this.side.getMCP().getCache().minecraft();
         for (var lib : libs) {
             // Sometimes natives don't have a main download
             if (lib.dl == null)
@@ -869,31 +868,12 @@ public class MCPTaskFactory {
             throw new IllegalStateException("Failed to find JDK for version " + java_version, e);
         }
 
-        ToIntFunction<String> logHandler = null;
-        if (isDecompile) {
-            jvm = Mavenizer.fillDecompileJvmArgs(jvm, true, true);
-            logHandler = MCPTaskFactory::parseDecompileLog;
-        }
+        ProcessUtils.Result ret;
+        if (isDecompile)
+            ret = StupidHacks.runDecompiler(jdk, log, tool, jvm, run);
+        else
+            ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, jvm, run);
 
-        var ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, jvm, run, logHandler);
-        if (isDecompile) {
-            if (ret.exitCode == NOT_ENOUGH_MEMORY) {
-                LOGGER.error("Failed to create JVM with Not Enough Memory issue, Modern minecraft requires atleast 4GB to decompile. Run it on a system with more ram.");
-            } else if (ret.exitCode == INVALID_INITAL_HEAP) {
-                LOGGER.error("Attempted to run decompile with JVM args: " + jvm + " resulted in Invalid Inital and Max heap settings.");
-                LOGGER.error("This is typically caused by you having a environement variable setting the global memory options, remove or set those variables to values higher then 4GB.");
-            }
-            if (ret.exitCode == OUT_OF_MEMORY || ret.exitCode == INVALID_INITAL_HEAP) {
-                var newJvm = Mavenizer.fillDecompileJvmArgs(resolveArgs(cache, tasks, jvmArgs), false, false);
-                if (!newJvm.equals(jvm)) {
-                    LOGGER.error("First decompile failed with OutOfMemory using JVM Args: " + jvm);
-                    LOGGER.error("Attempting again with: " + newJvm);
-                    ret = ProcessUtils.runJar(jdk, log.getParentFile(), log, tool, newJvm, run, logHandler);
-                    if (ret.exitCode == OUT_OF_MEMORY)
-                        LOGGER.error("Ran out of memory again, you can specify more manually using the --decompile-memory Mavenizer argument");
-                }
-            }
-        }
         if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to run MCP Step (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
 
@@ -945,40 +925,5 @@ public class MCPTaskFactory {
             }
         }
         return ret;
-    }
-
-    private static final int OUT_OF_MEMORY = -1001;
-    private static final int FAILED_DECOMPILE = -1002;
-    private static final int INVALID_INITAL_HEAP = -1003;
-    private static final int NOT_ENOUGH_MEMORY = -1004;
-    // Yes this is slow as fuck, but this is only run during a decompile run which is already slow,
-    // This is to check if Fernflower is broken and returning success when it really failed.
-    // It also eagerly exits the process when something fails so as to not waste time.
-    private static int parseDecompileLog(String line) {
-        if (line.startsWith("Initial heap size set to a larger value than the maximum heap size"))
-            return INVALID_INITAL_HEAP;
-        if (line.startsWith("Could not reserve enough space for object heap"))
-            return NOT_ENOUGH_MEMORY;
-        if (line.startsWith("java.lang.OutOfMemoryError:"))
-            return OUT_OF_MEMORY;
-        if (line.startsWith("Exception in thread") && line.contains("java.lang.OutOfMemoryError"))
-            return OUT_OF_MEMORY;
-        if (line.contains("ERROR:")) {
-            // String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + cl.qualifiedName + " couldn't be written.";
-            // String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + classWrapper.getClassStruct().qualifiedName + " couldn't be written.";
-            // String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + node.classStruct.qualifiedName + " couldn't be written.";
-            if (line.endsWith(" couldn't be written."))
-                return FAILED_DECOMPILE;
-            // DecompilerContext.getLogger().logError("Class " + cl.qualifiedName + " couldn't be processed.", t);
-            if (line.endsWith(" couldn't be processed."))
-                return FAILED_DECOMPILE;
-            // DecompilerContext.getLogger().logError("Class " + cl.qualifiedName + " couldn't be fully decompiled.", t);
-            if (line.endsWith(" couldn't be fully decompiled."))
-                return FAILED_DECOMPILE;
-            // String message = "Method " + mt.getName() + " " + mt.getDescriptor() + " in class " + classStruct.qualifiedName + " couldn't be decompiled.";
-            if (line.endsWith(" couldn't be decompiled."))
-                return FAILED_DECOMPILE;
-        }
-        return 0;
     }
 }

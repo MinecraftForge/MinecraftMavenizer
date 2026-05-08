@@ -20,9 +20,23 @@ import java.util.TreeMap;
 public enum FGVersion {
     v1_1("1.1"),
     v1_2("1.2"),
+    /**
+     * Gradle 2.14, Fernflower closed source with some 'fixes', technically lower then '2.0' because we re-used 2.0-SNAPSHOT...
+     */
+    v2_0_1("2.0.1"),
+    v2_0_2("2.0.2"),
+    /**
+     * Gradle 2.5, fernflower closed sourced 'fixed' https://github.com/LexManos/FernFlowerFixer/
+     */
     v2  ("2.0"),
+    /**
+     * Gradle 2.14, fernflower 2.0-SNAPSHOT
+     */
     v2_1("2.1"),
     v2_2("2.2"),
+    /**
+     * ForgeFlower 1.0.342-SNAPSHOT
+     */
     v2_3("2.3"),
     /**
      * Gradle 3.9, MCPConfig v1
@@ -75,8 +89,8 @@ public enum FGVersion {
         forge(v1_1, "1.7.2-10.12.0.967");
         forge(v1_2, "1.7.2-10.12.0.1048");
         forge(v2,   "1.8-11.14.3.1503");
-        //forge(v2_0_1, "1.8-11.14.3.1506");
-        //forge(v2_0_2, "1.8-11.14.3.1535");
+        forge(v2_0_1, "1.8-11.14.3.1506");
+        forge(v2_0_2, "1.8-11.14.3.1535");
         forge(v2_1, "1.8.8-11.14.4.1583"); //-1.8.8
         forge(v2_2, "1.9.4-12.17.0.1908"); //-1.9.4
         forge(v2_3, "1.12-14.21.0.2320");

@@ -6,6 +6,7 @@ package net.minecraftforge.mcmaven.impl.util;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
@@ -20,6 +21,7 @@ import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
+import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.util.hash.HashStore;
 import net.minecraftforge.util.logging.Logger;
@@ -233,6 +235,40 @@ public class Util {
                 itor.remove();
             }
             logger.getInfo().println();
+        }
+    }
+
+    public static String forgeToMcVersion(String version) {
+        // Save for a few april-fools versions, Minecraft doesn't use _ in their version names.
+        // So when Forge needs to reference a version of Minecraft that uses - in the name, it replaces
+        // it with _
+        // This could cause issues if we ever support a version with _ in it, but fuck it I don't care right now.
+        int idx = version.indexOf('-');
+        if (idx == -1)
+            throw new IllegalArgumentException("Invalid Forge version: " + version);
+        return version.substring(0, idx).replace('_', '-');
+    }
+
+    public static final File getArtifact(Cache cache, String coords) {
+        return getArtifact(cache, Artifact.from(coords));
+    }
+    public static final File getArtifact(Cache cache, Artifact artifact) {
+        // Some libraries are on Minecraft's maven. Such as launchwrapper.
+        // Rather then configure Forge's server to proxy Mojang's I add this check.
+        if ("net.minecraft".equals(artifact.getGroup()))
+            return cache.minecraft().download(artifact);
+        try {
+            return cache.maven().download(artifact);
+        } catch (Exception e) {
+            // If its 404 on Forge's maven, try Mojang's
+            if (e.getCause() instanceof FileNotFoundException) {
+                try {
+                    return cache.minecraft().download(artifact);
+                } catch (Exception e2) {
+                    e.addSuppressed(e2);
+                }
+            }
+            return Util.sneak(e);
         }
     }
 }

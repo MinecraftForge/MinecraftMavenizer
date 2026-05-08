@@ -5,8 +5,7 @@
 package net.minecraftforge.mcmaven.impl.tasks;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
-import net.minecraftforge.mcmaven.impl.mappings.Mappings;
-import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
+import net.minecraftforge.mcmaven.impl.mappings.ResolvedMappings;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.util.hash.HashFunction;
 import net.minecraftforge.mcmaven.impl.util.StupidHacks;
@@ -31,9 +30,10 @@ import java.util.zip.ZipOutputStream;
  */
 public final class RenameTask implements Task {
     private final String name;
-    private final MCPSide side;
     private final boolean javadocs;
+    private final Task srgTask;
     private final Task task;
+    private final boolean legacy;
 
     /**
      * Creates a new renamer for the given patcher.
@@ -43,11 +43,12 @@ public final class RenameTask implements Task {
      * @param sources The task that creates the unnamed sources
      * @param javadocs Wither to inject javadocs and rename lambda parameters, false is used for ForgeDev as we remap to SRG patches when making userdev
      */
-    public RenameTask(File build, String name, MCPSide side, Task sources, Mappings mappings, boolean javadocs) {
+    public RenameTask(File build, String name, Task sources, ResolvedMappings mappings, boolean javadocs, Task srgTask, String mcVersion) {
         this.name = name;
-        this.side = side;
         this.javadocs = javadocs;
+        this.srgTask = srgTask;
         this.task = this.remapSources(sources, mappings.getFolder(build), mappings);
+        this.legacy = StupidHacks.isLegacyRenamer(mcVersion);
     }
 
     @Override
@@ -65,11 +66,10 @@ public final class RenameTask implements Task {
         return this.task.name();
     }
 
-    private Task remapSources(Task input, File outputDir, Mappings provider) {
+    private Task remapSources(Task input, File outputDir, ResolvedMappings provider) {
         var output = new File(outputDir, !this.javadocs ? "remapped.jar" : "remapped-javadoc.jar");
-        var mappings = provider.getCsvZip(side);
-        var srg = this.javadocs ? side.getTasks().getMappings() : null;
-        var legacy = StupidHacks.isLegacyRenamer(side.getMCP().getMinecraftTasks().getVersion());
+        var mappings = provider.getCsvZip();
+        var srg = this.javadocs ? this.srgTask : null;
         return Task.named("remap[" + this.name + "][" + provider + ']' + (!this.javadocs ? "" : "[javadoc]"),
             Task.deps(input, mappings, srg),
             () -> remapSourcesImpl(input, mappings, output, srg, legacy)

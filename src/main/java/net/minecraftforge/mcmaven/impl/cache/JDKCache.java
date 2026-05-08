@@ -41,6 +41,14 @@ public final class JDKCache {
         return this.root;
     }
 
+    public File tryGet(int version) {
+        try {
+            return get(version);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to find JDK for version " + version, e);
+        }
+    }
+
     // TODO: [MCMavenizer][JDKCache] Make this thread safe. If this method is accessed concurrently, the same JDK could be downloaded more than once.
     /**
      * Gets the JDK for the given version.

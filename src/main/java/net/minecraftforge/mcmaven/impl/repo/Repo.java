@@ -8,6 +8,7 @@ import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
+import net.minecraftforge.mcmaven.impl.mappings.ResolvedMappings;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
@@ -69,13 +70,13 @@ public abstract class Repo {
     protected Supplier<GradleModule.Variant[]> sourceVariant(Mappings mappings) {
         return () -> new GradleModule.Variant[] {
             GradleModule.Variant.of("sources")
-                                .attribute("org.gradle.status", "release")
-                                .attribute("org.gradle.usage", "java-runtime")
-                                .attribute("org.gradle.category", "documentation")
-                                .attribute("org.gradle.dependency.bundling", "external")
-                                .attribute("org.gradle.docstype", "sources")
-                                .attribute("org.gradle.libraryelements", "jar")
-                                .attribute(Mappings.CHANNEL_ATTR, mappings.channel())
+                .attribute("org.gradle.status", "release")
+                .attribute("org.gradle.usage", "java-runtime")
+                .attribute("org.gradle.category", "documentation")
+                .attribute("org.gradle.dependency.bundling", "external")
+                .attribute("org.gradle.docstype", "sources")
+                .attribute("org.gradle.libraryelements", "jar")
+                .attribute(Mappings.CHANNEL_ATTR, mappings.channel())
                 .attribute(Mappings.VERSION_ATTR, mappings.version())
         };
     }
@@ -112,48 +113,32 @@ public abstract class Repo {
         });
     }
 
-    protected Supplier<GradleModule.Variant[]> simpleVariant(String name, Mappings mappings) {
+    protected Supplier<GradleModule.Variant[]> simpleVariant(String name, String mappingChannel, @Nullable String mappingVersion) {
         return () -> new GradleModule.Variant[] {
             GradleModule.Variant
                 .of(name)
                 .attribute("org.gradle.status", "release")
                 .attribute("org.gradle.category", "library")
                 .attribute("org.gradle.libraryelements", "jar")
-                .attribute(Mappings.CHANNEL_ATTR, mappings.channel())
-                .attribute(Mappings.VERSION_ATTR, mappings.version())
+                .attribute(Mappings.CHANNEL_ATTR, mappingChannel)
+                .attribute(Mappings.VERSION_ATTR, mappingVersion)
         };
     }
 
     protected GradleModule.Variant[] classVariants(Mappings mappings, MCPSide side) {
-        return classVariants(mappings, side, List.of(), List.of(), List.of());
-    }
-
-    // Classes needs a variant for each OS type so that we can have different natives
-    protected GradleModule.Variant[] classVariants(
-        Mappings mappings,
-        MCPSide side,
-        Collection<Artifact> extraDeps,
-        Collection<Artifact> extraCompileDeps,
-        Collection<Artifact> extraRuntimeDeps
-    ) {
         var deps = new ArrayList<Artifact>();
         deps.addAll(side.getMCLibraries());
         deps.addAll(side.getMCPConfigLibraries());
-        deps.addAll(extraDeps);
+        var jsonTask = side.getMCP().getMinecraftTasks().versionJson;
+        var json = JsonData.minecraftVersion(jsonTask.execute());
+        var java = json.javaVersion != null ? json.javaVersion.majorVersion : null;
 
-        // ExtraRuntimeDeps is never used.... Not sure where it was meant to go
-
-        return classVariants(
-            mappings,
-            side.getMCP().getMinecraftTasks().versionJson,
-            deps,
-            extraCompileDeps
-        );
+        return classVariants(mappings, java, deps, List.of());
     }
 
     protected GradleModule.Variant[] classVariants(
         Mappings mappings,
-        Task jsonTask,
+        @Nullable Integer javaVersion,
         Collection<Artifact> deps,
         Collection<Artifact> extraCompileDeps
     ) {
@@ -180,9 +165,6 @@ public abstract class Repo {
             }
         }
 
-        var json = JsonData.minecraftVersion(jsonTask.execute());
-        var java = json.javaVersion != null ? json.javaVersion.majorVersion : null;
-
         Consumer<GradleModule.Variant> common = v -> {
             v.attribute("org.gradle.status", "release")
              .attribute("org.gradle.usage", "java-runtime")
@@ -194,8 +176,8 @@ public abstract class Repo {
              .attribute(Mappings.VERSION_ATTR, mappings.version())
             ;
 
-            if (java != null)
-                v.attribute("org.gradle.jvm.version", java);
+            if (javaVersion != null)
+                v.attribute("org.gradle.jvm.version", javaVersion);
 
             v.deps(all);
         };
@@ -286,15 +268,15 @@ public abstract class Repo {
      * channel-verson-map2obf.tsrg.gz: gzip compressed tsrg file for mapped names to obf (notch) names
      * channel-verson-map2srg.tsrg.gz: gzip compressed tsrg file for mapped names to srg (intermediate) names
      */
-    protected List<PendingArtifact> mappingArtifacts(File cache, Mappings mappings, MCPSide side, Map<String, Supplier<String>> outputJson) {
+    protected List<PendingArtifact> mappingArtifacts(File cache, ResolvedMappings mappings, String mcVersion, Map<String, Supplier<String>> outputJson) {
         if (outputJson != null) {
             outputJson.put("mappings.channel", mappings::channel);
             outputJson.put("mappings.version", mappings::version);
         }
 
-        var coords = mappings.getArtifact(side);
-        var csvs = pending("Mappings Zip", mappings.getCsvZip(side), coords, false);
-        var pom = pending("Mappings POM", simplePom(cache, coords), coords.withExtension("pom"), false);
+        var coords = mappings.getArtifact();
+        var csvs = pending("Mappings Zip", mappings.getCsvZip(), coords, false);
+        var pom = pending("Mappings POM", simplePom(mappings.getFolder(cache), coords), coords.withExtension("pom"), false);
 
         if (outputJson != null) {
             outputJson.put("mappings.csv.artifact", csvs.artifact()::toString);
@@ -302,11 +284,11 @@ public abstract class Repo {
         }
 
         // Just create the zip and pom for unobfuscated versions.
-        if (!MCPConfigRepo.isObfuscated(side.getMCP().getMinecraftTasks().getVersion()))
+        if (!MCPConfigRepo.isObfuscated(mcVersion))
             return List.of(csvs, pom);
 
-        var m2o = pending("Mappings map2obf", mappings.getMapped2Obf(side), coords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
-        var m2s = pending("Mappings map2srg", mappings.getMapped2Srg(side), coords.withClassifier("map2srg").withExtension("tsrg.gz"), false);
+        var m2o = pending("Mappings map2obf", mappings.getMapped2Obf(), coords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
+        var m2s = pending("Mappings map2srg", mappings.getMapped2Srg(), coords.withClassifier("map2srg").withExtension("tsrg.gz"), false);
         if (outputJson != null) {
             outputJson.put("mappings.obf.artifact", m2o.artifact()::toString);
             outputJson.put("mappings.obf.file", m2o.task().filePathSupplier());

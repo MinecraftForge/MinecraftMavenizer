@@ -6,7 +6,7 @@ package net.minecraftforge.mcmaven.impl.repo.forge;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
-import net.minecraftforge.mcmaven.impl.mappings.Mappings;
+import net.minecraftforge.mcmaven.impl.mappings.ResolvedMappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.util.file.FileUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
@@ -24,10 +24,10 @@ public final class InjectTask implements Task {
     private final Artifact name;
     private final Cache cache;
     private final Patcher patcher;
-    private final Mappings mappings;
+    private final ResolvedMappings mappings;
     private final Task task;
 
-    InjectTask(File build, Cache cache, Artifact name, Patcher patcher, Task input, Mappings mappings) {
+    InjectTask(File build, Cache cache, Artifact name, Patcher patcher, Task input, ResolvedMappings mappings) {
         this.build = mappings.getFolder(build);
         this.name = name;
         this.cache = cache;

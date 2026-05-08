@@ -6,7 +6,6 @@ package net.minecraftforge.mcmaven.impl.repo.forge;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -40,6 +39,7 @@ import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.util.data.json.JsonData;
@@ -63,7 +63,7 @@ import org.jetbrains.annotations.Nullable;
  * These files may or may not be in SRG names, depending on the patcher configuration.
  * But the point is this creates source code.
  */
-public class Patcher implements Supplier<Task> {
+public class Patcher implements Supplier<Task>, ForgeVersionCommon {
     private final File build;
     private final ForgeRepo forge;
     private final Artifact name;
@@ -246,14 +246,16 @@ public class Patcher implements Supplier<Task> {
         return this.dataHash;
     }
 
-    public void forAllLibraries(Consumer<Artifact> consumer) {
-        this.forAllLibraries(consumer, null);
+    @Override
+    public int getJavaTarget() {
+        return this.getMCP().getConfig().java_target;
     }
 
+    @Override
     public void forAllLibraries(Consumer<Artifact> consumer, Predicate<Artifact> filter) {
         this.forAllLibrariesInternal(consumer, filter, this.getMCPSide().getMCLibraries());
         this.forAllLibrariesInternal(consumer, filter, this.getMCPSide().getMCPConfigLibraries());
-        this.forAllLibrariesInternal(consumer, filter, this.getArtifacts());
+        this.forAllLibrariesInternal(consumer, filter, this.getLibraries());
     }
 
     // to avoid duplicate code
@@ -264,7 +266,8 @@ public class Patcher implements Supplier<Task> {
         }
     }
 
-    public List<Artifact> getArtifacts() {
+    @Override
+    public List<Artifact> getLibraries() {
         // TODO MOVE ALL THIS LOGIC TO SOME SORT OF "ARTIFACT LIST GENERATOR" IN ARTIFACT.JAVA
         var artifacts = new ArrayList<Artifact>() /*{
             private final Set<NonVersionedArtifact> distincts = new HashSet<>();
@@ -303,12 +306,14 @@ public class Patcher implements Supplier<Task> {
         for (var lib : this.config.libraries) {
             var artifact = Artifact.from(lib);
             artifact = StupidHacks.fixLegacyForgeDeps(artifact);
-            artifacts.add(artifact);
+            if (artifact != null)
+                artifacts.add(artifact);
         }
 
         return artifacts;
     }
 
+    @Override
     public List<File> getClasspath() {
         var classpath = new ArrayList<File>();
 
@@ -320,35 +325,14 @@ public class Patcher implements Supplier<Task> {
         var cache = this.forge.getCache();
 
         for (var lib : this.getMCP().getConfig().getLibraries(MCPSide.JOINED)) {
-            classpath.add(getArtifact(cache, lib));
+            classpath.add(Util.getArtifact(cache, lib));
         }
 
         for (var lib : this.config.libraries) {
-            classpath.add(getArtifact(cache, lib));
+            classpath.add(Util.getArtifact(cache, lib));
         }
 
         return classpath;
-    }
-
-    private static final File getArtifact(Cache cache, String coords) {
-        var artifact = Artifact.from(coords);
-        // Some libraries are on Minecraft's maven. Such as launchwrapper.
-        // Rather then configure Forge's server to proxy Mojang's I add this check.
-        if ("net.minecraft".equals(artifact.getGroup()))
-            return cache.minecraft().download(artifact);
-        try {
-            return cache.maven().download(artifact);
-        } catch (Exception e) {
-            // If its 404 on Forge's maven, try Mojang's
-            if (e.getCause() instanceof FileNotFoundException) {
-                try {
-                    return cache.minecraft().download(artifact);
-                } catch (Exception e2) {
-                    e.addSuppressed(e2);
-                }
-            }
-            return Util.sneak(e);
-        }
     }
 
     /** @return The final unnamed sources */
@@ -389,7 +373,7 @@ public class Patcher implements Supplier<Task> {
 
         var output = new File(this.build, filename);
         var cache = Util.cache(output);
-        cache.add("data", this.data);
+        cache.addKnown("data", this.dataHash);
 
         if (Mavenizer.checkCache(output, cache))
             return output;
@@ -435,7 +419,7 @@ public class Patcher implements Supplier<Task> {
         var target = new File(this.build, "data/" + key + '/' + filename);
 
         var cache = Util.cache(target);
-        cache.add("data", this.data);
+        cache.addKnown("data", this.dataHash);
 
         if (Mavenizer.checkCache(target, cache))
             return target;
@@ -566,7 +550,7 @@ public class Patcher implements Supplier<Task> {
         var tool = maven.download(toolA);
 
         var cache = Util.cache(output);
-        cache.add("data", this.data);
+        cache.addKnown("data", this.dataHash);
         cache.add("tool", tool);
         cache.add("input", input);
         cache.add("jvm-args", data.getJvmArgs().stream().collect(Collectors.joining(" ")));
@@ -623,7 +607,7 @@ public class Patcher implements Supplier<Task> {
 
         var cache = Util.cache(output);
         cache.add("input", input);
-        cache.add("data", this.data);
+        cache.addKnown("data", this.dataHash);
 
         if (Mavenizer.checkCache(output, cache))
             return output;
@@ -797,5 +781,41 @@ public class Patcher implements Supplier<Task> {
 
         cache.save();
         return output;
+    }
+
+    @Override
+    public Artifact getMCPArtifact() {
+        return this.getMCP().getName();
+    }
+
+    @Override
+    public String getMinecraftVersion() {
+        return this.getMCP().getMinecraftTasks().getVersion();
+    }
+
+    @Override
+    public @Nullable List<String> getModules() {
+        return this.config.modules;
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public List<String> getCompileOnly() {
+        if (this.config.extraDependencies == null || this.config.extraDependencies.compileOnly == null)
+            return Collections.emptyList();
+        return this.config.extraDependencies.compileOnly;
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public List<String> getRuntimeOnly() {
+        if (this.config.extraDependencies == null || this.config.extraDependencies.runtimeOnly == null)
+            return Collections.emptyList();
+        return this.config.extraDependencies.runtimeOnly;
+    }
+
+    @Override
+    public MinecraftTasks getMinecraftTasks() {
+        return this.getMCP().getMinecraftTasks();
     }
 }

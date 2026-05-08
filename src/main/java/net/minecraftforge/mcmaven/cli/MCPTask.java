@@ -21,6 +21,7 @@ import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
+import net.minecraftforge.mcmaven.impl.mappings.ResolvedMappings;
 import net.minecraftforge.mcmaven.impl.repo.forge.Patcher;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
@@ -197,12 +198,12 @@ class MCPTask {
             Util.filter(LOGGER, "  SAS:        ", sas);
         LOGGER.info();
 
-        var task = new MCPTask(outputDir, new Cache(cacheRoot, jdkCacheRoot), artifact, pipeline);
+        var task = new MCPTask(outputDir, new Cache(cacheRoot, jdkCacheRoot), artifact, pipeline, mappings);
         var ret = task.classes();
         if(mappings != null)
-            task.mappings(mappings);
+            task.mappings();
         if (!disableDecompile)
-            ret = task.decompile(mappings, ats, sas);
+            ret = task.decompile(ats, sas);
         task.data.put("output", ret);
 
         try {
@@ -222,13 +223,15 @@ class MCPTask {
     private final MCP mcp;
     private final MCPSide side;
     private final String prefix;
+    private final ResolvedMappings mappings;
 
-    private MCPTask(@Nullable File outputDir, Cache cache, Artifact artifact, String pipeline) {
+    private MCPTask(@Nullable File outputDir, Cache cache, Artifact artifact, String pipeline, @Nullable Mappings baseMappings) {
         this.outputDir = outputDir;
 
         this.repo = new MCPConfigRepo(cache, false);
         this.mcp = repo.get(artifact);
         this.side = mcp.getSide(pipeline);
+        this.mappings = baseMappings == null ? null : baseMappings.withContext(side);
 
         this.data.put("config", artifact.toString());
         this.data.put("pipeline", pipeline);
@@ -251,15 +254,15 @@ class MCPTask {
         return this.data.get("classes.srg");
     }
 
-    private void mappings(@Nullable Mappings mappings) {
+    private void mappings() {
         this.data.put("mappings.channel", mappings.channel());
         this.data.put("mappings.version", mappings.version());
-        this.data.put("mappings.zip", local(mappings.getCsvZip(side).execute(), prefix + "/mappings.zip"));
-        this.data.put("mappings.map2obf", local(mappings.getMapped2Obf(side).execute(), prefix + "/mappings.map2obf.tsrg.gz"));
-        this.data.put("mappings.map2srg", local(mappings.getMapped2Srg(side).execute(), prefix + "/mappings.map2srg.tsrg.gz"));
+        this.data.put("mappings.zip", local(mappings.getCsvZip().execute(), prefix + "/mappings.zip"));
+        this.data.put("mappings.map2obf", local(mappings.getMapped2Obf().execute(), prefix + "/mappings.map2obf.tsrg.gz"));
+        this.data.put("mappings.map2srg", local(mappings.getMapped2Srg().execute(), prefix + "/mappings.map2srg.tsrg.gz"));
     }
 
-    private String decompile(@Nullable Mappings mappings, List<File> ats, List<File> sas) {
+    private String decompile(List<File> ats, List<File> sas) {
         var sourcesTask = side.getSources();
 
         if (!ats.isEmpty() || !sas.isEmpty()) {
@@ -299,7 +302,10 @@ class MCPTask {
         LOGGER.info("Renaming MCP Source Jar");
         indent = LOGGER.push();
         try {
-            var renameTask = new RenameTask(side.getBuildFolder(), side.getName(), side, sourcesTask, mappings, false);
+            var mcVersion = side.getMCP().getMinecraftTasks().getVersion();
+            var srgTask = side.getTasks().getMappings();
+
+            var renameTask = new RenameTask(side.getBuildFolder(), side.getName(), sourcesTask, mappings, false, srgTask, mcVersion);
             this.data.put("sources.named", local(renameTask.execute(), prefix + "/sources.named.jar"));
         } finally {
             LOGGER.pop(indent);

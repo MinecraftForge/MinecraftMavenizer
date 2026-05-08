@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,16 +25,17 @@ import de.siegmar.fastcsv.writer.LineDelimiter;
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
+import net.minecraftforge.mcmaven.impl.repo.forge.FG2Userdev;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks;
-import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.file.FileUtils;
 
 public class ParchmentMappings extends Mappings {
+    private final Map<Object, ResolvedMappings> resolved = new IdentityHashMap<>();
     private final ParchmentVersion parsedVersion;
     private Task downloadTask;
 
@@ -63,30 +65,36 @@ public class ParchmentMappings extends Mappings {
     }
 
     @Override
-    public Artifact getArtifact(MCPSide side) {
-        return this.parsedVersion.getMappingArtifact(side.getMCP().getName().getVersion());
+    public ResolvedMappings withContext(MCPSide side) {
+        return this.resolved.computeIfAbsent(side, _ -> withContextImpl(side));
+    }
+
+    private ResolvedMappings withContextImpl(MCPSide side) {
+        var csv = makeCsv(side);
+        var root = new File(side.getMCP().getBuildFolder(), "data/mapings");
+        var artifact = this.getArtifact(side);
+        var mappings = side.getTasks().getMappings();
+        return new ResolvedMappings(channel(), version(), artifact, root, mappings, csv, null);
     }
 
     @Override
-    public Task getCsvZip(MCPSide side) {
-        var key = new Key(Tasks.CSVs, side);
-        var ret = tasks.get(key);
-        if (ret != null)
-            return ret;
+    public ResolvedMappings withContext(FG2Userdev fg2) {
+        throw new IllegalStateException("Parchment mappings does not support Legacy: " + fg2.getName());
+    }
 
+    private Task makeCsv(MCPSide side) {
         var mc = side.getMCP().getMinecraftTasks();
         var srg = side.getTasks().getMappings();
 
         var client = mc.versionFile(MinecraftTasks.MCFile.CLIENT_MAPPINGS);
         var server = mc.versionFile(MinecraftTasks.MCFile.SERVER_MAPPINGS);
         var data = downloadTask(side.getMCP());
+        var mcpRoot = new File(side.getMCP().getBuildFolder(), "data/mapings");
 
-        ret = Task.named("srg2names[" + this + ']',
+        return Task.named("srg2names[" + this + ']',
             Task.deps(Set.of(srg, client, server, data).stream().filter(Objects::nonNull).toList()),
-            () -> getMappings(side.getMCP(), srg, client, server, data)
+            () -> getMappings(mcpRoot, srg, client, server, data)
         );
-        tasks.put(key, ret);
-        return ret;
     }
 
     private Task downloadTask(MCP mcp) {
@@ -104,13 +112,13 @@ public class ParchmentMappings extends Mappings {
         return maven.download(artifact);
     }
 
-    private File getMappings(MCP mcp, Task srgTask, Task clientTask, Task serverTask, Task dataTask) throws IOException {
+    private File getMappings(File mcpRoot, Task srgTask, Task clientTask, Task serverTask, Task dataTask) throws IOException {
         var srg = srgTask.execute();
         var client = clientTask.execute();
         var server = serverTask.execute();
         var data = dataTask.execute();
 
-        var root = getFolder(new File(mcp.getBuildFolder(), "data/mapings"));
+        var root = getFolder(mcpRoot);
         var output = new File(root, "parchment-" + version() + ".zip");
         var cache = Util.cache(output)
             .add("srg", srg)

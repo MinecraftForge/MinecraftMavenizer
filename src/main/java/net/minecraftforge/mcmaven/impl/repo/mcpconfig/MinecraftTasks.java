@@ -20,6 +20,8 @@ import java.util.jar.JarFile;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 
+import org.jetbrains.annotations.Nullable;
+
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.util.data.json.JsonData;
@@ -430,5 +432,11 @@ public class MinecraftTasks {
             Util.sneak(e);
         }
         return ret;
+    }
+
+    public @Nullable Integer getJavaVersion() {
+        var jsonTask = this.versionJson;
+        var json = JsonData.minecraftVersion(jsonTask.execute());
+        return json.javaVersion != null ? json.javaVersion.majorVersion : null;
     }
 }

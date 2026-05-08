@@ -5,8 +5,8 @@
 package net.minecraftforge.mcmaven.impl.tasks;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
-import net.minecraftforge.mcmaven.impl.mappings.Mappings;
-import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
+import net.minecraftforge.mcmaven.impl.cache.JDKCache;
+import net.minecraftforge.mcmaven.impl.mappings.ResolvedMappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.Task;
@@ -24,15 +24,18 @@ import java.util.function.Supplier;
 public final class RecompileTask implements Task {
     private final File build;
     private final Artifact name;
-    private final MCP mcp;
+    private final JDKCache jdks;
+    private final int javaTarget;
     private final Supplier<List<File>> classpath;
-    private final Mappings mappings;
+    private final ResolvedMappings mappings;
     private final Task task;
 
-    public RecompileTask(File build, Artifact name, MCP mcp, Supplier<List<File>> classpath, Task sources, Mappings mappings) {
+    public RecompileTask(File build, Artifact name,
+        JDKCache jdks, int javaTarget, Supplier<List<File>> classpath, Task sources, ResolvedMappings mappings) {
         this.build = mappings.getFolder(build);
         this.name = name;
-        this.mcp = mcp;
+        this.jdks = jdks;
+        this.javaTarget = javaTarget;
         this.classpath = classpath;
         this.mappings = mappings;
         this.task = this.recompileSources(sources);
@@ -63,7 +66,6 @@ public final class RecompileTask implements Task {
 
     private File recompileSourcesImpl(Task inputTask, File output) {
         var cache = Util.cache(output);
-        var javaTarget = this.mcp.getConfig().java_target;
         var sourcesJar = inputTask.execute();
 
         cache.add("sources", sourcesJar);
@@ -74,7 +76,7 @@ public final class RecompileTask implements Task {
 
         File jdk;
         try {
-            jdk = this.mcp.getCache().jdks().get(javaTarget);
+            jdk = this.jdks.get(javaTarget);
         } catch (Exception e) {
             throw new IllegalStateException("JDK not found: " + javaTarget, e);
         }

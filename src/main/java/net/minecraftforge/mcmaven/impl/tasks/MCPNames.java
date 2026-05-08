@@ -36,7 +36,7 @@ import java.util.zip.ZipFile;
 
 // TODO [Mavenizer][MCPNames] This is also in ForgeDev! Consolidate this!
 // TODO [Mavenizer][MCPNames] GARBAGE GARBAGE GARBAGE, CLEAN UP OR RE-IMPLEMENT
-record MCPNames(String hash, Map<String, String> names, Map<String, String> docs) {
+public record MCPNames(String hash, Map<String, String> names, Map<String, String> docs) {
     // We use \n here because we want to normalize line endings no matter the operating system we are running on.
     private static final String LINE_SEPERATOR = "\n"; //System.lineSeparator();
     //@formatter:off
@@ -86,7 +86,7 @@ record MCPNames(String hash, Map<String, String> names, Map<String, String> docs
         return new Data(names, docs);
     }
 
-    static MCPNames load(File data) throws IOException {
+    public static MCPNames load(File data) throws IOException {
         var loaded = loadData(data);
         return new MCPNames(HashFunction.sha1().hash(data), loaded.names, loaded.docs);
     }

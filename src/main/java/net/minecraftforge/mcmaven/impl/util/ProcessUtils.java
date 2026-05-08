@@ -284,7 +284,7 @@ public final class ProcessUtils {
         var sourcesOutput = new File(temp, "sources").getAbsoluteFile();
         try {
             // Ensure the output directory exists
-            FileUtils.ensureParent(sourcesOutput);
+            FileUtils.ensure(sourcesOutput);
 
             try (ZipInputStream zin = new ZipInputStream(new FileInputStream(sourcesJar))) {
                 ZipEntry entry;

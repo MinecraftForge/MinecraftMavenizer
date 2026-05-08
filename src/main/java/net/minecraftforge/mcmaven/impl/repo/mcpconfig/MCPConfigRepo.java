@@ -12,6 +12,7 @@ import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
+import net.minecraftforge.mcmaven.impl.mappings.ResolvedMappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
@@ -24,6 +25,9 @@ import net.minecraftforge.util.file.FileUtils;
 
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
+
+import org.jetbrains.annotations.Nullable;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
@@ -69,6 +73,8 @@ import java.util.jar.JarFile;
 // TODO [MCMavenizer][Documentation] Document
 public final class MCPConfigRepo extends Repo {
     private final Map<Artifact, MCP> versions = new HashMap<>();
+    private record LegacyKey(Artifact artifact, @Nullable String python) {}
+    private final Map<LegacyKey, MCPLegacy> legacy = new HashMap<>();
     private final Map<String, MinecraftTasks> mcTasks = new HashMap<>();
     private final Task downloadLauncherManifest = Task.named("downloadLauncherManifest", this::downloadLauncherManifest);
 
@@ -89,6 +95,16 @@ public final class MCPConfigRepo extends Repo {
 
     private MCP download(Artifact artifact) {
         return new MCP(this, artifact);
+    }
+
+    public MCPLegacy legacy(String mcVersion, @Nullable String python) {
+        var artifact = MCPLegacy.artifact(mcVersion);
+        var key = new LegacyKey(artifact, python);
+        return this.legacy.computeIfAbsent(key, this::downloadLegacy);
+    }
+
+    private MCPLegacy downloadLegacy(LegacyKey key) {
+        return new MCPLegacy(this, key.artifact(), key.python());
     }
 
     public MinecraftTasks getMCTasks(String version) {
@@ -140,7 +156,7 @@ public final class MCPConfigRepo extends Repo {
     }
 
     @Override
-    public List<PendingArtifact> process(Artifact artifact, Mappings mappings, Map<String, Supplier<String>> outputJson) {
+    public List<PendingArtifact> process(Artifact artifact, Mappings baseMappings, Map<String, Supplier<String>> outputJson) {
         validate(artifact);
         var version = artifact.getVersion();
 
@@ -154,6 +170,7 @@ public final class MCPConfigRepo extends Repo {
 
         var mcp = this.get(MCP.artifact(version));
         var mcpSide = mcp.getSide(side);
+        var mcVersion = mcp.getMinecraftTasks().getVersion();
 
         var mcpTasks = mcpSide.getTasks();
         var build = mcpSide.getBuildFolder();
@@ -162,29 +179,34 @@ public final class MCPConfigRepo extends Repo {
         var pom = pending("Maven POM", pom(build, side, mcpSide, version), name.withExtension("pom"), false);
         var metadata = pending("Metadata", metadata(build, mcpSide.getName(), mcpSide.getMCP().getMinecraftTasks()), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
 
+        var mappings = baseMappings.withContext(mcpSide);
+
         if (dependenciesOnly) {
             return List.of(
-                pom.withVariants(() -> classVariants(mappings, mcpSide)),
+                pom.withVariants(() -> classVariants(baseMappings, mcpSide)),
                 metadata
             );
         }
 
-        var mappingArtifacts = mappingArtifacts(build, mappings, mcpSide, outputJson);
+        var mappingArtifacts = mappingArtifacts(build, mappings, mcVersion, outputJson);
         if (isMappings)
             return mappingArtifacts;
 
         return switch (mappings.channel()) {
-            case "notch" -> List.of(pending("Classes", mcpTasks.getRawJar(), name.withClassifier("raw"), false, simpleVariant("obf-notch", new Mappings("notch", null))));
-            case "srg", "searge" -> List.of(pending("Classes", mcpTasks.getSrgJar(), name.withClassifier("srg"), false, simpleVariant("obf-searge", new Mappings("searge", null))));
+            case "notch" -> List.of(pending("Classes", mcpTasks.getRawJar(), name.withClassifier("raw"), false, simpleVariant("obf-notch", "notch", null)));
+            case "srg", "searge" -> List.of(pending("Classes", mcpTasks.getSrgJar(), name.withClassifier("srg"), false, simpleVariant("obf-searge", "searge", null)));
             default -> {
                 var pending = new ArrayList<PendingArtifact>();
+                var srgTask = mcpSide.getTasks().getMappings();
+                var jdks = this.getCache().jdks();
+                var javaTarget = mcpSide.getMCP().getConfig().java_target;
 
-                var sourcesTask = new RenameTask(build, name.getName(), mcpSide, mcpSide.getSources(), mappings, true);
-                var recompile = new RecompileTask(build, name, mcpSide.getMCP(), mcpSide::getClasspath, sourcesTask, mappings);
+                var sourcesTask = new RenameTask(build, name.getName(), mcpSide.getSources(), mappings, true, srgTask, mcVersion);
+                var recompile = new RecompileTask(build, name, jdks, javaTarget, mcpSide::getClasspath, sourcesTask, mappings);
                 var classesTask = mergeExtra(build, side, recompile, mcpSide.getTasks().getExtra(), mappings);
 
-                var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(mappings));
-                var classes = pending("Classes", classesTask, name, false, () -> classVariants(mappings, mcpSide));
+                var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(baseMappings));
+                var classes = pending("Classes", classesTask, name, false, () -> classVariants(baseMappings, mcpSide));
 
                 pending.addAll(List.of(
                     sources, classes, metadata, pom
@@ -232,7 +254,7 @@ public final class MCPConfigRepo extends Repo {
 
         //net.minecraft:mappings_{CHANNEL}:{MCP_VERSION}[-{VERSION}]@zip
         var mapCoords = Artifact.from(Constants.MC_GROUP, "mappings_official", artifact.getVersion()).withExtension("zip");
-        var mapPom = pending("Mappings POM", simplePom(cache, mapCoords), mapCoords.withExtension("pom"), false);
+        var mapPom = pending("Mappings POM", simplePom(mappings.getFolder(cache), mapCoords), mapCoords.withExtension("pom"), false);
         var m2o = pending("Mappings map2obf", tasks.mergeMappings(), mapCoords.withClassifier("map2obf").withExtension("tsrg.gz"), false);
 
         if (outputJson != null) {
@@ -277,7 +299,7 @@ public final class MCPConfigRepo extends Repo {
     }
 
     // TODO [MCMavenizer][client-extra] Band-aid fix for merging for clean! Remove later.
-    private static Task mergeExtra(File build, String side, Task recompiled, Task extra, Mappings mappings) {
+    private static Task mergeExtra(File build, String side, Task recompiled, Task extra, ResolvedMappings mappings) {
         return Task.named("mergeExtra[" + side + "][" + mappings + ']', Task.deps(extra, recompiled), () -> {
             var output = new File(mappings.getFolder(build), "recompiled-extra.jar");
             var recompiledF = recompiled.execute();
@@ -395,7 +417,7 @@ public final class MCPConfigRepo extends Repo {
         var json = JsonData.minecraftVersion(tasks.versionJson.execute());
         for (var lib : json.getLibs())
             deps.add(Artifact.from(lib.coord).withOS(lib.os));
-        return classVariants(mappings, tasks.versionJson, deps, List.of());
+        return classVariants(mappings, tasks.getJavaVersion(), deps, List.of());
     }
 
     private GradleModule.Variant[] classVariantsServer(Mappings mappings, MinecraftTasks tasks) {
@@ -412,6 +434,6 @@ public final class MCPConfigRepo extends Repo {
         } catch (IOException e) {
             return Util.sneak(e);
         }
-        return classVariants(mappings, tasks.versionJson, deps, List.of());
+        return classVariants(mappings, tasks.getJavaVersion(), deps, List.of());
     }
 }

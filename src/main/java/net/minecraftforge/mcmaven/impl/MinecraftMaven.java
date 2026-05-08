@@ -19,6 +19,7 @@ import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
+import net.minecraftforge.mcmaven.impl.util.StupidHacks;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.srgutils.MinecraftVersion;
@@ -79,7 +80,7 @@ public record MinecraftMaven(
 ) {
     // Only 1.14.4+ has official mappings, we can support more when we add more mappings
     private static final MinecraftVersion MIN_OFFICIAL_MAPPINGS = MinecraftVersion.from("1.14.4");
-    private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.14.4");
+    private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.8");
 
     public MinecraftMaven {
         LOGGER.info("  Output:             " + output.getAbsolutePath());
@@ -150,28 +151,83 @@ public record MinecraftMaven(
         if (version == null)
             throw new IllegalArgumentException("No version specified for Forge");
 
+        ComparableVersion verStart = null;
+        ComparableVersion verEnd = null;
+        if (version.charAt(0) == '[' && version.charAt(version.length()-1) == ']') {
+            var pts = version.split(",");
+            if (pts[0].length() > 1)
+                verStart = new ComparableVersion(pts[0].substring(1));
+            if (pts[1].length() > 1)
+                verEnd = new ComparableVersion(pts[1].substring(0, pts[1].length() - 1));
+            version = "all";
+        }
+
         if ("all".equals(version)) {
             if (outputJson != null)
                 throw new IllegalArgumentException("Output Json does not support bulk operations");
 
             var versions = this.cache.maven().getVersions(artifact);
-            var mappingCache = new HashMap<String, Mappings>();
-            for (var ver : versions.reversed()) {
-                var cver = new ComparableVersion(ver);
+            var cversions = new ArrayList<ComparableVersion>(versions.size());
+            for (var ver : versions) {
+                cversions.add(new ComparableVersion(ver));
+            }
+            Collections.sort(cversions);
+
+            var mappings = this.mappings;
+            //var lastMCVersion = "";
+            for (var cver : cversions) {
                 if (cver.compareTo(MIN_SUPPORTED_FORGE) < 0)
                     continue;
 
-                var fg = FGVersion.fromForge(ver);
-                if (fg == null || fg.ordinal() < FGVersion.v3.ordinal()) // Unsupported
+                if (StupidHacks.BLACKLISTED_FORGE_BUILDS.contains(cver.toString()))
                     continue;
 
-                var mappings = mappingCache.computeIfAbsent(forgeToMcVersion(ver), this.mappings::withMCVersion);
+                var ver = cver.toString();
+                var mcVersion = Util.forgeToMcVersion(ver);
+
+                var fg = FGVersion.fromForge(ver);
+                if (fg == null || fg.ordinal() < FGVersion.v2.ordinal()) // Unsupported
+                    continue;
+
+                if (fg.ordinal() >= FGVersion.v3.ordinal())
+                    continue;
+
+                if (verStart != null && cver.compareTo(verStart) < 0)
+                    continue;
+                if (verEnd != null && cver.compareTo(verEnd) > 0)
+                    continue;
+
+                /*
+                if (mcVersion.equals(lastMCVersion))
+                    continue;
+                lastMCVersion = mcVersion;
+                */
+
+                // Old versions don't have official mappings, and some of them require specific MCP mappigns due to the sources not being in
+                // full SRG names (we don't remap static imports) So if we're using official mappings (the default arugment) lets use the
+                // specific bot mappings that the version of Forge was built for. Any other option is at user's pearly and may not work.
+                if (this.mappings.channel().equals("official")) {
+                    var newMappings = StupidHacks.getDefaultMappings(cver).withMCVersion(mcVersion);
+                    if (!newMappings.channel().equals(mappings.channel()) || !newMappings.version().equals(mappings.version())) {
+                        mappings = newMappings;
+                        LOGGER.info("Using Mappings: " + mappings);
+                    }
+                }
+
                 var art = artifact.withVersion(ver);
                 var artifacts = repo.process(art, mappings, outputJson);
-                finalize(art, mappings, artifacts);
+                LOGGER.push();
+                try {
+                    finalize(art, mappings, artifacts);
+                } finally {
+                    LOGGER.pop();
+                }
             }
         } else {
-            var mappings = this.mappings.withMCVersion(forgeToMcVersion(version));
+            if (StupidHacks.BLACKLISTED_FORGE_BUILDS.contains(artifact.getVersion()))
+                throw new IllegalArgumentException("Forge version " + artifact.getVersion() + " has been blacklisted for technical reasons, pick a different Forge version");
+
+            var mappings = this.mappings.withMCVersion(Util.forgeToMcVersion(version));
             var artifacts = repo.process(artifact, mappings, outputJson);
             finalize(artifact, mappings, artifacts);
         }
@@ -205,10 +261,11 @@ public record MinecraftMaven(
                 var versioned = artifact.withVersion(ver.id);
                 // If there is no MCPConfig, then we just produce a official named jar
                 List<PendingArtifact> artifacts = null;
+                var mappings = this.mappings.withMCVersion(ver.id);
                 if (hasMcp(mcprepo, ver.id))
-                    artifacts = mcprepo.process(versioned, mappings.withMCVersion(ver.id), outputJson);
+                    artifacts = mcprepo.process(versioned, mappings, outputJson);
                 else if (mappings.channel().equals("official") && (hasOfficialMappings(mcprepo, ver.id) || !MCPConfigRepo.isObfuscated(ver.id)))
-                    artifacts = mcprepo.processWithoutMcp(versioned, mappings.withMCVersion(ver.id), outputJson);
+                    artifacts = mcprepo.processWithoutMcp(versioned, mappings, outputJson);
                 else {
                     LOGGER.info("Skipping " + versioned + " no mcp config");
                     continue;
@@ -248,17 +305,6 @@ public record MinecraftMaven(
 
         return json.getDownload(MinecraftTasks.MCFile.CLIENT_MAPPINGS.key) != null ||
             json.getDownload(MinecraftTasks.MCFile.SERVER_MAPPINGS.key) != null;
-    }
-
-    private static String forgeToMcVersion(String version) {
-        // Save for a few april-fools versions, Minecraft doesn't use _ in their version names.
-        // So when Forge needs to reference a version of Minecraft that uses - in the name, it replaces
-        // it with _
-        // This could cause issues if we ever support a version with _ in it, but fuck it I don't care right now.
-        int idx = version.indexOf('-');
-        if (idx == -1)
-            throw new IllegalArgumentException("Invalid Forge version: " + version);
-        return version.substring(0, idx).replace('_', '-');
     }
 
     public static String mcpToMcVersion(String version) {
@@ -477,7 +523,7 @@ public record MinecraftMaven(
             args.add(file.getAbsolutePath());
         }
 
-        execute("facade ", Constants.FACAD_JAVA_VERSION, tool, args, target);
+        execute("facade ", Constants.FACADE_JAVA_VERSION, tool, args, target);
         cache.save();
         return target;
     }
@@ -495,25 +541,23 @@ public record MinecraftMaven(
         if (parent != null && !parent.exists())
             parent.mkdirs();
 
-
         var log = new File(target.getAbsolutePath() + ".log");
         var ret = ProcessUtils.runJar(jdk, parent, log, tool, Collections.emptyList(), args);
         if (ret.exitCode != 0)
             throw new IllegalStateException("Failed to " + name + " file (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
-
     }
 
     private void updateVariants(Artifact artifact) {
         var root = new File(this.output, artifact.getFolder());
         var inputs = new ArrayList<File>();
         for (var file : root.listFiles()) {
-            if (file.isFile() && file.getName().endsWith(".variants")) {
+            if (file.isFile() && file.getName().endsWith(".variants"))
                 inputs.add(file);
-            }
         }
 
         var target = new File(this.output, artifact.withExtension("module").getLocalPath());
         var cache = Util.cache(target);
+        cache.add("codever", "1");
         for (var input : inputs) {
             cache.add(input.getName(), input);
         }
@@ -521,12 +565,18 @@ public record MinecraftMaven(
         if (Mavenizer.checkCache(target, cache))
             return;
 
+        var seen = new HashSet<String>();
         var module = GradleModule.of(artifact);
         for (var input : inputs) {
             try {
                 var data = JsonData.fromJson(input, GradleModule.Variant[].class);
-                for (var variant : data)
-                    module.variant(variant);
+                for (var variant : data) {
+                    // Stupid hack to work around a bug in our old system. (MCPMappings was marked as 'primary' so we may run into duplicate variants)
+                    // Variants must have unique attributes
+                    var attributes = JsonData.toJson(variant.attributes);
+                    if (seen.add(attributes))
+                        module.variant(variant);
+                }
             } catch (Throwable t) {
                 throw new RuntimeException("Failed to read artifact variants: %s".formatted(input), t);
             }
