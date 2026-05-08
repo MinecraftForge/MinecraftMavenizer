@@ -23,6 +23,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +43,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
     private final File cache;
     private final String repo;
     private final List<MavenCache> foreignRepositories;
+    private final boolean isFileRepo;
 
     /**
      * Initializes a new maven cache with the given name, repository, and cache directory.
@@ -72,6 +75,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
             this.foreignRepositories.add(new MavenCache(n, r, root));
         }
         this.knownHashes = knownHashes;
+        this.isFileRepo = this.repo.startsWith("file:");
     }
 
     public final File getFolder() {
@@ -175,6 +179,19 @@ public sealed class MavenCache permits MinecraftMavenCache {
      */
     protected File download(boolean changing, String path) throws IOException {
         var target = new File(cache, path);
+
+        // if we're a local file, let short circuit and just return that file
+        if (this.isFileRepo) {
+            try {
+                var uri = new URI(this.repo + path);
+                var file = new File(uri.getPath());
+                if (file.exists())
+                    return file;
+            } catch (URISyntaxException e) {
+                throw new IOException(e);
+            }
+        }
+
 
         if (target.exists()) {
             boolean invalidHash = false;
