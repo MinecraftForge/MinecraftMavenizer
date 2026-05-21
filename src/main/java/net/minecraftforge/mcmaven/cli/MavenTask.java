@@ -211,7 +211,6 @@ class MavenTask {
             options.has(globalAuxiliaryVariantsO),
             options.has(disableGradleO),
             options.has(stubO),
-            new HashSet<>(),
             new ArrayList<>(options.valuesOf(accessTransformerO)),
             new ArrayList<>(options.valuesOf(facadeConfigO)),
             options.valueOf(outputJsonO)

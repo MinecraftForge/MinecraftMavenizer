@@ -32,9 +32,9 @@ import org.jetbrains.annotations.Nullable;
 import com.google.gson.reflect.TypeToken;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
+import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.JDKCache;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
-import net.minecraftforge.mcmaven.impl.repo.forge.FGVersion;
 import net.minecraftforge.mcmaven.impl.repo.forge.FG2Userdev;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks.MCFile;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
@@ -118,6 +118,14 @@ public class MCPLegacy {
         return this.mcTasks;
     }
 
+    public Cache getCache() {
+        return this.repo.getCache();
+    }
+
+    public File getBuildFolder() {
+        return this.build;
+    }
+
     public File getData() {
         return this.data;
     }
@@ -134,9 +142,40 @@ public class MCPLegacy {
         return this.exceptorJson;
     }
 
+    public int getJavaTarget() {
+        // The vanilla launcher uses Java 8 for all legacy versions
+        // And the MCP archives have variant patches that deal with the decompile differences
+        // Also, modern macs simply do not have java 5 & 6 distros. So we have to use java 8
+        // My bulk testing works fine, I do not set the -target version when recompiling, Not
+        // sure if I care to do that.
+        /*
+        var comp = new ComparableVersion(this.mcVersion);
+        if (comp.compareTo(MC_1_6_1) < 0)
+            return 5;
+        if (comp.compareTo(MC_1_12) < 0)
+            return 6;
+        */
+        return 8;
+    }
+
+    public List<File> getClasspath() {
+        var classpath = new ArrayList<File>();
+        for (var lib : this.getMinecraftTasks().getClientLibraries())
+            classpath.add(lib.file());
+
+        // They added annotations in 1.7.10 so we need null annotations
+        var comp = new ComparableVersion(this.mcVersion);
+        if (comp.compareTo(MC_1_7_10) >= 0) {
+            var artifact = Artifact.from("com.google.code.findbugs:jsr305:1.3.9");
+            classpath.add(this.getCache().maven().download(artifact));
+        }
+
+        return classpath;
+    }
+
     public Child getChild() {
         if (this.child == null)
-            this.child = new Child(this.build, null, FGVersion.v2_3);
+            this.child = new Child(this.build, null);
         return this.child;
     }
 
@@ -147,7 +186,7 @@ public class MCPLegacy {
         var ret = this.children.get(key);
         if (ret == null) {
             var base = new File(this.build, key);
-            ret = new Child(base, accessTransformer, forge.getGradleVersion());
+            ret = new Child(base, accessTransformer);
             this.children.put(key, ret);
         }
         return ret;
@@ -479,19 +518,17 @@ public class MCPLegacy {
         private final JDKCache jdks;
         private final File build;
         private final File accessTransformer;
-        private final FGVersion fgVersion;
         private final String prefix;
         private final MCPCfg cfg;
         private final Task inject;
 
-        public Child(File build, File accessTransformer, FGVersion fg) {
+        public Child(File build, File accessTransformer) {
             this.maven = MCPLegacy.this.repo.getCache().maven();
             this.jdks = MCPLegacy.this.repo.getCache().jdks();
             this.build = build;
             this.accessTransformer = accessTransformer;
-            this.fgVersion = fg;
             this.prefix = MCPLegacy.this.prefix();
-            this.cfg = MCPCfg.get(fg, MCPLegacy.this.mcVersion);
+            this.cfg = MCPCfg.get(MCPLegacy.this.mcVersion);
             this.inject = mcpInject();
         }
 
@@ -585,7 +622,6 @@ public class MCPLegacy {
                 .add("tool", tool)
                 .add("input", input)
                 .add("args", String.join(", ", cleanup.args))
-                .addKnown("fg", this.fgVersion.name())
                 .addKnown("mcp", MCPLegacy.this.dataHash);
 
             if (Mavenizer.checkCache(output, cache))
@@ -628,13 +664,12 @@ public class MCPLegacy {
 
             var tool = maven.download(decompiler.artifact);
 
-            int java_version = this.fgVersion == FGVersion.v2_3 ? 8 : 6;
+            int java_version = MCPLegacy.this.getJavaTarget();
 
             var cache = Util.cache(output)
                 .add("input", input)
                 .add("tool", tool)
                 .add("args", String.join(", ", decompiler.args))
-                .addKnown("fg", this.fgVersion.name())
                 .addKnown("java", Integer.toString(java_version));
 
             if (Mavenizer.checkCache(output, cache))
@@ -932,9 +967,12 @@ public class MCPLegacy {
     }
 
     // The main difference between FG versions was the decompiler we invoked/embeded
-    private static final ComparableVersion MC_1_8_8 = new ComparableVersion("1.8.8");
-    private static final ComparableVersion MC_1_9   = new ComparableVersion("1.9");
-    private static final ComparableVersion MC_1_9_4 = new ComparableVersion("1.9.4");
+    private static final ComparableVersion MC_1_6_1  = new ComparableVersion("1.6.1");
+    private static final ComparableVersion MC_1_7_10 = new ComparableVersion("1.7.10");
+    private static final ComparableVersion MC_1_8_8  = new ComparableVersion("1.8.8");
+    private static final ComparableVersion MC_1_9    = new ComparableVersion("1.9");
+    private static final ComparableVersion MC_1_9_4  = new ComparableVersion("1.9.4");
+    private static final ComparableVersion MC_1_12   = new ComparableVersion("1.12");
 
     private record Exceptor(boolean json, boolean markers, boolean lvt) {
         private static Exceptor get(ComparableVersion mc) {
@@ -999,22 +1037,30 @@ public class MCPLegacy {
             "-log=WARN",
             "{libraries}" // Will be expanded to a list of all libraries using -e=
         );
-        private static Decompiler get(FGVersion fg, ComparableVersion mc) {
-            if (fg == FGVersion.v2_3) {
-                return new Decompiler(Constants.FERNFLOWER_FG_2_3, false, DECOMPILER_ARGS);
-            } else if (fg == FGVersion.v2_2 || fg == FGVersion.v2_1) {
-                return new Decompiler(Constants.FERNFLOWER_FG_2_2, false, DECOMPILER_ARGS);
-            } else {
-                var decompTool = Constants.FERNFLOWER_FG_2_0_LEGACY;
-                var decompArgs = DECOMPILER_ARGS_188;
-                if (mc.compareTo(MC_1_9_4) >= 0)
-                    decompTool = Constants.FERNFLOWER_FG_2_0_194;
-                else if (mc.compareTo(MC_1_8_8) >= 0)
-                    decompTool = Constants.FERNFLOWER_FG_2_0_194;
-                else // 1.8
-                    decompArgs = DECOMPILER_ARGS_18;
-                return new Decompiler(decompTool, true, decompArgs);
+        private static Decompiler get(ComparableVersion mc) {
+            var decompTool = Constants.FERNFLOWER_FG_2_0_LEGACY;
+            var decompArgs = DECOMPILER_ARGS_188;
+            var legacy = true;
+
+            if (mc.compareTo(MC_1_12) >= 0) {
+                decompTool = Constants.FERNFLOWER_FG_2_3;
+                decompArgs = DECOMPILER_ARGS;
+                legacy = false;
+            } else if (mc.compareTo(MC_1_8_8) >= 0) {
+                decompTool = Constants.FERNFLOWER_FG_2_2;
+                decompArgs = DECOMPILER_ARGS;
+                legacy = false;
             }
+            /*
+            else if (mc.compareTo(MC_1_9_4) >= 0)
+                decompTool = Constants.FERNFLOWER_FG_2_0_194;
+            else if (mc.compareTo(MC_1_8_8) >= 0)
+                decompTool = Constants.FERNFLOWER_FG_2_0_194;
+            */
+            else { // 1.8
+                decompArgs = DECOMPILER_ARGS_18;
+            }
+            return new Decompiler(decompTool, legacy, decompArgs);
         }
     }
     private record MCPCfg(
@@ -1022,11 +1068,11 @@ public class MCPLegacy {
         Cleanup cleanup,
         Decompiler decompiler
     ) {
-        private static MCPCfg get(FGVersion fg, String mc) {
+        private static MCPCfg get(String mc) {
             var comp = new ComparableVersion(mc);
             var except = Exceptor.get(comp);
             var cleanup = Cleanup.get(mc);
-            var decomp = Decompiler.get(fg, comp);
+            var decomp = Decompiler.get(comp);
             return new MCPCfg(except, cleanup, decomp);
         }
     }

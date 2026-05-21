@@ -27,6 +27,7 @@ import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.repo.forge.FG2Userdev;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPLegacy;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks;
 import net.minecraftforge.mcmaven.impl.util.Task;
@@ -80,6 +81,11 @@ public class ParchmentMappings extends Mappings {
     @Override
     public ResolvedMappings withContext(FG2Userdev fg2) {
         throw new IllegalStateException("Parchment mappings does not support Legacy: " + fg2.getName());
+    }
+
+    @Override
+    public ResolvedMappings withContext(MCPLegacy legacy) {
+        throw new IllegalStateException("Parchment mappings does not support Legacy: " + legacy.getName());
     }
 
     private Task makeCsv(MCPSide side) {

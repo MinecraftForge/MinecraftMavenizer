@@ -160,7 +160,9 @@ public final class ForgeRepo extends Repo {
         var srgSources = dev.getSources();
 
         var mappings = baseMappings.withContext(dev);
-        var sourcesTask = new RenameTask(build, userdev.getName(), srgSources, mappings, true, srgTask, mcVersion);
+        var sourcesTask = mappings.channel().equals("srg")
+            ? srgSources
+            : new RenameTask(build, userdev.getName(), srgSources, mappings, true, srgTask, mcVersion);
         var classesTask = new RecompileTask(build, name, jdks, dev.getJavaTarget(), dev::getClasspath, sourcesTask, mappings);
 
         var mappingCoords = mappings.getArtifact();
@@ -226,8 +228,11 @@ public final class ForgeRepo extends Repo {
         var mcVersion = joined.getMCP().getMinecraftTasks().getVersion();
         var mappings = baseMappings.withContext(joined);
         var srgTask = joined.getTasks().getMappings();
+        var srgSources = patcher.get();
 
-        var sourcesTask = new RenameTask(build, userdev.getName(), patcher.get(), mappings, true, srgTask, mcVersion);
+        var sourcesTask = mappings.channel().equals("srg")
+            ? srgSources
+            : new RenameTask(build, userdev.getName(), srgSources, mappings, true, srgTask, mcVersion);
         var recompile = new RecompileTask(build, name, jdks, patcher.getJavaTarget(), patcher::getClasspath, sourcesTask, mappings);
         var classesTask = new InjectTask(build, this.cache, name, patcher, recompile, mappings);
 

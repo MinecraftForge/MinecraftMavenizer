@@ -51,6 +51,7 @@ public class MinecraftTasks {
     private Task renameClient;
     private Task renameServer;
     private Task clientPom;
+    private Task joinedPom;
     private Task serverPom;
     private Task extractServer;
 
@@ -263,12 +264,18 @@ public class MinecraftTasks {
 
     public Task clientPom() {
         if (this.clientPom == null)
-            this.clientPom = Task.named("pom[" + this.version + "][client]", Task.deps(this.versionJson), this::clientPomImpl);
+            this.clientPom = Task.named("pom[" + this.version + "][client]", Task.deps(this.versionJson), () -> clientPomImpl("client"));
         return this.clientPom;
     }
 
-    private File clientPomImpl() {
-        var output = new File(this.cacheRoot, "client.pom");
+    public Task joinedPom() {
+        if (this.joinedPom == null)
+            this.joinedPom = Task.named("pom[" + this.version + "][joined]", Task.deps(this.versionJson), () -> clientPomImpl("joined"));
+        return this.joinedPom;
+    }
+
+    private File clientPomImpl(String name) {
+        var output = new File(this.cacheRoot, name + "pom");
         var json = this.versionJson.execute();
 
         var cache = Util.cache(output)
@@ -279,7 +286,7 @@ public class MinecraftTasks {
 
         var meta = JsonData.minecraftVersion(json);
 
-        var builder = new POMBuilder("net.minecraft", "client", version)
+        var builder = new POMBuilder("net.minecraft", name, version)
             .preferGradleModule()
             .dependencies(deps -> {
                 for (var lib : meta.libraries)
@@ -287,13 +294,7 @@ public class MinecraftTasks {
             });
 
 
-        FileUtils.ensureParent(output);
-        try (var os = new FileOutputStream(output)) {
-            os.write(builder.build().getBytes(StandardCharsets.UTF_8));
-        } catch (IOException | ParserConfigurationException | TransformerException e) {
-            Util.sneak(e);
-        }
-
+        write(builder, output);
         cache.save();
         return output;
     }
@@ -305,7 +306,7 @@ public class MinecraftTasks {
     }
 
     private File serverPomImpl() {
-        var output = new File(this.cacheRoot, "client.pom");
+        var output = new File(this.cacheRoot, "server.pom");
         var jarFile = versionFile(MCFile.SERVER_JAR).execute();
 
         var cache = Util.cache(output)
@@ -318,16 +319,18 @@ public class MinecraftTasks {
         var builder = new POMBuilder("net.minecraft", "server", version)
             .preferGradleModule()
             .dependencies(deps -> libs.forEach(deps::add));
+        write(builder, output);
+        cache.save();
+        return output;
+    }
 
+    private static void write(POMBuilder pom, File output) {
         FileUtils.ensureParent(output);
         try (var os = new FileOutputStream(output)) {
-            os.write(builder.build().getBytes(StandardCharsets.UTF_8));
+            os.write(pom.build().getBytes(StandardCharsets.UTF_8));
         } catch (IOException | ParserConfigurationException | TransformerException e) {
             Util.sneak(e);
         }
-
-        cache.save();
-        return output;
     }
 
     public Task extractServer() {

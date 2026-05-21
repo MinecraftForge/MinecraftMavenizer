@@ -17,6 +17,7 @@ import org.jetbrains.annotations.Nullable;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.repo.forge.FG2Userdev;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPLegacy;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
@@ -66,6 +67,19 @@ public class SRGMappings extends Mappings {
         var mappings = fg2.getMCP().getMappings();
         var extra = fg2.getExtraMappings();
         return new ResolvedMappings(channel(), version(), artifact, root, mappings, csv, extra);
+    }
+
+    @Override
+    public ResolvedMappings withContext(MCPLegacy legacy) {
+        return this.resolved.computeIfAbsent(legacy, _ -> withContextImpl(legacy));
+    }
+
+    public ResolvedMappings withContextImpl(MCPLegacy legacy) {
+        var root = new File(legacy.getBuildFolder(), "data/mapings");
+        var csv = csvTask(root);
+        var artifact = this.getArtifact(legacy);
+        var mappings = legacy.getMappings();
+        return new ResolvedMappings(channel(), version(), artifact, root, mappings, csv, null);
     }
 
     private Task csvTask(File root) {

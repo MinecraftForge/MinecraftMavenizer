@@ -13,6 +13,7 @@ import net.minecraftforge.mcmaven.impl.repo.forge.FGVersion;
 import net.minecraftforge.mcmaven.impl.repo.forge.ForgeRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPLegacy;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
@@ -44,7 +45,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Supplier;
 
@@ -73,7 +73,6 @@ public record MinecraftMaven(
     boolean globalAuxiliaryVariants,
     boolean disableGradle,
     boolean stubJars,
-    Set<String> mcpConfigVersions,
     List<File> accessTransformer,
     List<File> facadeConfigs,
     @Nullable File outputJsonFile
@@ -241,17 +240,39 @@ public record MinecraftMaven(
         if (version == null)
             throw new IllegalArgumentException("No version specified for Forge");
 
+        MinecraftVersion verStart = null;
+        MinecraftVersion verEnd = null;
+        if (version.charAt(0) == '[' && version.charAt(version.length()-1) == ']') {
+            var pts = version.split(",");
+            if (pts[0].length() > 1)
+                verStart = MinecraftVersion.from(pts[0].substring(1));
+            if (pts[1].length() > 1)
+                verEnd = MinecraftVersion.from(pts[1].substring(0, pts[1].length() - 1));
+            version = "all";
+        }
+
+        // Quick check of maven-metadata.xml to get a list of known MCPConfig versions
+        var maven = mcprepo.getCache().maven();
+        var mcpConfigVersions = new HashSet<>(maven.getVersions(MCP.artifact("1.21.11")));
+        mcpConfigVersions.remove("1.12.2"); // Force 1.12.2 to not use MCPConfig, instead using the legacy MCP toolchain
+        var mcpLegacyVersions = new HashSet<>(maven.getVersions(MCPLegacy.artifact("1.12.2")));
+
         if ("all".equals(version)) {
             if (outputJson != null)
                 throw new IllegalArgumentException("Output Json does not support bulk operations");
 
             var manifestFile = mcprepo.getLauncherManifestTask().execute();
             var manifest = JsonData.launcherManifest(manifestFile);
+            // The launcher manifest is normally in reverse release order, so don't worry about sorting them.
             for (var ver : manifest.versions) {
-
+                MinecraftVersion cver;
                 try {
-                    var cver = MinecraftVersion.from(ver.id);
-                    if (cver.compareTo(MIN_OFFICIAL_MAPPINGS) < 0)
+                    cver = MinecraftVersion.from(ver.id);
+                    if (verStart != null && cver.compareTo(verStart) < 0)
+                        continue;
+                    if (verEnd != null && cver.compareTo(verEnd) > 0)
+                        continue;
+                    if (cver.compareTo(MIN_OFFICIAL_MAPPINGS) < 0 && !mcpConfigVersions.contains(ver.id) && !mcpLegacyVersions.contains(ver.id))
                         continue;
                 } catch (IllegalArgumentException e) {
                     // Invalid/unknown version, so skip.
@@ -261,40 +282,47 @@ public record MinecraftMaven(
                 var versioned = artifact.withVersion(ver.id);
                 // If there is no MCPConfig, then we just produce a official named jar
                 List<PendingArtifact> artifacts = null;
+
                 var mappings = this.mappings.withMCVersion(ver.id);
-                if (hasMcp(mcprepo, ver.id))
+                // If we're using official mappings, and are on a version that doesn't have official mappings, lets just use SRG names
+                if (this.mappings.channel().equals("official")) {
+                    if (cver.compareTo(MIN_OFFICIAL_MAPPINGS) < 0)
+                        mappings = Mappings.of("srg").withMCVersion(ver.id);
+                }
+
+                if (mcpConfigVersions.contains(ver.id))
                     artifacts = mcprepo.process(versioned, mappings, outputJson);
-                else if (mappings.channel().equals("official") && (hasOfficialMappings(mcprepo, ver.id) || !MCPConfigRepo.isObfuscated(ver.id)))
+                else if (mcpLegacyVersions.contains(ver.id))
+                    artifacts = mcprepo.processLegacy(versioned, mappings, outputJson);
+                else if (hasOfficialMappings(mcprepo, ver.id) || !MCPConfigRepo.isObfuscated(ver.id))
                     artifacts = mcprepo.processWithoutMcp(versioned, mappings, outputJson);
                 else {
                     LOGGER.info("Skipping " + versioned + " no mcp config");
                     continue;
                 }
-                finalize(versioned, mappings, artifacts);
+                LOGGER.push();
+                try {
+                    finalize(versioned, mappings, artifacts);
+                } finally {
+                    LOGGER.pop();
+                }
             }
         } else {
             var mcVersion = mcpToMcVersion(version);
             var mappings = this.mappings.withMCVersion(mcVersion);
 
             List<PendingArtifact> artifacts = null;
-            if (hasMcp(mcprepo, version))
+            if (mcpConfigVersions.contains(version))
                 artifacts = mcprepo.process(artifact, mappings, outputJson);
-            else if (mappings.channel().equals("official") && (hasOfficialMappings(mcprepo, mcVersion) || !MCPConfigRepo.isObfuscated(mcVersion)))
+            else if (mcpLegacyVersions.contains(version))
+                artifacts = mcprepo.processLegacy(artifact, mappings, outputJson);
+            else if (hasOfficialMappings(mcprepo, mcVersion) || !MCPConfigRepo.isObfuscated(mcVersion))
                 artifacts = mcprepo.processWithoutMcp(artifact, mappings, outputJson);
             else
-                throw new IllegalStateException("Can not process " + artifact + " as it does not have a MCPConfig ror official mappings");
+                throw new IllegalStateException("Can not process " + artifact + " as it does not have a MCPConfig, MCPLegacy, or official mappings");
 
             finalize(artifact, mappings, artifacts);
         }
-    }
-
-    // This is ugly, but there really isn't a good way to check if a file exists. DownlodUtils could probably use a 'exists' that HEAD's and returns false non 404
-    private boolean hasMcp(MCPConfigRepo repo, String version) {
-        if (this.mcpConfigVersions.isEmpty()) {
-            var versions = repo.getCache().maven().getVersions(MCP.artifact("1.21.11"));
-            this.mcpConfigVersions.addAll(versions);
-        }
-        return this.mcpConfigVersions.contains(version);
     }
 
     // No official mappings, we can't do anything

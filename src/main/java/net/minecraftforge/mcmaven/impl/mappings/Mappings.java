@@ -7,6 +7,7 @@ package net.minecraftforge.mcmaven.impl.mappings;
 import java.io.File;
 
 import net.minecraftforge.mcmaven.impl.repo.forge.FG2Userdev;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPLegacy;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
@@ -72,6 +73,7 @@ public abstract class Mappings {
 
     public abstract ResolvedMappings withContext(MCPSide side);
     public abstract ResolvedMappings withContext(FG2Userdev fg2);
+    public abstract ResolvedMappings withContext(MCPLegacy legacy);
 
 
     protected Artifact getArtifact(MCPSide side) {
@@ -89,12 +91,24 @@ public abstract class Mappings {
     protected Artifact getArtifact(FG2Userdev fg2) {
         //net.minecraft:mappings_{CHANNEL}:{MC_VERSION}-{legacy|FORGE_VERSION}[-{VERSION}]@zip
         var name = "mappings_" + this.channel;
-        var version = fg2.getMinecraftVersion();
+        // either the raw mc version, or MC_VERSION-PYTHON_VERSION;
+        var version = fg2.getMCP().getName().getVersion();
         if (fg2.getExtraMappings() == null)
             version += "-legacy";
         else
             version += '-' + fg2.getForgeVersion();
         if (this.version() != null && !fg2.getMinecraftVersion().equals(this.version()))
+            version += '-' + this.version();
+
+        return Artifact.from(Constants.MC_GROUP, name, version).withExtension("zip");
+    }
+
+    protected Artifact getArtifact(MCPLegacy legacy) {
+        //net.minecraft:mappings_{CHANNEL}:{MC_VERSION}-legacy[-{VERSION}]@zip
+        var name = "mappings_" + this.channel;
+        // either the raw mc version, or MC_VERSION-PYTHON_VERSION;
+        var version = legacy.getName().getVersion() + "-legacy";
+        if (this.version() != null && !legacy.getMinecraftTasks().getVersion().equals(this.version()))
             version += '-' + this.version();
 
         return Artifact.from(Constants.MC_GROUP, name, version).withExtension("zip");

@@ -6,6 +6,7 @@ package net.minecraftforge.mcmaven.impl.repo.mcpconfig;
 
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks.ArtifactFile;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks.MCFile;
 import net.minecraftforge.mcmaven.impl.tasks.RecompileTask;
 import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
@@ -200,8 +201,11 @@ public final class MCPConfigRepo extends Repo {
                 var srgTask = mcpSide.getTasks().getMappings();
                 var jdks = this.getCache().jdks();
                 var javaTarget = mcpSide.getMCP().getConfig().java_target;
+                var srgSources = mcpSide.getSources();
 
-                var sourcesTask = new RenameTask(build, name.getName(), mcpSide.getSources(), mappings, true, srgTask, mcVersion);
+                var sourcesTask = mappings.channel().equals("srg")
+                    ? srgSources
+                    : new RenameTask(build, name.getName(), srgSources, mappings, true, srgTask, mcVersion);
                 var recompile = new RecompileTask(build, name, jdks, javaTarget, mcpSide::getClasspath, sourcesTask, mappings);
                 var classesTask = mergeExtra(build, side, recompile, mcpSide.getTasks().getExtra(), mappings);
 
@@ -275,6 +279,56 @@ public final class MCPConfigRepo extends Repo {
         } else {
             throw new IllegalArgumentException("MCPConfigRepo does not support artifact: " + artifact);
         }
+    }
+
+    public List<PendingArtifact> processLegacy(Artifact artifact, Mappings baseMappings, Map<String, Supplier<String>> outputJson) {
+        if (!Constants.MC_GROUP.equals(artifact.getGroup()))
+            throw new IllegalArgumentException("MCPConfigRepo cannot process modules that aren't for group net.minecraft");
+
+        var side = artifact.getName();
+        var version = artifact.getVersion();
+        var name = Artifact.from("net.minecraft", side, version);
+        switch (side) {
+            //case "client": // Eventually add sided variants
+            //case "server":
+            case "joined":
+                break;
+            default:
+                throw new IllegalArgumentException("MCPConfigRepo does not support artifact: " + artifact);
+        }
+
+        var jdks = this.cache.jdks();
+        var mcp = this.legacy(version, null);
+        var tasks = mcp.getMinecraftTasks();
+        var mcVersion = tasks.getVersion();
+        var build = mcp.getBuildFolder();
+        var srgTask = mcp.getMappings();
+        var srgSources = mcp.getChild().getFinalStep();
+
+        var mappings = baseMappings.withContext(mcp);
+        var sourcesTask = mappings.channel().equals("srg")
+            ? srgSources
+            : new RenameTask(build, mcp.getName().getName(), srgSources, mappings, true, srgTask, mcVersion);
+        var javaTarget = mcp.getJavaTarget();
+        var classesTask = new RecompileTask(build, name, jdks, javaTarget, mcp::getClasspath, sourcesTask, mappings);
+
+        var mappingArtifacts = mappingArtifacts(build, mappings, mcVersion, outputJson);
+
+        var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(baseMappings));
+        var classes = pending("Classes", classesTask, name, false, () -> {
+            var libs = tasks.getClientLibraries().stream().map(ArtifactFile::artifact).toList();
+            return classVariants(baseMappings, javaTarget, libs, List.of());
+        });
+        var metadata = pending("Metadata", metadata(build, artifact.getName(), tasks), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
+        var pom = pending("Maven POM", tasks.joinedPom(), name.withExtension("pom"), false);
+
+        if (outputJson != null)
+            outputJson.put("mc.version", tasks::getVersion);
+
+        var ret = new ArrayList<PendingArtifact>();
+        ret.addAll(mappingArtifacts);
+        ret.addAll(List.of(sources, classes, pom, metadata));
+        return ret;
     }
 
     public List<PendingArtifact> processExtra(String module, String version) {
