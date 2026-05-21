@@ -8,12 +8,14 @@ import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
 import java.io.File;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.SequencedCollection;
 import java.util.concurrent.Callable;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 /** Represents a task that can be executed. Tasks in this tool <strong>will always</strong> provide a file. */
@@ -47,7 +49,7 @@ public interface Task {
      * Useful for our output json file.
      */
     default Supplier<String> filePathSupplier() {
-    	return () -> this.execute().getAbsolutePath();
+        return () -> this.execute().getAbsolutePath();
     }
 
     static Task named(String name, Callable<File> supplier) {
@@ -82,6 +84,23 @@ public interface Task {
         };
     }
 
+    static class DependencyException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+        private List<Task> deps = new ArrayList<>();
+        private final Task erroring;
+
+        public DependencyException(Task erroring, Throwable cause, Task self) {
+            super("Failed to execute task `%s` which is required by task `%s`".formatted(erroring.name(), self.name()), cause);
+            this.erroring = erroring;
+            deps.add(self);
+        }
+
+        @Override
+        public String getMessage() {
+            return "Failed to execute task `%s` which is required by task `%s`".formatted(this.erroring.name(), this.deps.stream().map(Task::name).collect(Collectors.joining("->")));
+        }
+    }
+
     final class Simple implements Task {
         private final String name;
         private final SequencedCollection<? extends Supplier<? extends Task>> deps;
@@ -97,9 +116,9 @@ public interface Task {
 
         @Override
         public File execute() {
-        	// Don't try to execute again if we've already failed
-        	if (failed != null)
-        		throw failed;
+            // Don't try to execute again if we've already failed
+            if (failed != null)
+                throw failed;
 
             // immediately stop if result is already calculated
             if (this.file == null) {
@@ -110,8 +129,11 @@ public interface Task {
 
                     try {
                         task.execute();
+                    } catch (DependencyException e) {
+                        e.deps.addFirst(this);
+                        throw e; // rethrow
                     } catch (Exception e) {
-                        failed = new RuntimeException("Failed to execute task `%s` which is required by task `%s`".formatted(task.name(), this.name()), e);
+                        failed = new DependencyException(task, e, this);
                         throw failed;
                     }
                 }
