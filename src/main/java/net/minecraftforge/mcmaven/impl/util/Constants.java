@@ -17,9 +17,10 @@ public final class Constants {
     public static final String MCP_DOWNLOADS = FORGE_FILES + "mcp/";
 
     // Legacy FG2 Decompilers
-    // This was https://files.minecraftforge.net/fernflower-fix-1.0.zip!/fernflower.jar but I extracted it to make it easier to download
-    // This is the old obfusicated fernflower decompiler, with just the inner class NPE fix, tehcnially this wasn't used in 1.0, but its just a NPE fix so use it for everything
-    public static final Artifact FERNFLOWER_FG_1_0 = Artifact.from("net.minecraftforge:fernflower:0.1.0.0");
+    // This was https://files.minecraftforge.net/fernflower_temporary.zip!/fernflower.jar but that has issues with running on anything higher then java 6
+    // Java 6 doesn't exist for OSX, so i've had to implement patches to fix those decompile differences.
+    // See https://github.com/MinecraftForge/ForgeFlower/tree/legacy-1.0
+    public static final Artifact FERNFLOWER_FG_1_0 = Artifact.from("net.minecraftforge:forgeflower:0.1.0.0");
     // This was https://files.minecraftforge.net/fernflower-fix-1.0.zip!/fernflower.jar but I extracted it to make it easier to download
     // This is the old obfusicated fernflower decompiler, with all of my fixes from: https://github.com/LexManos/FernFlowerFixer/
     public static final Artifact FERNFLOWER_FG_2_0_LEGACY = Artifact.from("net.minecraftforge:fernflower:0.2.0.0");
@@ -40,7 +41,7 @@ public final class Constants {
     public static final String LAUNCHER_MANIFEST = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
     public static final String MOJANG_MAVEN = "https://libraries.minecraft.net/";
 
-    public static final Artifact ACCESS_TRANSFORMER = Artifact.from("net.minecraftforge:accesstransformers:8.2.16:fatjar");
+    public static final Artifact ACCESS_TRANSFORMER = Artifact.from("net.minecraftforge:accesstransformers:8.2.17:fatjar");
     public static final int ACCESS_TRANSFORMER_JAVA_VERSION = 8;
 
     public static final Artifact SIDE_STRIPPER = Artifact.from("net.minecraftforge:mergetool:1.2.5:fatjar");
@@ -61,7 +62,7 @@ public final class Constants {
     public static final Artifact MCINJECTOR = Artifact.from("de.oceanlabs.mcp:mcinjector:3.4.5:fatjar");
     public static final int MCINJECTOR_JAVA_VERSION = 8;
 
-    public static final Artifact MCPCLEANUP = Artifact.from("net.minecraftforge:mcpcleanup:2.4.2:fatjar");
+    public static final Artifact MCPCLEANUP = Artifact.from("net.minecraftforge:mcpcleanup:2.4.3:fatjar");
     public static final int MCPCLEANUP_JAVA_VERSION = 8;;
 
     public static final Artifact LEGACY_MERGETOOL = Artifact.from("net.minecraftforge:mergetool:0.2.3.4:fatjar");

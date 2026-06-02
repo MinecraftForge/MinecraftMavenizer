@@ -18,7 +18,17 @@ import java.util.TreeMap;
  * GitHub.com</a>
  */
 public enum FGVersion {
+    /*
+     * Gradle 1.8, 'fmlpatches.zip' in SRG names 'forgepatches.zip' in mapped names
+     * Sources/resources included flat in the userdev jar
+     * All Mappings/SRG files included in userdev
+     * Forge and FML ats are seperate files
+     */
+    v1("1.0"),
     v1_1("1.1"),
+    /*
+     * Forge patches moved to SRG names
+     */
     v1_2("1.2"),
     /**
      * Gradle 2.14, Fernflower closed source with some 'fixes', technically lower then '2.0' because we re-used 2.0-SNAPSHOT...
@@ -86,6 +96,7 @@ public enum FGVersion {
     }
 
     static {
+        forge(v1,   "1.6.4-9.11.1.960");
         forge(v1_1, "1.7.2-10.12.0.967");
         forge(v1_2, "1.7.2-10.12.0.1048");
         forge(v2,   "1.8-11.14.3.1503");
@@ -108,6 +119,7 @@ public enum FGVersion {
     // Special versions that do not match the general ranges of historical versions.
     // This will probably need updating when we back port new ForgeDev toolchain to older versions.
     private static final List<SpecialCase> SPECIAL_CASES = List.of(
+        special(null, "1.6.4-9.11.1.964", "1.6.5"),
         special(v3, "1.12.2-14.23.5.2851", "1.12.3")
     );
 
@@ -131,7 +143,7 @@ public enum FGVersion {
         }
 
         for (var entry : FORGE_TO_FG.entrySet()) {
-            if (entry.getValue().compareTo(ver) <= 0)
+            if (ver.compareTo(entry.getValue()) >= 0)
                 return entry.getKey();
         }
 

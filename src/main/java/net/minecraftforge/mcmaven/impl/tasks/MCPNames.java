@@ -59,11 +59,17 @@ public record MCPNames(String hash, Map<String, String> names, Map<String, Strin
     private static Data loadData(File data) throws IOException {
         var names = new HashMap<String, String>();
         var docs = new HashMap<String, String>();
+        var candidates = Set.of("methods.csv", "fields.csv", "params.csv");
         try (var zip = new ZipFile(data)) {
             var entries = zip.entries();
             while (entries.hasMoreElements()) {
                 var entry = entries.nextElement();
-                if (!entry.getName().endsWith(".csv")) continue;
+                var filename = entry.getName();
+                var idx = filename.lastIndexOf('/');
+                if (idx != -1)
+                    filename = filename.substring(idx + 1);
+                if (!candidates.contains(filename))
+                    continue;
 
                 try (var reader = CsvReader.builder().ofNamedCsvRecord(new InputStreamReader(zip.getInputStream(entry)))) {
                     for (var row : reader) {
@@ -264,7 +270,7 @@ public record MCPNames(String hash, Map<String, String> names, Map<String, Strin
     }
 
     /** Inserts the given javadoc line into the list of lines before any annotations */
-    private static void insertAboveAnnotations(List<String> list, String line) {
+    public static void insertAboveAnnotations(List<String> list, String line) {
         int back = 0;
         while (list.get(list.size() - 1 - back).trim().startsWith("@"))
             back++;
@@ -288,7 +294,7 @@ public record MCPNames(String hash, Map<String, String> names, Map<String, Strin
         return ret;
     }
 
-    private String replaceInLine(String line, @Nullable Set<String> blacklist) {
+    public String replaceInLine(String line, @Nullable Set<String> blacklist) {
         var buf = new StringBuffer();
         var matcher = SRG_FINDER.matcher(line);
         while (matcher.find()) {
@@ -299,7 +305,7 @@ public record MCPNames(String hash, Map<String, String> names, Map<String, Strin
         return buf.toString();
     }
 
-    private interface JavadocAdder {
+    public static final class JavadocAdder {
         /**
          * Converts a raw javadoc string into a nicely formatted, indented, and wrapped string.
          *
@@ -309,7 +315,7 @@ public record MCPNames(String hash, Map<String, String> names, Map<String, Strin
          *                  doc
          * @return A fully formatted javadoc comment string complete with comment characters and newlines.
          */
-        static String buildJavadoc(String indent, String javadoc, boolean multiline) {
+        public static String buildJavadoc(String indent, String javadoc, boolean multiline) {
             var builder = new StringBuilder();
 
             // split and wrap.

@@ -5,6 +5,7 @@
 package net.minecraftforge.mcmaven.impl.repo.forge;
 
 import net.minecraftforge.mcmaven.impl.cache.Cache;
+import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
@@ -18,11 +19,14 @@ import net.minecraftforge.mcmaven.impl.util.Constants;
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder;
 import net.minecraftforge.mcmaven.impl.util.POMBuilder.Dependencies.Dependency;
+import net.minecraftforge.mcmaven.impl.util.StupidHacks;
 import net.minecraftforge.mcmaven.impl.util.Task;
 import net.minecraftforge.mcmaven.impl.util.Util;
+import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.data.json.RunConfig;
 import net.minecraftforge.util.file.FileUtils;
+import net.minecraftforge.util.hash.HashFunction;
 
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
@@ -31,20 +35,28 @@ import javax.xml.transform.TransformerException;
 
 import org.jetbrains.annotations.Nullable;
 
+import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 // TODO: [MCMavenizer][ForgeRepo] For now, the ForgeRepo needs to be fully complete with everything it has to do.
 // later, we can worry about refactoring it so that other repositories such as MCP (clean) and FMLOnly can function.
@@ -90,20 +102,19 @@ public final class ForgeRepo extends Repo {
         LOGGER.info("Processing Minecraft Forge (userdev): " + version);
         var indent = LOGGER.push();
         try {
-            if (isPython(version))
+            // TODO [MCMavenizer][Backporting] You know what has to be done eventually...
+            if (isPython(version)) {
+                Info.gatherVariants(this.cache.maven(), version);
                 throw new IllegalArgumentException("Python version unsupported!");
+            }
 
             if (fg == null)
                 throw new IllegalArgumentException("Unknown Forge version " + version);
 
-            // TODO [MCMavenizer][Backporting] You know what has to be done eventually...
             switch (fg) {
-                /*
+                case v1:
                 case v1_1:
-                    break;
-                case v1_2:
-                    break;
-                */
+                case v1_2: // V2 can process V1
                 case v2_0_1:
                 case v2_0_2:
                 case v2:
@@ -141,9 +152,6 @@ public final class ForgeRepo extends Repo {
     ///     - Source files used to recompile the default jar.
     ///   - metadata.zip:
     ///     - Metadata about the version, such as runs.json and version.json.
-    /// - `net.minecraft:{mcp-version}:client`
-    ///   - extra:
-    ///     - This is the client jar file with class files removed. This is for legacy versions which expect it to
     /// exist.
     /// - `net.minecraft:mappings_{CHANNEL}:{MCP_VERSION}[-{VERSION}]@zip`
     ///   - A zip file containing fields, methods, and params.csv files mapping SRG->MCP names.
@@ -160,9 +168,18 @@ public final class ForgeRepo extends Repo {
         var srgSources = dev.getSources();
 
         var mappings = baseMappings.withContext(dev);
-        var sourcesTask = mappings.channel().equals("srg")
-            ? srgSources
-            : new RenameTask(build, userdev.getName(), srgSources, mappings, true, srgTask, mcVersion);
+
+        Task sourcesTask = srgSources;
+        // v1 and v1.1 have Forge patches in mapped names, and I haven't implemented converting to SRG yet as it would need to run Srg2Source
+        // So check if we are using the 'correct' mappings, and if not throw and exception
+        if (fgVersion == FGVersion.v1 || fgVersion == FGVersion.v1_1) {
+            var required = StupidHacks.getDefaultMappings(new ComparableVersion(version));
+            if (!required.channel().equals(mappings.channel()) || !required.version().equals(mappings.version()))
+                throw new IllegalStateException("Can not setup " + name + " as it requires you to us the explicit mappings: " + required.toString());
+            sourcesTask = dev.getSourcesWithJavadocs();
+        } else if (!mappings.channel().equals("srg")) {
+            sourcesTask = new RenameTask(build, userdev.getName(), srgSources, mappings, true, srgTask, mcVersion);
+        }
         var classesTask = new RecompileTask(build, name, jdks, dev.getJavaTarget(), dev::getClasspath, sourcesTask, mappings);
 
         var mappingCoords = mappings.getArtifact();
@@ -173,7 +190,7 @@ public final class ForgeRepo extends Repo {
         var classes = pending("Classes", classesTask, name, false, () -> classVariants(baseMappings, dev, mappingCoords));
         var metadata = pending("Metadata", metadata(build, dev, dev.getRuns()), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
 
-        var pom = pending("Maven POM", pom(mappings.getFolder(build), dev, version, null /*extraCoords*/, mappingCoords), name.withExtension("pom"), false);
+        var pom = pending("Maven POM", pom(mappings.getFolder(build), dev, version, null, mappingCoords), name.withExtension("pom"), false);
 
         // Gradle only allows downloading artifacts from one repo, so we need to pull in any classifers that we reference
         var classifiers = getClassifieres(name, dev.getLibraries(), new HashMap<>());
@@ -182,7 +199,6 @@ public final class ForgeRepo extends Repo {
 
         var ret = new ArrayList<PendingArtifact>();
         ret.addAll(mappingArtifacts);
-        //ret.addAll(extraOutput);
         ret.addAll(List.of(sources, classes, pom, metadata));
         ret.addAll(classifiers.values());
         return ret;
@@ -432,5 +448,118 @@ public final class ForgeRepo extends Repo {
 
 
         return super.classVariants(mappings, patcher.getMinecraftTasks().getJavaVersion(), libs, extraCompile);
+    }
+
+
+    // Old code that I think may be useful for older versions, so I don't want to delete quite yet, delete when all legacy versions are supported
+    public static class Info {
+        public static final Map<String, String> MAPPINGS = new LinkedHashMap<>();
+        public static final Map<String, String> CONF = new LinkedHashMap<>();
+
+        private static String hashEntries(ZipFile zip, List<String> entries) {
+            Collections.sort(entries);
+            var bos = new ByteArrayOutputStream();
+            for (var name : entries) {
+                var entry = zip.getEntry(name);
+                try {
+                    var stream = zip.getInputStream(entry);
+                    stream.transferTo(bos);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return HashFunction.sha1().hash(bos.toByteArray());
+        }
+        private static void zip(ZipFile zip, List<String> entries, String suffix, String version, String hash) {
+            Collections.sort(entries);
+            var output = new File(version + '-' + suffix + '-' + hash + ".zip");
+            try (var out = new ZipOutputStream(new FileOutputStream(output))) {
+                for (var ent : entries) {
+                    var entry = zip.getEntry(ent);
+                    var name = entry.getName().replace("conf/", "");
+                    if (name.isEmpty() || entry.isDirectory())
+                        continue;
+                    byte[] data = zip.getInputStream(entry).readAllBytes();
+
+                    switch (name) {
+                        case "packaged.srg":
+                            name = "joined.srg";
+                            var map = IMappingFile.load(new ByteArrayInputStream(data));
+                            var tmp = Path.of("Z:/test/_test/joined.srg");
+                            map.write(tmp, IMappingFile.Format.SRG, false);
+                            data = Files.readAllBytes(tmp);
+                            break;
+                        case "packaged.exc":
+                            name = "joined.exc";
+                            break;
+                        case "Start.java":
+                            name = "patches/Start.java";
+                            continue;
+                            //break;
+                    }
+                    if (name.endsWith(".csv"))
+                        name = name.substring(name.indexOf('/') + 1);
+                    if (name.startsWith("minecraft_ff/"))
+                        name = "patches/minecraft_merged_ff/" + name.substring(13);
+
+                    var newEntry = new ZipEntry(name);
+                    newEntry.setTime(entry.getTime());
+                    out.putNextEntry(newEntry);
+                    out.write(data);
+                    out.closeEntry();
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        private static List<PendingArtifact> gatherVariants(MavenCache cache, String version) {
+            var userdev = getUserdev(version);
+            var mappingsFiles = new ArrayList<String>();
+            var confFiles = new ArrayList<String>();
+
+            var file = cache.download(userdev);
+            try (var zip = new ZipFile(file)) {
+                for (var itr = zip.entries().asIterator(); itr.hasNext(); ) {
+                    var entry = itr.next();
+                    var ename = entry.getName();
+                    var filename = ename.indexOf('/') == -1 ? ename : ename.substring(ename.indexOf('/') + 1);
+
+                    if ("fields.csv".equals(filename) || "methods.csv".equals(filename) || "params.csv".equals(filename)) {
+                        mappingsFiles.add(ename);
+                    } else if (ename.startsWith("conf/")) {
+                        confFiles.add(ename);
+                    }
+                }
+
+                var hash = hashEntries(zip, mappingsFiles);
+                if (!MAPPINGS.containsKey(hash)) {
+                    System.out.println("New Mappings: " + hash + " " + version);
+                    MAPPINGS.put(hash, version);
+                    zip(zip, mappingsFiles, "mappings", version, hash);
+                }
+                hash = hashEntries(zip, confFiles);
+                if (!CONF.containsKey(hash)) {
+                    System.out.println("New Conf:     " + hash + " " + version);
+                    CONF.put(hash, version);
+                    zip(zip, confFiles, "conf", version, hash);
+                }
+
+            } catch (IOException e) {
+                throw new IllegalStateException("Error reading config " + file.getAbsolutePath(), e);
+            }
+            return List.of();
+        }
+        public static void finish() {
+            if (!MAPPINGS.isEmpty()) {
+                System.out.println("Mappings: ");
+                for (var entry : MAPPINGS.entrySet())
+                    System.out.println("\t" + entry.getKey() + ' ' + entry.getValue());
+            }
+            if (!CONF.isEmpty()) {
+                System.out.println("Conf: ");
+                for (var entry : CONF.entrySet())
+                    System.out.println("\t" + entry.getKey() + ' ' + entry.getValue());
+            }
+        }
     }
 }

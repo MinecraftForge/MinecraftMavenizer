@@ -52,7 +52,9 @@ public class StupidHacks {
         "org.scala-lang:scala-xml_2.11:1.0.2",                "org.scala-lang.modules:scala-xml_2.11:1.0.2",
         "org.scala-lang:scala-parser-combinators_2.11:1.0.1", "org.scala-lang.modules:scala-parser-combinators_2.11:1.0.1",
         // They renamed the artifact
-        "tv.twitch:twitch-external-platform:4.5", "tv.twitch:twitch-platform:6.5"
+        "tv.twitch:twitch-external-platform:4.5", "tv.twitch:twitch-platform:6.5",
+        // Bumped transitivly somewhere in 1.7.10-pre4, and relied on the bumped version
+        "com.google.guava:guava:15.0", "com.google.guava:guava:16.0"
     );
     // these are artifacts that Mojang referenced in the past, but now are deleted.
     //private static Set<String> DELETED_ARTIFACTS = Set.of(
@@ -147,6 +149,12 @@ public class StupidHacks {
         FORGE_MAPPINGS.add(new ForgeMappings(new ComparableVersion(forge), mappings));
     }
     static {
+        // FG 1.x, these were packed in the userdev. Manually uploaded
+        mappings("1.7.2-10.12.0.967",        "snapshot:20131226-1.7.2");
+        mappings("1.7.2-10.12.0.1024",       "snapshot:20140205-1.7.2");
+        mappings("1.7.10_pre4-10.12.2.1137", "snapshot:20140624-1.7.10-pre4");
+
+        // FG2, normal published mappings
         mappings("1.7.2-10.12.0.1024",  "snapshot:20140205-1.7.2");
         mappings("1.8-11.14.3.1503",    "snapshot:20141130-1.8");
         mappings("1.8.8-11.14.4.1575",  "snapshot:20151122-1.8");
@@ -239,5 +247,15 @@ public class StupidHacks {
         }
 
         return output;
+    }
+
+    public static Artifact fixMCPArtifact(Artifact artifact) {
+        // There is an artifact created in 2014 that doesn't follow the
+        // same format as the other mcp artifacts, and has bad parameter names
+        // And rather then update an existing file on the maven that may be used by whatever
+        // I made a new fixed file
+        if ("1.7.10".equals(artifact.getVersion()))
+            return artifact.withVersion("1.7.10-fixed");
+        return artifact;
     }
 }

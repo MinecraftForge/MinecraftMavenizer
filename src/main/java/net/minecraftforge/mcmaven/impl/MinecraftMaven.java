@@ -79,7 +79,7 @@ public record MinecraftMaven(
 ) {
     // Only 1.14.4+ has official mappings, we can support more when we add more mappings
     private static final MinecraftVersion MIN_OFFICIAL_MAPPINGS = MinecraftVersion.from("1.14.4");
-    private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.8");
+    private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.7.2");
 
     public MinecraftMaven {
         LOGGER.info("  Output:             " + output.getAbsolutePath());
@@ -185,10 +185,7 @@ public record MinecraftMaven(
                 var mcVersion = Util.forgeToMcVersion(ver);
 
                 var fg = FGVersion.fromForge(ver);
-                if (fg == null || fg.ordinal() < FGVersion.v2.ordinal()) // Unsupported
-                    continue;
-
-                if (fg.ordinal() >= FGVersion.v3.ordinal())
+                if (fg == null) // Unsupported
                     continue;
 
                 if (verStart != null && cver.compareTo(verStart) < 0)
@@ -222,6 +219,8 @@ public record MinecraftMaven(
                     LOGGER.pop();
                 }
             }
+
+            ForgeRepo.Info.finish();
         } else {
             if (StupidHacks.BLACKLISTED_FORGE_BUILDS.contains(artifact.getVersion()))
                 throw new IllegalArgumentException("Forge version " + artifact.getVersion() + " has been blacklisted for technical reasons, pick a different Forge version");
@@ -256,6 +255,8 @@ public record MinecraftMaven(
         var mcpConfigVersions = new HashSet<>(maven.getVersions(MCP.artifact("1.21.11")));
         mcpConfigVersions.remove("1.12.2"); // Force 1.12.2 to not use MCPConfig, instead using the legacy MCP toolchain
         var mcpLegacyVersions = new HashSet<>(maven.getVersions(MCPLegacy.artifact("1.12.2")));
+        // Used while developing on maven local
+        //mcpLegacyVersions.addAll(List.of("1.7.2", "1.7.10-pre4", "1.7.10"));
 
         if ("all".equals(version)) {
             if (outputJson != null)

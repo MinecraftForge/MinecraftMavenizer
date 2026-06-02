@@ -11,6 +11,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -64,7 +65,6 @@ public class FG2Userdev implements ForgeVersionCommon {
     private final MCPLegacy.Child mcpChild;
     private final Task sourcesTask;
     private final Map<String, Task> extracts = new HashMap<>();
-    private final Task patches;
 
     FG2Userdev(File build, ForgeRepo forge, Artifact name, FGVersion fgVersion) {
         this.build = build;
@@ -94,14 +94,26 @@ public class FG2Userdev implements ForgeVersionCommon {
 
         this.mcVersion = Util.forgeToMcVersion(this.name.getVersion());
 
+        // FG 1.x we need to merge the access transformers, FML and Forge patches are seperate, and source/resources are not in a zip
+        var fg1 = this.fgVersion.ordinal() <= FGVersion.v1_2.ordinal();
+
         var legacyMCP = StupidHacks.legacyMcp(new ComparableVersion(this.name.getVersion()));
         this.mcp = this.forge.mcpconfig.legacy(this.mcVersion, legacyMCP);
-        this.mcpChild = this.mcp.getChild(this);
+        var atFile = fg1 ? mergeAts() : extract("merged_at.cfg");
+        // 1.7.2 Forge switched to FG1.2 in 1.7.2-10.12.0.1048, this changed our decompiler to
+        // a version that bulk sorts all classes. So produces different decomp.
+        var legacyFG = "1.7.2".equals(this.mcVersion) && this.fgVersion != FGVersion.v1_2 ? this.fgVersion : null;
+        this.mcpChild = this.mcp.getChild(this, atFile, legacyFG);
 
         this.forgeVersion = this.name.getVersion().substring(this.name.getVersion().indexOf('-') + 1);
 
-        this.patches = extract("patches.zip");
-        this.sourcesTask = patch();
+        // FG 1.1 needs to remap between FML and Forge patches
+        if (this.fgVersion == FGVersion.v1 || this.fgVersion == FGVersion.v1_1)
+            this.sourcesTask = patchForgeRenamed();
+        else if (this.fgVersion == FGVersion.v1_2)
+            this.sourcesTask = patchForge();
+        else
+            this.sourcesTask = patch();
     }
 
     public File getBuildFolder() {
@@ -206,23 +218,33 @@ public class FG2Userdev implements ForgeVersionCommon {
     @Override
     public List<File> getClasspath() {
         var classpath = new ArrayList<File>();
-        var seen = new HashSet<String>();
+        var seen = new HashMap<String, Artifact>();
+        var cache = this.forge.getCache();
 
         // minecraft version.json libs + userdev libs
         for (var lib : this.getMCP().getMinecraftTasks().getClientLibraries()) {
-            classpath.add(lib.file());
-            // We just want the group:name and clssifier, incase they have upated the version since we were built
-            seen.add(lib.artifact().withVersion(null).toString());
+
+            // We might have to upgrade a vanilla dependency
+            var artifact = StupidHacks.fixLegacyForgeDeps(lib.artifact());
+            if (artifact == null)
+                continue;
+
+            if (artifact != lib.artifact())
+                classpath.add(Util.getArtifact(cache, artifact));
+            else
+                classpath.add(lib.file());
+
+            // We just want the group:name and clssifier, in case they have updated the version since we were built
+            seen.put(artifact.withVersion(null).toString(), artifact);
         }
 
-        var cache = this.forge.getCache();
         if (this.config.inheritsFrom == null) {
             // If there is no inherits, this is before Mojang added that feature to the launcher
             // So we need to try and strip out any libraries that come from the vanilla launcher.
             for (var lib : this.config.libraries) {
                 var artifact = StupidHacks.fixLegacyForgeDeps(Artifact.from(lib.name));
                 var unversioned = artifact.withVersion(null).toString();
-                if (!seen.contains(unversioned)) {
+                if (!seen.containsKey(unversioned)) {
                     if (artifact != null)
                         classpath.add(Util.getArtifact(cache, artifact));
                 }
@@ -231,7 +253,7 @@ public class FG2Userdev implements ForgeVersionCommon {
             for (var lib : this.config.libraries) {
                 var artifact = StupidHacks.fixLegacyForgeDeps(Artifact.from(lib.name));
                 if (artifact != null)
-                    classpath.add(Util.getArtifact(cache, artifact));
+                    classpath.addFirst(Util.getArtifact(cache, artifact)); // Add our versions before vanilla's in case we upgrade
             }
         }
 
@@ -283,12 +305,12 @@ public class FG2Userdev implements ForgeVersionCommon {
     private Task patch() {
         var input = inject();
         var patches = StupidHacks.needsPatchFixes(this.name)
-            ? fixPatches(this.patches)
-            : this.patches;
+            ? fixPatches(extract("patches.zip"))
+            :            extract("patches.zip");
 
         return Task.named("patch",
             Task.deps(input, patches),
-            () -> this.patch(input.execute(), patches.execute())
+            () -> this.patch(input.execute(), patches.execute(), "patched")
         );
     }
 
@@ -299,9 +321,9 @@ public class FG2Userdev implements ForgeVersionCommon {
         );
     }
 
-    private File patch(File input, File patches) {
-        var output = new File(this.build, "patched.jar");
-        var rejects = new File(this.build, "patches-rejects.jar");
+    private File patch(File input, File patches, String name) {
+        var output = new File(this.build, name + ".jar");
+        var rejects = new File(this.build, name + "-rejects.jar");
 
         var cache = Util.cache(output)
             .add("input", input)
@@ -318,7 +340,7 @@ public class FG2Userdev implements ForgeVersionCommon {
         if (rejects.exists())
             rejects.delete();
 
-        if (this.fgVersion == FGVersion.v2)
+        if (this.fgVersion.ordinal() <= FGVersion.v2.ordinal())
             patchUnstable(input, patches, output, rejects);
         else
             patchStable(input, patches, output, rejects);
@@ -348,7 +370,7 @@ public class FG2Userdev implements ForgeVersionCommon {
             Util.sneak(e);
         }
 
-
+        Throwable failure = null;
         // Apply them
         try (var zin = new ZipInputStream(new FileInputStream(input));
              var zout = new ZipOutputStream(new FileOutputStream(output))
@@ -375,13 +397,14 @@ public class FG2Userdev implements ForgeVersionCommon {
                         for (var hunk : result.getHunks())
                             LOGGER.error("  Hunk #" + hunk.getHunkID() + ": " + hunk.getStatus().name());
 
-                        Util.sneak(result.getFailure());
-                    }
-                    for (var itr = ctx.getData().iterator(); itr.hasNext();) {
-                        var line = itr.next();
-                        zout.write(line.getBytes(StandardCharsets.UTF_8));
-                        if (itr.hasNext())
-                            zout.write('\n');
+                        failure = result.getFailure();
+                    } else {
+                        for (var itr = ctx.getData().iterator(); itr.hasNext();) {
+                            var line = itr.next();
+                            zout.write(line.getBytes(StandardCharsets.UTF_8));
+                            if (itr.hasNext())
+                                zout.write('\n');
+                        }
                     }
                 }
                 zout.closeEntry();
@@ -389,6 +412,9 @@ public class FG2Userdev implements ForgeVersionCommon {
         } catch (IOException e) {
             Util.sneak(e);
         }
+
+        if (failure != null)
+            Util.sneak(failure);
     }
 
     // Modern versions that use out Fernflower fork produce stabelized output so we can use
@@ -459,160 +485,156 @@ public class FG2Userdev implements ForgeVersionCommon {
         }
     }
 
-    /*
-    private Task mcpPatch() {
-        var input = decompileCleanup();
-        return Task.named("mcp-patch",
-            Task.deps(input), () -> mcpPatch(input)
+    private Task mergeAts() {
+        var fml = extract("src/main/resources/fml_at.cfg");
+        var forge = extract("src/main/resources/forge_at.cfg");
+        return Task.named("merge-ats",
+            Task.deps(fml, forge), () -> this.mergeAts(fml.execute(), forge.execute())
         );
     }
 
-    private File mcpPatch(Task inputTask) {
-        var input = inputTask.execute();
-        var output = new File(this.build, "mcp-patched.jar");
+    private File mergeAts(File fml, File forge) {
+        var output = new File(this.build, "merged-at.cfg");
         var cache = Util.cache(output)
-            .add("input", input)
-            .addKnown("mcp", this.getMCP().getDataHash());
-
-        //if (Mavenizer.checkCache(output, cache))
-        //    return output;
-
-        var patchesMap = new HashMap<String, List<PatchFile>>();
-        try (var zin = new ZipInputStream(new FileInputStream(this.getMCP().getData()))) {
-            final var prefix = "patches/minecraft_merged_ff/";
-            for (ZipEntry entry; (entry = zin.getNextEntry()) != null;) {
-                var name = entry.getName();
-                if (!name.startsWith(prefix))
-                    continue;
-
-                int patchIndex = name.indexOf(".patch");
-                // 6 is the length of ".patch" + 3 to account for .## at the end of the file.
-                if (patchIndex < 0 || patchIndex < name.length() - 9)
-                    continue;
-
-                var filename = name.substring(prefix.length(), patchIndex);
-                var lines = new ArrayList<String>();
-                boolean first = true;
-                @SuppressWarnings("resource")
-                var reader = new NewLineDetector(new InputStreamReader(zin, StandardCharsets.UTF_8));
-                for (String line; (line = reader.readLine()) != null; ) {
-                    // Old patches are generated with the 'diff' comand as the first line
-                    // And DiffPatch doesn't support that so we need to skip it
-                    if (!(first && line.startsWith("diff ")))
-                        lines.add(line);
-                    first = false;
-                }
-
-                var patch = PatchFile.fromLines(name, lines, true);
-
-                // Some old patches were trimmed, so the last empty line of context was removed. So lets try and detect that case
-                var last = patch.patches.getLast();
-                if (last.getContextLines().size() != last.length1)
-                    last.recalculateLength();
-
-                System.out.println("Patch: " + name);
-                patchesMap.computeIfAbsent(filename, _ -> new ArrayList<>()).add(patch);
-            }
-        } catch (IOException e) {
-            return Util.sneak(e);
-        }
-
-        FileUtils.ensureParent(output);
-        try (var zin = new ZipInputStream(new FileInputStream(input));
-             var zout = new ZipOutputStream(new FileOutputStream(output))) {
-
-            for (ZipEntry entry; (entry = zin.getNextEntry()) != null; ) {
-                var name = entry.getName();
-                var newEntry = new ZipEntry(name);
-                newEntry.setTime(entry.getTime());
-                zout.putNextEntry(newEntry);
-
-                if (!name.endsWith(".java")) {
-                    zin.transferTo(zout);
-                    zout.closeEntry();
-                    continue;
-                }
-
-                List<String> lines = NewLineDetector.readLines(zin);
-                var patches = patchesMap.get(name.replace('/', '.'));
-                if (patches != null && !patches.isEmpty()) {
-                    List<io.codechicken.diffpatch.patch.Patcher.Result> results = null;
-                    boolean success = false;
-                    for (var patch : patches) {
-                        var patcher = new io.codechicken.diffpatch.patch.Patcher(patch, lines, 1.0F, FuzzyLineMatcher.MatchMatrix.DEFAULT_MAX_OFFSET);
-                        results = patcher.patch(PatchMode.FUZZY); // We need to use FUZZ because we inject annotations which causes an OFFSET, and apply ATs which requires ACCESS
-                        success = results.stream().allMatch(r -> r.success);
-                        if (success) {
-                            lines = patcher.lines;
-                            break;
-                        }
-                    }
-
-                    if (!success) {
-                        LOGGER.push();
-                        LOGGER.error("Input:  " + input.getAbsolutePath());
-                        LOGGER.error("Output: " + output.getAbsolutePath());
-                        LOGGER.error("MCP:    " + this.getMCP().getData().getAbsolutePath());
-                        LOGGER.error("Failed to apply patch to " + name);
-                        for (int x = 0; x < results.size(); x++)
-                            LOGGER.error("  #" + x + ": " + results.get(x).summary());
-                        LOGGER.pop();
-                        throw new IllegalStateException("Failed to apply patch to " + name);
-                    }
-                }
-
-                for (var line : lines) {
-                    zout.write(line.getBytes(StandardCharsets.UTF_8));
-                    zout.write('\n');
-                }
-
-                zout.closeEntry();
-            }
-        } catch (IOException e) {
-            return Util.sneak(e);
-        }
-
-        cache.save();
-        return output;
-    }
-
-    private Task decompileCleanup() {
-        var input = decompile();
-        return Task.named("decompile-cleanup",
-            Task.deps(input), () -> decompileCleanup(input.execute())
-        );
-    }
-
-    private File decompileCleanup(File input) {
-        var tool = this.forge.getCache().maven().download(Constants.MCPCLEANUP);
-        var output = new File(this.build, "decompile-cleaned.jar");
-        var log = new File(this.build, "decompile-cleaned.log");
-        var cache = Util.cache(output)
-            .add("tool", tool)
-            .add("input", input)
-            .addKnown("fg", this.fgVersion.name());
+            .add("fml", fml)
+            .add("forge", forge);
 
         if (Mavenizer.checkCache(output, cache))
             return output;
 
-        var args = new ArrayList<String>(5);
-        args.addAll(List.of(
-            "--input", input.getAbsolutePath(),
-            "--output", output.getAbsolutePath(),
-            "--pre-patch"
-        ));
-        if (this.fgVersion == FGVersion.v2)
-            args.add("--fernflower"); // Version 2 is before we used our own fernflower fork, so we did a lot of pre-mcp cleanup
+        try (var out = new FileOutputStream(output)) {
+            out.write(Files.readAllBytes(fml.toPath()));
+            out.write("\n# Forge\n".getBytes(StandardCharsets.UTF_8));
+            out.write(Files.readAllBytes(forge.toPath()));
+            cache.save();
+            return output;
+        } catch (IOException e) {
+            return Util.sneak(e);
+        }
+    }
 
-        var jdk = jdk(Constants.MCPCLEANUP_JAVA_VERSION);
-        var ret = ProcessUtils.runJar(jdk, this.globalBase, log, tool, Collections.emptyList(), args);
-        if (ret.exitCode != 0)
-            throw new IllegalStateException("Failed to run MCPCleanup (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
+    private Task injectLegacy() {
+        var input = this.mcpChild.getFinalStep();
+        return Task.named("inject",
+            Task.deps(input),
+            () -> this.injectLegacy(input.execute())
+        );
+    }
+
+    private File injectLegacy(File input) {
+        var output = new File(this.build, "injected.jar");
+        var cache = Util.cache(output)
+            .add("input", input)
+            .addKnown("data", this.dataHash);
+
+        if (Mavenizer.checkCache(output, cache))
+            return output;
+
+        FileUtils.ensureParent(output);
+        try(var out = new ZipOutputStream(new FileOutputStream(output))) {
+            var seen = new HashSet<String>();
+            try (var zin = new ZipInputStream(new FileInputStream(input))) {
+                for (ZipEntry entry = null; (entry = zin.getNextEntry()) != null; ) {
+                    seen.add(entry.getName());
+                    out.putNextEntry(FileUtils.getStableEntry(entry.getName()));
+                    zin.transferTo(out);
+                    out.closeEntry();
+                }
+            }
+            try (var zin = new ZipInputStream(new FileInputStream(this.data))) {
+                for (ZipEntry entry = null; (entry = zin.getNextEntry()) != null; ) {
+                    var name = entry.getName();
+                    if (entry.isDirectory())
+                        continue;
+                    else if (name.startsWith("src/main/resources/"))
+                        name = name.substring(19);
+                    else if (name.startsWith("src/main/java/"))
+                        name = name.substring(14);
+                    else
+                        continue;
+
+                    if (!seen.add(name))
+                        continue;
+
+                    out.putNextEntry(FileUtils.getStableEntry(name));
+                    zin.transferTo(out);
+                    out.closeEntry();
+                }
+            }
+            cache.save();
+            return output;
+        } catch (IOException e) {
+            return Util.sneak(e);
+        }
+    }
+
+    private Task patchFml() {
+        var base = injectLegacy();
+        var patches = extract("fmlpatches.zip");
+        return Task.named("patch-fml",
+            Task.deps(base, patches), () -> this.patch(base.execute(), patches.execute(), "patched-fml")
+        );
+    }
+
+    private Task patchForge() {
+        var base = patchFml();
+        var patches = extract("forgepatches.zip");
+        return Task.named("patch",
+            Task.deps(base, patches), () -> this.patch(base.execute(), patches.execute(), "patched")
+        );
+    }
+
+    private Task rename() {
+        var input = patchFml();
+        return Task.named("rename",
+            Task.deps(input), () -> this.rename(input.execute())
+        );
+    }
+
+    private File rename(File input) {
+        var output = new File(this.build, "renamed.jar");
+        var cache = Util.cache(output)
+            .add("input", input)
+            .addKnown("mappings", this.dataHash);
+
+        if (Mavenizer.checkCache(output, cache))
+            return output;
+
+        LegacyRenamer.rename(input, this.data, output, true);
 
         cache.save();
         return output;
     }
-    */
+
+    private Task patchForgeRenamed() {
+        var base = rename();
+        var patches = extract("forgepatches.zip");
+        return Task.named("patch",
+            Task.deps(base, patches), () -> this.patch(base.execute(), patches.execute(), "patched")
+        );
+    }
+
+    public Task getSourcesWithJavadocs() {
+        var input = this.getSources();
+        return Task.named("javadocs",
+            Task.deps(input), () -> this.javadocs(input.execute())
+        );
+    }
+
+    private File javadocs(File input) {
+        var output = new File(this.build, "patched-javadocs.jar");
+        var cache = Util.cache(output)
+            .add("input", input)
+            .addKnown("mappings", this.dataHash);
+
+        if (Mavenizer.checkCache(output, cache))
+            return output;
+
+        LegacyRenamer.rename(input, this.data, output, false);
+
+        cache.save();
+        return output;
+    }
 
     public Map<String, RunConfig> getRuns() {
         // Use LinkedHashMap to keep things stable

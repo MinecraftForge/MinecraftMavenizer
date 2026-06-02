@@ -98,6 +98,11 @@ public final class MCPConfigRepo extends Repo {
         return new MCP(this, artifact);
     }
 
+    public MCPLegacy legacy(String mcVersion) {
+        return legacy(mcVersion, null);
+    }
+
+    // Variants used for Forge artifacts
     public MCPLegacy legacy(String mcVersion, @Nullable String python) {
         var artifact = MCPLegacy.artifact(mcVersion);
         var key = new LegacyKey(artifact, python);
@@ -298,7 +303,7 @@ public final class MCPConfigRepo extends Repo {
         }
 
         var jdks = this.cache.jdks();
-        var mcp = this.legacy(version, null);
+        var mcp = this.legacy(version);
         var tasks = mcp.getMinecraftTasks();
         var mcVersion = tasks.getVersion();
         var build = mcp.getBuildFolder();

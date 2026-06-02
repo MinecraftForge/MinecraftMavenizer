@@ -36,6 +36,7 @@ import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.JDKCache;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.repo.forge.FG2Userdev;
+import net.minecraftforge.mcmaven.impl.repo.forge.FGVersion;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks.MCFile;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
@@ -59,6 +60,7 @@ public class MCPLegacy {
     private final Artifact name;
     private final boolean isPython;
     private final String mcVersion;
+    private final ComparableVersion mcVersionComp;
     private final File data;
     private final String dataHash;
     private final File build;
@@ -78,6 +80,7 @@ public class MCPLegacy {
         this.repo = repo;
         this.isPython = python != null;
         this.mcVersion = name.getVersion();
+        this.mcVersionComp = new ComparableVersion(this.mcVersion);
 
         if (python != null) {
             this.name = name.withVersion(name.getVersion() + '-' + python.replace(".zip", "")).withClassifier(null);
@@ -91,9 +94,10 @@ public class MCPLegacy {
             }
         } else {
             this.name = name;
-            this.data = this.repo.getCache().maven().download(name);
+            var fixed = StupidHacks.fixMCPArtifact(name);
+            this.data = this.repo.getCache().maven().download(fixed);
             if (!this.data.exists())
-                throw new IllegalStateException("Failed to download " + name);
+                throw new IllegalStateException("Failed to download " + fixed);
         }
 
         this.dataHash = Util.sneak(() -> HashFunction.sha1().hash(this.data));
@@ -106,7 +110,11 @@ public class MCPLegacy {
         this.mappings = extract(prefix + "joined.srg");
         this.exceptorJson = extract(prefix + "exceptor.json"); // Possibly non-existant?
         this.exceptorConfig = extract(prefix + "joined.exc");
-        this.statics = extract(this.isPython ? "conf/STATIC_METHODS.txt" : "static_methods.txt"); // may not exist
+
+        if (this.mcVersionComp.compareTo(MC_1_8) < 0)
+            this.statics = null;
+        else
+            this.statics = extract(this.isPython ? "conf/STATIC_METHODS.txt" : "static_methods.txt"); // may not exist
         this.listLibraries = listLibraries();
     }
 
@@ -175,18 +183,23 @@ public class MCPLegacy {
 
     public Child getChild() {
         if (this.child == null)
-            this.child = new Child(this.build, null);
+            this.child = new Child(this.build, null, null);
         return this.child;
     }
 
-    public Child getChild(FG2Userdev forge) {
-        var accessTransformer = forge.extract("merged_at.cfg").execute();
+    public Child getChild(FG2Userdev forge, Task atTask, @Nullable FGVersion legacyFG) {
+        var accessTransformer = atTask.execute();
         var hash = Util.hash(HashFunction.sha1(), accessTransformer);
-        var key = forge.getName().getName() + '/' + hash;
+
+        var key = forge.getName().getName();
+        if (legacyFG != null)
+            key += '-' + legacyFG.toString();
+        key += '/' + hash;
+
         var ret = this.children.get(key);
         if (ret == null) {
             var base = new File(this.build, key);
-            ret = new Child(base, accessTransformer);
+            ret = new Child(base, accessTransformer, legacyFG);
             this.children.put(key, ret);
         }
         return ret;
@@ -213,12 +226,12 @@ public class MCPLegacy {
         if (Mavenizer.checkCache(target, cache))
             return target;
 
+        FileUtils.ensureParent(target);
+
         try (var zip = new ZipFile(data)) {
             var entry = zip.getEntry(name);
             if (entry == null)
                 throw except("Missing Data: " + name);
-
-            FileUtils.ensureParent(target);
 
             try (var os = new FileOutputStream(target)) {
                 zip.getInputStream(entry).transferTo(os);
@@ -251,6 +264,8 @@ public class MCPLegacy {
 
     private Task exceptorConfig() {
         var base = this.exceptorConfig;
+        if (this.statics == null)
+            return base;
         var statics = this.statics;
         var mappings = getMappings();
         return Task.named(prefix() + "exceptor-config",
@@ -518,17 +533,19 @@ public class MCPLegacy {
         private final JDKCache jdks;
         private final File build;
         private final File accessTransformer;
+        private final @Nullable FGVersion legacyFG;
         private final String prefix;
         private final MCPCfg cfg;
         private final Task inject;
 
-        public Child(File build, File accessTransformer) {
+        public Child(File build, File accessTransformer, @Nullable FGVersion legacyFG) {
             this.maven = MCPLegacy.this.repo.getCache().maven();
             this.jdks = MCPLegacy.this.repo.getCache().jdks();
             this.build = build;
             this.accessTransformer = accessTransformer;
+            this.legacyFG = legacyFG;
             this.prefix = MCPLegacy.this.prefix();
-            this.cfg = MCPCfg.get(MCPLegacy.this.mcVersion);
+            this.cfg = MCPCfg.get(MCPLegacy.this.mcVersionComp, legacyFG);
             this.inject = mcpInject();
         }
 
@@ -648,15 +665,47 @@ public class MCPLegacy {
             return output;
         }
 
+        private Task writeSorts() {
+            if (this.cfg.decompiler.sorts == null)
+                return null;
+            return Task.named(prefix + "sort", () -> writeSortsImpl());
+        }
+
+        private File writeSortsImpl() {
+            var output = new File(this.build, "sorts.cfg");
+            var sorts = new StringBuilder();
+            for (var sort : this.cfg.decompiler.sorts) {
+                sorts.append("-sort=")
+                    .append(sort)
+                    .append('\n');
+            }
+            var cache = Util.cache(output)
+                .add("sorts", sorts.toString());
+
+            if (Mavenizer.checkCache(output, cache))
+                return output;
+
+            FileUtils.ensureParent(output);
+            try {
+                Files.writeString(output.toPath(), sorts);
+            } catch (IOException e) {
+                return Util.sneak(e);
+            }
+
+            cache.save();
+            return output;
+        }
+
         private Task decompile() {
             var input = this.exceptor();
             var libraries = MCPLegacy.this.listLibraries;
+            var sorts = this.writeSorts();
             return Task.named(prefix + "decompile",
-                Task.deps(input, libraries), () -> decompile(input.execute(), libraries.execute())
+                Task.deps(input, libraries, sorts), () -> decompile(input.execute(), libraries.execute(), sorts == null ? null : sorts.execute())
             );
         }
 
-        private File decompile(File input, File libraries) {
+        private File decompile(File input, File libraries, File sorts) {
             var output = new File(this.build, "decompiled.jar");
             var log = new File(this.build, "decompiled.log");
 
@@ -671,6 +720,9 @@ public class MCPLegacy {
                 .add("tool", tool)
                 .add("args", String.join(", ", decompiler.args))
                 .addKnown("java", Integer.toString(java_version));
+
+            if (sorts != null)
+                cache.add("sorts", sorts);
 
             if (Mavenizer.checkCache(output, cache))
                 return output;
@@ -687,6 +739,9 @@ public class MCPLegacy {
                 temp = new File(dir, input.getName());
 
                 run = new ArrayList<String>(decompiler.args.size());
+                if (sorts != null)
+                    run.addAll(List.of("-cfg", sorts.getAbsolutePath()));
+
                 for (var arg : decompiler.args) {
                     if ("{libraries}".equals(arg)) {
                         // This is a version that doens't support the -cfg arg
@@ -721,6 +776,8 @@ public class MCPLegacy {
                 run.add(dir.getAbsolutePath());
             } else {
                 run = new ArrayList<String>(decompiler.args);
+                if (sorts != null)
+                    run.addAll(List.of("-cfg", sorts.getAbsolutePath()));
                 run.addAll(List.of(
                     "-cfg", libraries.getAbsolutePath(),
                     input.getAbsolutePath(),
@@ -732,6 +789,7 @@ public class MCPLegacy {
                 temp.delete();
 
             var jdk = jdks.tryGet(java_version);
+            //jdk = new File("C:\\Program Files\\java\\jdk1.7.0_80");
             var ret = StupidHacks.runDecompiler(jdk, log, tool, jvm, run);
             if (ret.exitCode != 0 || !temp.exists())
                 throw new IllegalStateException("Failed to run decompiler (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
@@ -766,10 +824,19 @@ public class MCPLegacy {
             var output = new File(this.build, "joined-mci.jar");
             var log = new File(this.build, "joined-mci.log");
             var internalLog = new File(this.build, "joined-mci-internal.log");
+            var customArgs = new ArrayList<String>();
+            if (except.generate)
+                customArgs.add("--generateParams");
+            if (except.markers)
+                customArgs.add("--applyMarkers");
+            if (except.lvt)
+                customArgs.addAll(List.of("--lvt", "LVT"));
+
             var cache = Util.cache(output)
                 .add("tool", tool)
                 .add("input", input)
-                .add("config", config);
+                .add("config", config)
+                .add("args", String.join(", ", customArgs));
             if (json != null)
                 cache.add("json", json);
 
@@ -780,15 +847,11 @@ public class MCPLegacy {
                 "--jarIn", input.getAbsolutePath(),
                 "--jarOut", output.getAbsolutePath(),
                 "--mapIn", config.getAbsolutePath(),
-                "--log", internalLog.getAbsolutePath(), // Annoying but we have to have two logs to actually have the logs be written
-                "--generateParams"
+                "--log", internalLog.getAbsolutePath() // Annoying but we have to have two logs to actually have the logs be written
             ));
+            args.addAll(customArgs);
             if (json != null)
                 args.addAll(List.of("--jsonIn", json.getAbsolutePath()));
-            if (except.markers)
-                args.add("--applyMarkers");
-            if (except.lvt)
-                args.addAll(List.of("--lvt", "LVT"));
 
             var jdk = jdks.tryGet(Constants.MCINJECTOR_JAVA_VERSION);
             var ret = ProcessUtils.runJar(jdk, this.build, log, tool, Collections.emptyList(), args);
@@ -908,7 +971,8 @@ public class MCPLegacy {
             var args = List.of(
                 "--inJar", input.getAbsolutePath(),
                 "--outJar", output.getAbsolutePath(),
-                "--atfile", this.accessTransformer.getAbsolutePath()
+                "--atfile", this.accessTransformer.getAbsolutePath(),
+                "--ignore-invalid" // Needed for some old Forge versions with invalid lines
             );
 
             var jdk = jdks.tryGet(Constants.ACCESS_TRANSFORMER_JAVA_VERSION);
@@ -968,42 +1032,55 @@ public class MCPLegacy {
 
     // The main difference between FG versions was the decompiler we invoked/embeded
     private static final ComparableVersion MC_1_6_1  = new ComparableVersion("1.6.1");
+    private static final ComparableVersion MC_1_7_2  = new ComparableVersion("1.7.2");
     private static final ComparableVersion MC_1_7_10 = new ComparableVersion("1.7.10");
+    private static final ComparableVersion MC_1_8    = new ComparableVersion("1.8");
     private static final ComparableVersion MC_1_8_8  = new ComparableVersion("1.8.8");
+    private static final ComparableVersion MC_1_8_9  = new ComparableVersion("1.8.9");
     private static final ComparableVersion MC_1_9    = new ComparableVersion("1.9");
     private static final ComparableVersion MC_1_9_4  = new ComparableVersion("1.9.4");
     private static final ComparableVersion MC_1_12   = new ComparableVersion("1.12");
 
-    private record Exceptor(boolean json, boolean markers, boolean lvt) {
+    private record Exceptor(boolean json, boolean markers, boolean lvt, boolean generate) {
         private static Exceptor get(ComparableVersion mc) {
             var json = true;
             var markers = true;
             var lvt = false;
+            var generate = true;
             if (mc.compareTo(MC_1_8_8) >= 0) {
                 json = false;
                 lvt = true;
             }
             if (mc.compareTo(MC_1_9) >= 0)
                 markers = false;
-            return new Exceptor(json, markers, lvt);
+            if (mc.compareTo(MC_1_7_2) <= 0)
+                generate = false;
+            return new Exceptor(json, markers, lvt, generate);
         }
     }
     private record Cleanup(Artifact artifact, List<String> args) {
-        private static Cleanup get(String mc) {
+        private static Cleanup get(ComparableVersion mc) {
             var args = List.<String>of();
-            if ("1.8".equals(mc))
+            if (mc.compareTo(MC_1_8_9) >= 0) {
+                args = List.of();
+            } else if (mc.compareTo(MC_1_8_8) >= 0) {
+                args = List.of("--fix-generic-params");//, "--fernflower", "--enum-args=false", "--enum-constructors=false");
+            } else if (mc.compareTo(MC_1_8) >= 0) {
                 args = List.of("--fix-generic-params", "--fml", "--fernflower",
                     // These patches are enum sythetic arg fixes which cleaup does in a generic way
                     "--ignore-patch", "net/minecraft/network/EnumConnectionState.java",
                     "--ignore-patch", "net/minecraft/util/EnumChatFormatting.java",
                     "--ignore-patch", "net/minecraft/util/EnumParticleTypes.java"
                 );
-            else if ("1.8.8".equals(mc))
-                args = List.of("--fix-generic-params");//, "--fernflower", "--enum-args=false", "--enum-constructors=false");
+            } else if (mc.compareTo(MC_1_7_10) >= 0) {
+                args = List.of("--fix-generic-params", "--fml", "--fernflower");
+            } else {
+                args = List.of("--mode", "1.7.2");
+            }
             return new Cleanup(Constants.MCPCLEANUP, args);
         }
     }
-    private record Decompiler(Artifact artifact, boolean legacy, List<String> args) {
+    private record Decompiler(Artifact artifact, boolean legacy, List<String> args, List<String> sorts) {
 
         private static final List<String> DECOMPILER_ARGS = List.of(
             "-din=1", // DECOMPILE_INNER
@@ -1026,6 +1103,7 @@ public class MCPLegacy {
             "-asc=1", // ASCII_STRING_CHARACTERS
             "-log=WARN"
         );
+        /*
         private static final List<String> DECOMPILER_ARGS_188 = List.of(
             "-din=1", // DECOMPILE_INNER
             "-rbr=1", // REMOVE_BRIDGE
@@ -1037,30 +1115,44 @@ public class MCPLegacy {
             "-log=WARN",
             "{libraries}" // Will be expanded to a list of all libraries using -e=
         );
-        private static Decompiler get(ComparableVersion mc) {
-            var decompTool = Constants.FERNFLOWER_FG_2_0_LEGACY;
-            var decompArgs = DECOMPILER_ARGS_188;
-            var legacy = true;
+        */
 
-            if (mc.compareTo(MC_1_12) >= 0) {
-                decompTool = Constants.FERNFLOWER_FG_2_3;
-                decompArgs = DECOMPILER_ARGS;
-                legacy = false;
-            } else if (mc.compareTo(MC_1_8_8) >= 0) {
-                decompTool = Constants.FERNFLOWER_FG_2_2;
-                decompArgs = DECOMPILER_ARGS;
-                legacy = false;
-            }
-            /*
-            else if (mc.compareTo(MC_1_9_4) >= 0)
-                decompTool = Constants.FERNFLOWER_FG_2_0_194;
+        private static String sort(String... args) {
+            return String.join(",", args);
+        }
+        private static Decompiler get(ComparableVersion mc, @Nullable FGVersion legacyFG) {
+            if (mc.compareTo(MC_1_12) >= 0)
+                return new Decompiler(Constants.FERNFLOWER_FG_2_3, false, DECOMPILER_ARGS, null);
             else if (mc.compareTo(MC_1_8_8) >= 0)
-                decompTool = Constants.FERNFLOWER_FG_2_0_194;
-            */
-            else { // 1.8
-                decompArgs = DECOMPILER_ARGS_18;
+                return new Decompiler(Constants.FERNFLOWER_FG_2_2, false, DECOMPILER_ARGS, null);
+            else if (mc.compareTo(MC_1_8) >= 0)
+                return new Decompiler(Constants.FERNFLOWER_FG_2_0_LEGACY, true, DECOMPILER_ARGS_18, null);
+            else if (mc.compareTo(MC_1_7_2) >= 0 && legacyFG == null) // Forge 1.7.2 uses FG 1.1 and 1.2 so we need this check
+                return new Decompiler(Constants.FERNFLOWER_FG_2_0_LEGACY, true, DECOMPILER_ARGS_18, null);
+            else {
+                // Old Fernflower uses HashSet to iterate over inner classes
+                // Which the iteration order has changed a few times between java versions
+                // So unfortunately, we have to hardcode some specifc sorting to make patches apply
+                var sorts = switch (mc.toString()) {
+                    case "1.7.2" -> List.of(
+                        sort("net/minecraft/client/gui/inventory/GuiContainerCreative", "CreativeSlot", "ContainerCreative"),
+                        sort("net/minecraft/client/renderer/texture/Stitcher", "Slot", "Holder"),
+                        sort("net/minecraft/client/settings/GameSettings", "SwitchOptions", "Options"),
+                        sort("net/minecraft/enchantment/EnchantmentHelper", "IModifier", "ModifierDamage", "ModifierLiving", "HurtIterator", "DamageIterator"),
+                        sort("net/minecraft/entity/player/EntityPlayer", "EnumStatus", "EnumChatVisibility"),
+                        sort("net/minecraft/world/biome/BiomeGenBase", "SpawnListEntry", "Height", "TempCategory"),
+                        sort("net/minecraft/world/gen/structure/ComponentScatteredFeaturePieces", "Feature", "JunglePyramid", "SwampHut", "DesertPyramid"),
+                        sort("net/minecraft/world/gen/structure/StructureMineshaftPieces", "Cross", "Room", "Corridor", "Stairs"),
+                        sort("net/minecraft/world/gen/structure/StructureStrongholdPieces", "Stairs", "Straight", "Library", "PortalRoom", "ChestCorridor", "RoomCrossing", "StairsStraight", "Stairs2", "Prison", "LeftTurn", "RightTurn", "Stones", "Stronghold", "Stronghold$Door", "Crossing", "Corridor", "SwitchDoor", "PieceWeight"),
+                        sort("net/minecraft/world/gen/structure/StructureVillagePieces",
+                                "Well", "Village", "Hall", "House1", "Church", "House4Garden", "Path",
+                                "House2", "Start", "House3", "WoodHut", "Field1", "Field2", "Road", "Torch", "PieceWeight"),
+                        sort("net/minecraft/world/storage/MapData", "MapCoord", "MapInfo")
+                    );
+                    default -> null;
+                };
+                return new Decompiler(Constants.FERNFLOWER_FG_1_0, true, DECOMPILER_ARGS_18, sorts);
             }
-            return new Decompiler(decompTool, legacy, decompArgs);
         }
     }
     private record MCPCfg(
@@ -1068,11 +1160,10 @@ public class MCPLegacy {
         Cleanup cleanup,
         Decompiler decompiler
     ) {
-        private static MCPCfg get(String mc) {
-            var comp = new ComparableVersion(mc);
-            var except = Exceptor.get(comp);
+        private static MCPCfg get(ComparableVersion mc, @Nullable FGVersion legacyFG) {
+            var except = Exceptor.get(mc);
             var cleanup = Cleanup.get(mc);
-            var decomp = Decompiler.get(comp);
+            var decomp = Decompiler.get(mc, legacyFG);
             return new MCPCfg(except, cleanup, decomp);
         }
     }
