@@ -17,9 +17,12 @@ jobs:
     strategy:
       matrix:
         command: [
-            "--forge --version 1.21.11-61.1.0",
+            "--forge --version 1.6.4-9.11.1.964",
+            "--forge --version 1.7.10-10.13.4.1614-1.7.10",
+            "--forge --version 1.8.9-11.15.1.2318-1.8.9,
+            "--forge --version 1.12.2-14.23.5.2864",
             "--forge --version 1.20.1-47.4.0",
-            "--forge --version 1.12.2-14.23.5.2859 --mappings snapshot:20171003-1.12",
+            "--forge --version 1.21.11-61.1.0",
             "--forge --version 26.1-62.0.0",
             "--client --version 1.20.1",
             "--server --version 1.20.1",
