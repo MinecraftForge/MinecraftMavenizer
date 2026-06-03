@@ -119,7 +119,7 @@ public enum FGVersion {
     // Special versions that do not match the general ranges of historical versions.
     // This will probably need updating when we back port new ForgeDev toolchain to older versions.
     private static final List<SpecialCase> SPECIAL_CASES = List.of(
-        special(null, "1.6.4-9.11.1.964", "1.6.5"),
+        special(null, "1.6.4-9.11.1.965", "1.6.5"),
         special(v3, "1.12.2-14.23.5.2851", "1.12.3")
     );
 

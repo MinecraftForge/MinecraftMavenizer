@@ -86,7 +86,9 @@ public final class ForgeRepo extends Repo {
         this.globalBuild = new File(cache.root(), "forge/.global");
     }
 
-    private static boolean isPython(String version) {
+    public static boolean isPython(String version) {
+        if (FGVersion.fromForge(version) != null)
+            return false;
         var ver = new ComparableVersion(version);
         return ver.compareTo(PYTHON_START) >= 0 && ver.compareTo(PYTHON_END) < 0;
     }
@@ -104,7 +106,7 @@ public final class ForgeRepo extends Repo {
         try {
             // TODO [MCMavenizer][Backporting] You know what has to be done eventually...
             if (isPython(version)) {
-                Info.gatherVariants(this.cache.maven(), version);
+                //Info.gatherVariants(this.cache.maven(), version, fg);
                 throw new IllegalArgumentException("Python version unsupported!");
             }
 
@@ -512,8 +514,10 @@ public final class ForgeRepo extends Repo {
                 throw new RuntimeException(e);
             }
         }
-        private static List<PendingArtifact> gatherVariants(MavenCache cache, String version) {
+        private static List<PendingArtifact> gatherVariants(MavenCache cache, String version, @Nullable FGVersion fg) {
             var userdev = getUserdev(version);
+            if  (fg == null)
+                userdev = userdev.withClassifier("src").withExtension("zip");
             var mappingsFiles = new ArrayList<String>();
             var confFiles = new ArrayList<String>();
 
@@ -522,14 +526,25 @@ public final class ForgeRepo extends Repo {
                 for (var itr = zip.entries().asIterator(); itr.hasNext(); ) {
                     var entry = itr.next();
                     var ename = entry.getName();
-                    var filename = ename.indexOf('/') == -1 ? ename : ename.substring(ename.indexOf('/') + 1);
+                    var filename = ename.lastIndexOf('/') == -1 ? ename : ename.substring(ename.lastIndexOf('/') + 1);
 
-                    if ("fields.csv".equals(filename) || "methods.csv".equals(filename) || "params.csv".equals(filename)) {
+                    if ("fields.csv".equals(filename)
+                        || "methods.csv".equals(filename)
+                        || "params.csv".equals(filename)
+                    ) {
                         mappingsFiles.add(ename);
-                    } else if (ename.startsWith("conf/")) {
+                    } else if (ename.startsWith("conf/")
+                        || ename.startsWith("forge/conf/")
+                        || ename.startsWith("forge/fml/conf/")
+                    ) {
                         confFiles.add(ename);
                     }
                 }
+
+                if (confFiles.isEmpty())
+                    throw new IllegalStateException("Missing conf files: " + version);
+                if (mappingsFiles.isEmpty())
+                    throw new IllegalStateException("Missing mapping files: " + version);
 
                 var hash = hashEntries(zip, mappingsFiles);
                 if (!MAPPINGS.containsKey(hash)) {

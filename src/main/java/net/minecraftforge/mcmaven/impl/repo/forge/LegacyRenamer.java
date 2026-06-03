@@ -33,7 +33,18 @@ class LegacyRenamer {
     private static final Pattern METHOD     = Pattern.compile("^((?: {4})+|\\t+)(?:[\\w$.\\[\\]]+ )+(func_[0-9]+_[a-zA-Z_]+)\\(");
     private static final Pattern FIELD      = Pattern.compile("^((?: {4})+|\\t+)(?:[\\w$.\\[\\]]+ )+(field_[0-9]+_[a-zA-Z_]+) *(?:=|;)");
 
+    private static final Pattern METHOD_FG1 = Pattern.compile("^( {4}|\\t)(?:[\\w$.\\[\\]]+ )*(func_[0-9]+_[a-zA-Z_]+)\\(");
+    private static final Pattern FIELD_FG1  = Pattern.compile("^( {4}|\\t)(?:[\\w$.\\[\\]]+ )*(field_[0-9]+_[a-zA-Z_]+) *(?:=|;)");
+
+    public static void renameFG_1_0(File input, File mappings, File output) {
+        rename(input, mappings, output, false, true);
+    }
+
     public static void rename(File input, File mappings, File output, boolean javadocMarkers) {
+        rename(input, mappings, output, javadocMarkers, false);
+    }
+
+    private static void rename(File input, File mappings, File output, boolean javadocMarkers, boolean fg_1_0) {
         try {
             var names = MCPNames.load(mappings);
             FileUtils.ensureParent(output);
@@ -47,8 +58,13 @@ class LegacyRenamer {
                     if (!entry.getName().endsWith(".java")) {
                         zin.transferTo(zout);
                     } else {
+                        if (entry.getName().endsWith("ComponentVillageStartPiece.java"))
+                            System.currentTimeMillis();
                         var lines = NewLineDetector.readLines(zin);
-                        lines = rename(names, lines, javadocMarkers);
+                        if (fg_1_0)
+                            lines = renameFG_1_0(names, lines);
+                        else
+                            lines = rename(names, lines, javadocMarkers);
                         for (var itr = lines.iterator(); itr.hasNext();) {
                             var line = itr.next();
                             zout.write(line.getBytes(StandardCharsets.UTF_8));
@@ -87,6 +103,7 @@ class LegacyRenamer {
                         formatted = matcher.group(1) + "// JAVADOC METHOD $$ " + name;
                     else
                         formatted = JavadocAdder.buildJavadoc(matcher.group(1), docs, true);
+
                     MCPNames.insertAboveAnnotations(newLines, formatted);
                 }
             } else if ((matcher = FIELD.matcher(line)).find()) {
@@ -97,11 +114,46 @@ class LegacyRenamer {
                     if (javadocMarkers)
                         formatted = matcher.group(1) + "// JAVADOC FIELD $$ " + name;
                     else
-                        formatted = JavadocAdder.buildJavadoc(matcher.group(1), docs, true);
+                        formatted = JavadocAdder.buildJavadoc(matcher.group(1), docs, false);
+
                     MCPNames.insertAboveAnnotations(newLines, formatted);
                 }
             }
             newLines.add(names.replaceInLine(line, null));
+        }
+        return newLines;
+    }
+
+
+    // FG 1.0 didn't use the itnermediate javadoc markers
+    // And didnt take annotations into account when inserting javadocs
+    private static List<String> renameFG_1_0(MCPNames names, List<String> lines) {
+        var newLines = new ArrayList<String>(lines.size());
+        Matcher matcher = null;
+        String lastLine = null;
+        for (var line : lines) {
+            if ((matcher = METHOD_FG1.matcher(line)).find()) {
+                var name = matcher.group(2);
+                var docs = names.docs().get(name);
+
+                if (docs != null && !docs.isEmpty()) {
+                    if (lastLine != null && !lastLine.isEmpty() && !lastLine.endsWith("{"))
+                        newLines.add("");
+                    String formatted = JavadocAdder.buildJavadoc(matcher.group(1), docs, true);
+                    newLines.add(formatted);
+                }
+            } else if ((matcher = FIELD_FG1.matcher(line)).find()) {
+                var name = matcher.group(2);
+                var docs = names.docs().get(name);
+                if (docs != null && !docs.isEmpty()) {
+                    if (lastLine != null && !lastLine.isEmpty() && !lastLine.endsWith("{"))
+                        newLines.add("");
+                    String formatted = JavadocAdder.buildJavadoc(matcher.group(1), docs, docs.length() >= 70);
+                    newLines.add(formatted);
+                }
+            }
+            newLines.add(names.replaceInLine(line, null));
+            lastLine = line;
         }
         return newLines;
     }

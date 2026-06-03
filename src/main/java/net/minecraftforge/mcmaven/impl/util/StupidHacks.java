@@ -150,6 +150,7 @@ public class StupidHacks {
     }
     static {
         // FG 1.x, these were packed in the userdev. Manually uploaded
+        mappings("1.6.3-9.11.0.873",         "snapshot:20130918-1.6.3");
         mappings("1.7.2-10.12.0.967",        "snapshot:20131226-1.7.2");
         mappings("1.7.2-10.12.0.1024",       "snapshot:20140205-1.7.2");
         mappings("1.7.10_pre4-10.12.2.1137", "snapshot:20140624-1.7.10-pre4");
@@ -180,7 +181,7 @@ public class StupidHacks {
                 break;
             version = map.mappings();
         }
-        if(version == null)
+        if (version == null)
             throw new IllegalStateException("Could not determine default mappings for " + forgeVersion);
         return Mappings.of(version);
     }

@@ -12,6 +12,7 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -41,6 +42,7 @@ import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks.MCFile;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.Constants;
+import net.minecraftforge.mcmaven.impl.util.NewLineDetector;
 import net.minecraftforge.mcmaven.impl.util.ProcessUtils;
 import net.minecraftforge.mcmaven.impl.util.StupidHacks;
 import net.minecraftforge.mcmaven.impl.util.Task;
@@ -108,7 +110,7 @@ public class MCPLegacy {
         // TODO: [Mavenizer] Maybe write a task to convert the old python to newer formated artifacts?
         var prefix = this.isPython ? "conf/" : "";
         this.mappings = extract(prefix + "joined.srg");
-        this.exceptorJson = extract(prefix + "exceptor.json"); // Possibly non-existant?
+        this.exceptorJson = extract(prefix + "exceptor.json");
         this.exceptorConfig = extract(prefix + "joined.exc");
 
         if (this.mcVersionComp.compareTo(MC_1_8) < 0)
@@ -144,10 +146,6 @@ public class MCPLegacy {
 
     public Task getMappings() {
         return this.mappings;
-    }
-
-    public Task getExceptorJson() {
-        return this.exceptorJson;
     }
 
     public int getJavaTarget() {
@@ -951,19 +949,28 @@ public class MCPLegacy {
             var renamed = MCPLegacy.this.rename();
             if (this.accessTransformer == null)
                 return renamed;
+
+            // Obfed access transformers, we need to remap them
+            var config = MCPLegacy.this.mcVersionComp.compareTo(MC_1_6_4) <= 0
+                ? renameAts()
+                : null;
+
             return Task.named(prefix + "modifyAccess",
-                Task.deps(renamed), () -> this.modifyAccess(renamed.execute())
+                Task.deps(renamed, config), () -> this.modifyAccess(renamed.execute(), config == null ? null : config.execute())
             );
         }
 
-        private File modifyAccess(File input) {
+        private File modifyAccess(File input, @Nullable File config) {
             var tool = maven.download(Constants.ACCESS_TRANSFORMER);
             var output = new File(this.build, "modify-access.jar");
             var log = new File(this.build, "modify-access.log");
+            if (config == null)
+                config = this.accessTransformer;
+
             var cache = Util.cache(output)
                 .add("tool", tool)
                 .add("input", input)
-                .add("config", this.accessTransformer);
+                .add("config", config);
 
             if (Mavenizer.checkCache(output, cache))
                 return output;
@@ -971,7 +978,7 @@ public class MCPLegacy {
             var args = List.of(
                 "--inJar", input.getAbsolutePath(),
                 "--outJar", output.getAbsolutePath(),
-                "--atfile", this.accessTransformer.getAbsolutePath(),
+                "--atfile", config.getAbsolutePath(),
                 "--ignore-invalid" // Needed for some old Forge versions with invalid lines
             );
 
@@ -979,6 +986,97 @@ public class MCPLegacy {
             var ret = ProcessUtils.runJar(jdk, this.build, log, tool, Collections.emptyList(), args);
             if (ret.exitCode != 0)
                 throw new IllegalStateException("Failed to run Access Transformer (exit code " + ret.exitCode + "), See log: " + log.getAbsolutePath());
+
+            cache.save();
+            return output;
+        }
+
+        private Task renameAts() {
+            var mappings = MCPLegacy.this.getMappings();
+
+            return Task.named(prefix + "renameAts",
+                Task.deps(mappings), () -> this.renameAts(mappings.execute())
+            );
+        }
+
+        // Obfusciated access transformers for 1.6.4 and below
+        // Uses an old format that AccessTransformer doesn't support, so I transform it here, fairly easy to do
+        // https://github.com/MinecraftForge/FML/blob/f1b3381e61fac1a0ae90f521223c6bc613eb4888/common/cpw/mods/fml/common/asm/transformers/AccessTransformer.java#L120
+        //
+        // If we reworked the process to apply ATs before renaming, then all that really needs to be done is to replace the first . with a space
+        // But This is simple enough to do and should work
+        private File renameAts(File mappings) {
+            var output = new File(this.build, "renamed-at.cfg");
+            var cache = Util.cache(output)
+                .add("input", this.accessTransformer)
+                .add("mappings", mappings);
+
+            if (Mavenizer.checkCache(output, cache))
+                return output;
+
+            FileUtils.ensureParent(output);
+            try (var out = new FileOutputStream(output);
+                 var inf = new FileInputStream(this.accessTransformer)
+            ) {
+                var map = IMappingFile.load(mappings);
+                var reader = new NewLineDetector(new InputStreamReader(inf));
+
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String comment = null;
+                    int idx = line.indexOf('#');
+                    if (idx != -1) {
+                        comment = line.substring(idx);
+                        line = idx == 0 ? "" : line.substring(0, idx);
+                    }
+
+                    line = line.trim();
+                    if (!line.isEmpty()) {
+                        idx = line.indexOf(' ');
+                        if (idx == -1) { // Must have both access and traget
+                            Mavenizer.LOGGER.debug("Invalid access transformer line: " + line);
+                            continue;
+                        }
+
+                        var target = line.substring(idx + 1);
+                        var transformation = line.substring(0, idx + 1);
+                        idx = target.indexOf('.');
+
+                        // Class target
+                        if (idx == -1) {
+                            line = transformation + map.remapClass(target);
+                        } else {
+                            var cls = target.substring(0, idx);
+                            target = target.substring(idx + 1);
+                            var mcls = map.getClass(cls);
+
+                            // There are no mappings for this class, so assume its not obfed
+                            if (mcls != null) {
+                                idx = target.indexOf('(');
+
+                                if (idx == -1) { // Field
+                                    line = transformation + map.remapClass(cls) + ' ' + mcls.remapField(target);
+                                } else { // Method
+                                    var name = target.substring(0, idx);
+                                    var desc = target.substring(idx);
+                                    line = transformation + map.remapClass(cls) + ' ' + mcls.remapMethod(name, desc) + map.remapDescriptor(desc);
+                                }
+                            }
+                        }
+                    }
+
+
+                    out.write(line.getBytes(StandardCharsets.UTF_8));
+                    if (comment != null) {
+                        if (!line.isEmpty())
+                            out.write(' ');
+                        out.write(comment.getBytes(StandardCharsets.UTF_8));
+                    }
+                    out.write('\n');
+                }
+            } catch (IOException e) {
+                return Util.sneak(e);
+            }
 
             cache.save();
             return output;
@@ -1032,6 +1130,7 @@ public class MCPLegacy {
 
     // The main difference between FG versions was the decompiler we invoked/embeded
     private static final ComparableVersion MC_1_6_1  = new ComparableVersion("1.6.1");
+    private static final ComparableVersion MC_1_6_4  = new ComparableVersion("1.6.4");
     private static final ComparableVersion MC_1_7_2  = new ComparableVersion("1.7.2");
     private static final ComparableVersion MC_1_7_10 = new ComparableVersion("1.7.10");
     private static final ComparableVersion MC_1_8    = new ComparableVersion("1.8");
@@ -1047,10 +1146,15 @@ public class MCPLegacy {
             var markers = true;
             var lvt = false;
             var generate = true;
+
+            if (mc.compareTo(MC_1_6_4) <= 0)
+                json = false;
+
             if (mc.compareTo(MC_1_8_8) >= 0) {
                 json = false;
                 lvt = true;
             }
+
             if (mc.compareTo(MC_1_9) >= 0)
                 markers = false;
             if (mc.compareTo(MC_1_7_2) <= 0)
@@ -1074,8 +1178,10 @@ public class MCPLegacy {
                 );
             } else if (mc.compareTo(MC_1_7_10) >= 0) {
                 args = List.of("--fix-generic-params", "--fml", "--fernflower");
-            } else {
+            } else if (mc.compareTo(MC_1_7_2) >= 0) {
                 args = List.of("--mode", "1.7.2");
+            } else {
+                args = List.of("--mode", "1.6.4");
             }
             return new Cleanup(Constants.MCPCLEANUP, args);
         }

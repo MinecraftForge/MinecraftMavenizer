@@ -79,7 +79,7 @@ public record MinecraftMaven(
 ) {
     // Only 1.14.4+ has official mappings, we can support more when we add more mappings
     private static final MinecraftVersion MIN_OFFICIAL_MAPPINGS = MinecraftVersion.from("1.14.4");
-    private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.7.2");
+    private static final ComparableVersion MIN_SUPPORTED_FORGE = new ComparableVersion("1.6.4");
 
     public MinecraftMaven {
         LOGGER.info("  Output:             " + output.getAbsolutePath());
@@ -184,20 +184,14 @@ public record MinecraftMaven(
                 var ver = cver.toString();
                 var mcVersion = Util.forgeToMcVersion(ver);
 
-                var fg = FGVersion.fromForge(ver);
-                if (fg == null) // Unsupported
-                    continue;
-
                 if (verStart != null && cver.compareTo(verStart) < 0)
                     continue;
                 if (verEnd != null && cver.compareTo(verEnd) > 0)
                     continue;
 
-                /*
-                if (mcVersion.equals(lastMCVersion))
+                // Python isn't supported yet
+                if (ForgeRepo.isPython(ver))
                     continue;
-                lastMCVersion = mcVersion;
-                */
 
                 // Old versions don't have official mappings, and some of them require specific MCP mappigns due to the sources not being in
                 // full SRG names (we don't remap static imports) So if we're using official mappings (the default arugment) lets use the

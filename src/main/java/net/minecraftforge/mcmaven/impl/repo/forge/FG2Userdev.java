@@ -389,11 +389,13 @@ public class FG2Userdev implements ForgeVersionCommon {
                     var result = patch.patchSingle(false, ctx);
 
                     if (!result.getStatus().isSuccess()) {
-                        LOGGER.error("Fialed to patch " + name);
-                        LOGGER.error("  Input:   " + input.getAbsolutePath());
-                        LOGGER.error("  Patches: " + patchesArchive.getAbsolutePath());
-                        LOGGER.error("  Output:  " + output.getAbsolutePath());
+                        if (failure == null) {
+                            LOGGER.error("Input:   " + input.getAbsolutePath());
+                            LOGGER.error("Patches: " + patchesArchive.getAbsolutePath());
+                            LOGGER.error("Output:  " + output.getAbsolutePath());
+                        }
 
+                        LOGGER.error("Fialed to patch " + name);
                         for (var hunk : result.getHunks())
                             LOGGER.error("  Hunk #" + hunk.getHunkID() + ": " + hunk.getStatus().name());
 
@@ -600,7 +602,10 @@ public class FG2Userdev implements ForgeVersionCommon {
         if (Mavenizer.checkCache(output, cache))
             return output;
 
-        LegacyRenamer.rename(input, this.data, output, true);
+        if (this.fgVersion == FGVersion.v1)
+            LegacyRenamer.renameFG_1_0(input, this.data, output);
+        else
+            LegacyRenamer.rename(input, this.data, output, true);
 
         cache.save();
         return output;
@@ -616,6 +621,11 @@ public class FG2Userdev implements ForgeVersionCommon {
 
     public Task getSourcesWithJavadocs() {
         var input = this.getSources();
+
+        // FG v1 applied javadocs before Forge patches, so just return the source
+        if (this.fgVersion == FGVersion.v1)
+            return input;
+
         return Task.named("javadocs",
             Task.deps(input), () -> this.javadocs(input.execute())
         );
