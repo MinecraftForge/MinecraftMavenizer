@@ -38,7 +38,7 @@ dependencyResolutionManagement.versionCatalogs.register('libs') {
     library 'commonsio', 'commons-io', 'commons-io' version '2.18.0'
 
     // Utilities
-    library 'utils-download', 'net.minecraftforge', 'download-utils'  version '0.4.0'
+    library 'utils-download', 'net.minecraftforge', 'download-utils'  version '0.4.1'
     library 'utils-files',    'net.minecraftforge', 'file-utils'      version '0.3.3'
     library 'utils-hash',     'net.minecraftforge', 'hash-utils'      version '0.2.2'
     library 'utils-data',     'net.minecraftforge', 'json-data-utils' version '0.4.9'

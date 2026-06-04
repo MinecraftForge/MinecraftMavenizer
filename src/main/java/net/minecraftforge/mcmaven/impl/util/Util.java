@@ -261,7 +261,7 @@ public class Util {
             return cache.maven().download(artifact);
         } catch (Exception e) {
             // If its 404 on Forge's maven, try Mojang's
-            if (e.getCause() instanceof FileNotFoundException) {
+            if (e instanceof FileNotFoundException) {
                 try {
                     return cache.minecraft().download(artifact);
                 } catch (Exception e2) {

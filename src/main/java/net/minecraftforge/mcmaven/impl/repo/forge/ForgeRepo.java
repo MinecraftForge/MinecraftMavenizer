@@ -122,13 +122,13 @@ public final class ForgeRepo extends Repo {
         var indent = LOGGER.push();
         try {
             // TODO [MCMavenizer][Backporting] You know what has to be done eventually...
-            if (isPython(version)) {
-                //Info.gatherVariants(this.cache.maven(), version, fg);
-                throw new IllegalArgumentException("Python version unsupported!");
-            }
-
-            if (fg == null)
+            if (fg == null) {
+                if (isPython(version)) {
+                    //Info.gatherVariants(this.cache.maven(), version, fg);
+                    throw new IllegalArgumentException("Python version unsupported!");
+                }
                 throw new IllegalArgumentException("Unknown Forge version " + version);
+            }
 
             switch (fg) {
                 case v1:
