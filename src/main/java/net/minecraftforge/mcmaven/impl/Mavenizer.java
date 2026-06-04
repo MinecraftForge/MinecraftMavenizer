@@ -21,7 +21,7 @@ public final class Mavenizer {
     private static boolean offline = false;
 
     private static boolean cacheOnly = false;
-    private static boolean cacheMiss = false;
+    public static boolean cacheMiss = false;
     private static boolean ignoreCache = false;
 
     public static boolean isOffline() {

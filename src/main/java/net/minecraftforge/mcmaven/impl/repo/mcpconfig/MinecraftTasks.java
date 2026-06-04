@@ -383,7 +383,8 @@ public class MinecraftTasks {
         if (clientLibraries == null) {
             var ret = new ArrayList<ArtifactFile>();
             var json = JsonData.minecraftVersion(this.versionJson.execute());
-            for (var lib : json.getLibs()) {
+            var libs = json.getLibs();
+            for (var lib : libs) {
                 //Natives don't have main download
                 if (lib.dl == null)
                     continue;

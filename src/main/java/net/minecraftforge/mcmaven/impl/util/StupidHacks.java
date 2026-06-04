@@ -52,7 +52,7 @@ public class StupidHacks {
         "org.scala-lang:scala-xml_2.11:1.0.2",                "org.scala-lang.modules:scala-xml_2.11:1.0.2",
         "org.scala-lang:scala-parser-combinators_2.11:1.0.1", "org.scala-lang.modules:scala-parser-combinators_2.11:1.0.1",
         // They renamed the artifact
-        "tv.twitch:twitch-external-platform:4.5", "tv.twitch:twitch-platform:6.5",
+        //"tv.twitch:twitch-external-platform:4.5", "tv.twitch:twitch-platform:4.5",
         // Bumped transitivly somewhere in 1.7.10-pre4, and relied on the bumped version
         "com.google.guava:guava:15.0", "com.google.guava:guava:16.0"
     );

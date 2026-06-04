@@ -32,6 +32,7 @@ import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPLegacy;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MinecraftTasks.ArtifactFile;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.ComparableVersion;
 import net.minecraftforge.mcmaven.impl.util.ContextualPatch;
@@ -188,14 +189,30 @@ public class FG2Userdev implements ForgeVersionCommon {
 
     @Override
     public void forAllLibraries(Consumer<Artifact> consumer, Predicate<Artifact> filter) {
+
+        /*
         for (var library : this.config.getLibs()) {
-            var artifact = Artifact.from(library.coord).withOS(library.os);
-            if (filter == null || filter.test(artifact))
+            var artifact = StupidHacks.fixLegacyForgeDeps(Artifact.from(library.coord));
+            if (artifact == null || library.dl == null)
+                continue;
+            artifact = artifact.withOS(library.os);
+            if (filter == null || filter.test(artifact)) {
+                System.out.println("Dev: " + artifact + " " + artifact.getOs());
                 consumer.accept(artifact);
+            }
         }
         for (var library : this.getMCP().getMinecraftTasks().getClientLibraries()) {
-            if (filter == null || filter.test(library.artifact()))
+            if (filter == null || filter.test(library.artifact())) {
+                System.out.println("MC:  " + library.artifact() + " " + library.artifact().getOs());
                 consumer.accept(library.artifact());
+            }
+        }
+        */
+        var libs = getLibraryFiles();
+        for (var lib : libs) {
+            if (filter == null || filter.test(lib.artifact())) {
+                consumer.accept(lib.artifact());
+            }
         }
     }
 
@@ -211,12 +228,21 @@ public class FG2Userdev implements ForgeVersionCommon {
 
     @Override
     public List<File> getClasspath() {
-        var classpath = new ArrayList<File>();
+        var ret = new ArrayList<File>();
+        for (var lib : getLibraryFiles())
+            ret.add(lib.file());
+        return ret;
+
+    }
+    public List<ArtifactFile> getLibraryFiles() {
+        var classpath = new ArrayList<ArtifactFile>();
         var seen = new HashMap<String, Artifact>();
         var cache = this.forge.getCache();
 
         // minecraft version.json libs + userdev libs
-        for (var lib : this.getMCP().getMinecraftTasks().getClientLibraries()) {
+        var mc = this.getMCP().getMinecraftTasks();
+        var libs = mc.getClientLibraries();
+        for (var lib : libs) {
 
             // We might have to upgrade a vanilla dependency
             var artifact = StupidHacks.fixLegacyForgeDeps(lib.artifact());
@@ -224,9 +250,9 @@ public class FG2Userdev implements ForgeVersionCommon {
                 continue;
 
             if (artifact != lib.artifact())
-                classpath.add(Util.getArtifact(cache, artifact));
+                classpath.add(new ArtifactFile(artifact, Util.getArtifact(cache, artifact, true)));
             else
-                classpath.add(lib.file());
+                classpath.add(lib);
 
             // We just want the group:name and clssifier, in case they have updated the version since we were built
             seen.put(artifact.withVersion(null).toString(), artifact);
@@ -240,14 +266,14 @@ public class FG2Userdev implements ForgeVersionCommon {
                 var unversioned = artifact.withVersion(null).toString();
                 if (!seen.containsKey(unversioned)) {
                     if (artifact != null)
-                        classpath.add(Util.getArtifact(cache, artifact));
+                        classpath.add(new ArtifactFile(artifact, Util.getArtifact(cache, artifact, true)));
                 }
             }
         } else {
             for (var lib : this.config.libraries) {
                 var artifact = StupidHacks.fixLegacyForgeDeps(Artifact.from(lib.name));
                 if (artifact != null)
-                    classpath.addFirst(Util.getArtifact(cache, artifact)); // Add our versions before vanilla's in case we upgrade
+                    classpath.addFirst(new ArtifactFile(artifact, Util.getArtifact(cache, artifact, true))); // Add our versions before vanilla's in case we upgrade
             }
         }
 
@@ -599,6 +625,11 @@ public class FG2Userdev implements ForgeVersionCommon {
     }
 
     public Map<String, RunConfig> getRuns() {
+        var mc = new ComparableVersion(this.mcp.getMinecraftTasks().getVersion());
+        var prefix = "cpw.mods.";
+        if (mc.compareTo(new ComparableVersion("1.8")) >= 0)
+            prefix = "net.minecraftforge.";
+
         // Use LinkedHashMap to keep things stable
         var serverEnv = new LinkedHashMap<String, String>();
         serverEnv.put("MCP_TO_SRG",    "{mcp_to_srg}");
@@ -607,10 +638,10 @@ public class FG2Userdev implements ForgeVersionCommon {
         serverEnv.put("FORGE_VERSION", this.getForgeVersion());
         serverEnv.put("FORGE_GROUP",   "net.minecraftforge");
         serverEnv.put("MC_VERSION",    this.getMinecraftVersion());
-        serverEnv.put("tweakClass",    "net.minecraftforge.fml.common.launcher.FMLServerTweaker");
+        serverEnv.put("tweakClass",    prefix + "fml.common.launcher.FMLServerTweaker");
 
         var clientEnv = new LinkedHashMap<>(serverEnv);
-        clientEnv.put("tweakClass",       "net.minecraftforge.fml.common.launcher.FMLTweaker");
+        clientEnv.put("tweakClass",       prefix + "fml.common.launcher.FMLTweaker");
         clientEnv.put("assetIndex",       "{asset_index}");
         clientEnv.put("assetDirectory",   "{assets_root}");
         clientEnv.put("nativesDirectory", "{natives}");

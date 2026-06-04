@@ -252,7 +252,20 @@ public class Util {
     public static final File getArtifact(Cache cache, String coords) {
         return getArtifact(cache, Artifact.from(coords));
     }
-    public static final File getArtifact(Cache cache, Artifact artifact) {
+    public static final File getArtifact(Cache cache, Artifact artifact, boolean quiet) {
+        if (!quiet)
+            return getArtifact(cache, artifact);
+
+        // This is ugly, but I dont feel like re-working the maven system to not print the stack when doing a fallback
+        boolean old = Mavenizer.cacheMiss;
+        Mavenizer.cacheMiss = true;
+        try {
+            return getArtifact(cache, artifact);
+        } finally {
+            Mavenizer.cacheMiss = old;
+        }
+    }
+    private static final File getArtifact(Cache cache, Artifact artifact) {
         // Some libraries are on Minecraft's maven. Such as launchwrapper.
         // Rather then configure Forge's server to proxy Mojang's I add this check.
         if ("net.minecraft".equals(artifact.getGroup()))
