@@ -9,7 +9,6 @@ import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
 import net.minecraftforge.mcmaven.impl.repo.Repo.PendingArtifact;
-import net.minecraftforge.mcmaven.impl.repo.forge.FGVersion;
 import net.minecraftforge.mcmaven.impl.repo.forge.ForgeRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
@@ -188,9 +187,7 @@ public record MinecraftMaven(
                     continue;
                 if (verEnd != null && cver.compareTo(verEnd) > 0)
                     continue;
-
-                // Python isn't supported yet
-                if (ForgeRepo.isPython(ver))
+                if (!ForgeRepo.isSupported(ver))
                     continue;
 
                 // Old versions don't have official mappings, and some of them require specific MCP mappigns due to the sources not being in
@@ -219,7 +216,21 @@ public record MinecraftMaven(
             if (StupidHacks.BLACKLISTED_FORGE_BUILDS.contains(artifact.getVersion()))
                 throw new IllegalArgumentException("Forge version " + artifact.getVersion() + " has been blacklisted for technical reasons, pick a different Forge version");
 
-            var mappings = this.mappings.withMCVersion(Util.forgeToMcVersion(version));
+            var mcVersion = Util.forgeToMcVersion(version);
+            var mappings = this.mappings.withMCVersion(mcVersion);
+
+            // Old versions don't have official mappings, and some of them require specific MCP mappigns due to the sources not being in
+            // full SRG names (we don't remap static imports) So if we're using official mappings (the default arugment) lets use the
+            // specific bot mappings that the version of Forge was built for. Any other option is at user's pearl and may not work.
+            if (this.mappings.channel().equals("official") && !hasOfficialMappings(mcprepo, mcVersion)) {
+                var cver = new ComparableVersion(artifact.getVersion());
+                var newMappings = StupidHacks.getDefaultMappings(cver).withMCVersion(mcVersion);
+                if (!newMappings.channel().equals(mappings.channel()) || !newMappings.version().equals(mappings.version())) {
+                    mappings = newMappings;
+                    LOGGER.info("Using Mappings: " + mappings);
+                }
+            }
+
             var artifacts = repo.process(artifact, mappings, outputJson);
             finalize(artifact, mappings, artifacts);
         }

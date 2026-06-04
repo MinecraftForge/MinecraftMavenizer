@@ -28,12 +28,6 @@ import java.util.zip.ZipOutputStream;
 
 import org.jetbrains.annotations.Nullable;
 
-import io.codechicken.diffpatch.cli.PatchOperation;
-import io.codechicken.diffpatch.util.LogLevel;
-import io.codechicken.diffpatch.util.PatchMode;
-import io.codechicken.diffpatch.util.Input.MultiInput;
-import io.codechicken.diffpatch.util.Output.MultiOutput;
-import io.codechicken.diffpatch.util.archiver.ArchiveFormat;
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPLegacy;
@@ -340,10 +334,7 @@ public class FG2Userdev implements ForgeVersionCommon {
         if (rejects.exists())
             rejects.delete();
 
-        if (this.fgVersion.ordinal() <= FGVersion.v2.ordinal())
-            patchUnstable(input, patches, output, rejects);
-        else
-            patchStable(input, patches, output, rejects);
+        patchUnstable(input, patches, output, rejects);
 
         cache.save();
         return output;
@@ -417,45 +408,6 @@ public class FG2Userdev implements ForgeVersionCommon {
 
         if (failure != null)
             Util.sneak(failure);
-    }
-
-    // Modern versions that use out Fernflower fork produce stabelized output so we can use
-    // DiffPatch. But on older verions we need both ACCESS and OFFSET changes at the same time
-    // And if we tried to do that with DiffPatch we would need to use FUZZY which is TOO Fuzzy.
-    // it causes patches to be injected half-way and in weird places.
-    private void patchStable(File input, File patches, File output, File rejects) {
-        var builder = PatchOperation.builder()
-            .logTo(LOGGER::error)
-            .baseInput(MultiInput.archive(ArchiveFormat.ZIP, input.toPath()))
-            .patchesInput(MultiInput.archive(ArchiveFormat.ZIP, patches.toPath()))
-            .patchedOutput(MultiOutput.archive(ArchiveFormat.ZIP, output.toPath()))
-            .rejectsOutput(MultiOutput.archive(ArchiveFormat.ZIP, rejects.toPath()))
-            .level(LogLevel.ERROR)
-            .mode(PatchMode.ACCESS)
-            .aPrefix("/")
-            .bPrefix("/")
-        ;
-
-        try {
-            var result = builder.build().operate();
-
-            boolean success = result.exit == 0;
-            if (!success) {
-                LOGGER.error("Fialed to apply patches");
-                LOGGER.error("  Input:   " + input.getAbsolutePath());
-                LOGGER.error("  Patches: " + patches.getAbsolutePath());
-                LOGGER.error("  Output:  " + output.getAbsolutePath());
-                LOGGER.error("  Rejects: " + rejects.getAbsolutePath());
-                if (result.summary != null)
-                    result.summary.print(LOGGER.getError(), true);
-                else
-                    LOGGER.error("Failed to apply patches, no summary available");
-
-                throw except("Failed to apply patches, rejects saved to: " + rejects.getAbsolutePath());
-            }
-        } catch (IOException e) {
-            Util.sneak(e);
-        }
     }
 
     private Task inject() {

@@ -188,9 +188,20 @@ public class StupidHacks {
 
     // List of 'bad' forge builds that are just broke for some reason and we explicitly don't want to support
     public static final Set<String> BLACKLISTED_FORGE_BUILDS = Set.of(
+        // First 1.8 build, missing FML source files in userdev. No way to make this work
+        "1.8-11.14.0.1237-1.8",
+        // Broken access transformer, fixed in 1268
+        "1.8-11.14.0.1267-1.8",
         // Has some fucked up patches with weird generics, I have no idea how they came into existance, they dont match github...
         // This is the very first 1.8.8 build, and the next one works fine, so I'm chalking it up to Gradle Snapshot voodoo
         "1.8.8-11.14.4.1575-1.8.8",
+        // These are early builds of 1.8.8 which use FG 2.0 snapshots, and an old Fernflower
+        // With a long since deleted mcp zip/patch set
+        "1.8.8-11.14.4.1576-1.8.8",
+        "1.8.8-11.14.4.1579-1.8.8",
+        "1.8.8-11.14.4.1580-1.8.8",
+        "1.8.8-11.14.4.1581-1.8.8",
+        "1.8.8-11.14.4.1582-1.8.8",
         // Has a reference to scala.actors.threadpool.Arrays which is part of org.scala-lang:scala-actors
         // Which we don't ship, but instead is a transitive of org.scala-lang:scala-actors-migration_2.11:1.1.0
         // I could add the library to this version, but i'd rather just skip it

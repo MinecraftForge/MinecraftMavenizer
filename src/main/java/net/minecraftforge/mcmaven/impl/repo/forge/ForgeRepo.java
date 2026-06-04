@@ -86,9 +86,26 @@ public final class ForgeRepo extends Repo {
         this.globalBuild = new File(cache.root(), "forge/.global");
     }
 
-    public static boolean isPython(String version) {
-        if (FGVersion.fromForge(version) != null)
+    public static boolean isSupported(String version) {
+        // Python isn't supported yet
+        if (isPython(version))
             return false;
+
+        var fg = FGVersion.fromForge(version);
+        if (fg == null)
+            return false;
+
+        // Early versions of 1.8.8 use a old '2.0' build with funkey fernflower
+        // The mcp artifact was also updated behind the scenes, so it won't apply correctly
+        // I need to rebuild those files in order for this to work
+        // But we have later builds of 1.8.8 that work so im not worried about it for now
+        if (version.startsWith("1.8.8-") && fg.ordinal() < FGVersion.v2_1.ordinal())
+            return false;
+
+        return true;
+    }
+
+    private static boolean isPython(String version) {
         var ver = new ComparableVersion(version);
         return ver.compareTo(PYTHON_START) >= 0 && ver.compareTo(PYTHON_END) < 0;
     }
@@ -117,8 +134,8 @@ public final class ForgeRepo extends Repo {
                 case v1:
                 case v1_1:
                 case v1_2: // V2 can process V1
-                case v2_0_1:
-                case v2_0_2:
+                //case v2_0_1: // These use an old decompiler that I haven't patched yet.
+                //case v2_0_2:
                 case v2:
                 case v2_1:
                 case v2_2:

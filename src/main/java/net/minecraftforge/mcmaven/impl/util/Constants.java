@@ -62,7 +62,7 @@ public final class Constants {
     public static final Artifact MCINJECTOR = Artifact.from("de.oceanlabs.mcp:mcinjector:3.4.5:fatjar");
     public static final int MCINJECTOR_JAVA_VERSION = 8;
 
-    public static final Artifact MCPCLEANUP = Artifact.from("net.minecraftforge:mcpcleanup:2.4.4:fatjar");
+    public static final Artifact MCPCLEANUP = Artifact.from("net.minecraftforge:mcpcleanup:2.4.5:fatjar");
     public static final int MCPCLEANUP_JAVA_VERSION = 8;;
 
     public static final Artifact LEGACY_MERGETOOL = Artifact.from("net.minecraftforge:mergetool:0.2.3.4:fatjar");
