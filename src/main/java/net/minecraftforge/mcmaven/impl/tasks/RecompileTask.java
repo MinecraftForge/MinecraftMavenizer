@@ -70,18 +70,23 @@ public final class RecompileTask implements Task {
 
         cache.add("sources", sourcesJar);
         cache.addKnown("debug", "true");
+        if (this.javaTarget < 8)
+            cache.addKnown("java_target", Integer.toString(this.javaTarget));
 
         if (Mavenizer.checkCache(output, cache))
             return output;
 
+        // OSX doesn't have java < 8, so we need to grab 8 and set the --target argument
+        int jdkTarget = javaTarget < 8 ? 8 : javaTarget;
+
         File jdk;
         try {
-            jdk = this.jdks.get(javaTarget);
+            jdk = this.jdks.get(jdkTarget);
         } catch (Exception e) {
-            throw new IllegalStateException("JDK not found: " + javaTarget, e);
+            throw new IllegalStateException("JDK not found: " + jdkTarget, e);
         }
 
-        ProcessUtils.recompileJar(jdk, this.classpath.get(), sourcesJar, output, true);
+        ProcessUtils.recompileJar(jdk, this.classpath.get(), sourcesJar, output, true, javaTarget);
 
         cache.save();
         return output;

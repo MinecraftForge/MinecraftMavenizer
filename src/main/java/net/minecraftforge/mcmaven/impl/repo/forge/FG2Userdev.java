@@ -163,8 +163,7 @@ public class FG2Userdev implements ForgeVersionCommon {
 
     @Override
     public int getJavaTarget() {
-        // Older minecraft supported java 6, but it's not really possible to get a version of that these days, so we've been using 8 for over a decade
-        return 8;
+        return this.mcp.getJavaTarget();
     }
 
     @Override

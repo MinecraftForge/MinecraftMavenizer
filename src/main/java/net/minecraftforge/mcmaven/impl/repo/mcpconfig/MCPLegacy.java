@@ -154,13 +154,11 @@ public class MCPLegacy {
         // Also, modern macs simply do not have java 5 & 6 distros. So we have to use java 8
         // My bulk testing works fine, I do not set the -target version when recompiling, Not
         // sure if I care to do that.
-        /*
         var comp = new ComparableVersion(this.mcVersion);
         if (comp.compareTo(MC_1_6_1) < 0)
             return 5;
         if (comp.compareTo(MC_1_12) < 0)
             return 6;
-        */
         return 8;
     }
 
@@ -712,6 +710,9 @@ public class MCPLegacy {
             var tool = maven.download(decompiler.artifact);
 
             int java_version = MCPLegacy.this.getJavaTarget();
+            // Mac OSX doesn't have Java below 6, so we must use 8.
+            if (java_version < 8)
+                java_version = 8;
 
             var cache = Util.cache(output)
                 .add("input", input)

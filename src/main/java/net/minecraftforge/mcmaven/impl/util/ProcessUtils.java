@@ -269,7 +269,7 @@ public final class ProcessUtils {
         }
     }
 
-    public static File recompileJar(File javaHome, List<File> classpath, File sourcesJar, File outputJar, boolean enableDebug) {
+    public static File recompileJar(File javaHome, List<File> classpath, File sourcesJar, File outputJar, boolean enableDebug, int javaTarget) {
         // classpath arg
         var classpathString = makeClasspathString(classpath);
 
@@ -325,14 +325,24 @@ public final class ProcessUtils {
 
         var outputClasses = new File(temp, "classes");
         FileUtils.ensure(outputClasses);
-        var args = new ArrayList<>(List.of(
-            "-nowarn",
+        var args = new ArrayList<String>();
+        args.add("-nowarn");
+
+        if (enableDebug)
+            args.add("-g");
+
+        if (javaTarget < 8) {
+            args.addAll(List.of(
+                "-source", "1." + javaTarget,
+                "-target", "1." + javaTarget
+            ));
+        }
+
+        args.addAll(List.of(
             "-d " + wrap(outputClasses.getAbsolutePath().replace('\\', '/')),
             "-classpath " + wrap(classpathString),
             sourcePath.toString()
         ));
-        if (enableDebug)
-            args.add("-g");
 
         var process = ProcessUtils.runJavac(javaHome, temp, new File(outputJar.getAbsolutePath() + ".log"), args, sourcesJar);
         if (process.exitCode != 0) {

@@ -87,10 +87,6 @@ public final class ForgeRepo extends Repo {
     }
 
     public static boolean isSupported(String version) {
-        // Python isn't supported yet
-        if (isPython(version))
-            return false;
-
         var fg = FGVersion.fromForge(version);
         if (fg == null)
             return false;
