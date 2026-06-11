@@ -9,13 +9,16 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.jetbrains.annotations.Nullable;
+
 import joptsimple.OptionParser;
+import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.MinecraftMaven;
 import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
-import net.minecraftforge.mcmaven.impl.mappings.ParchmentMappings;
 import net.minecraftforge.mcmaven.impl.util.Artifact;
 import net.minecraftforge.mcmaven.impl.util.Constants;
 
@@ -88,7 +91,7 @@ class MavenTask {
 
         var mappingsO = parser.accepts("mappings",
             "Mappings to use for this artifact. Formatted as channel:version")
-            .withRequiredArg().ofType(String.class).defaultsTo("official");
+            .withRequiredArg().ofType(String.class);
 
         var parchmentO = parser.accepts("parchment",
             "Version of parchment mappings to use, snapshots are not supported")
@@ -191,9 +194,7 @@ class MavenTask {
         if (artifact.getVersion() == null)
             artifact = artifact.withVersion(options.valueOf(versionO));
 
-        var mappings = options.has(parchmentO)
-            ? new ParchmentMappings(options.valueOf(parchmentO))
-            : Mappings.of(options.valueOf(mappingsO));
+        var mappings = getMappings(options, mappingsO, parchmentO);
 
         var foreignRepositories = new HashMap<String, String>();
         for (var s : options.valuesOf(foreignRepositoryO)) {
@@ -217,5 +218,13 @@ class MavenTask {
         mcmaven.run(artifact);
 
         return parser;
+    }
+
+    private static @Nullable Mappings getMappings(OptionSet options, OptionSpec<String> mappingsO, OptionSpec<String> parchmentO) {
+        if (options.has(parchmentO))
+            return Mappings.of("parchment", options.valueOf(parchmentO));
+        if (options.has(mappingsO))
+            return Mappings.of(options.valueOf(mappingsO));
+        return null;
     }
 }

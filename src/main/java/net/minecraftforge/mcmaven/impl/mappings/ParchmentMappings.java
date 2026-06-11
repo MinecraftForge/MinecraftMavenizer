@@ -48,11 +48,6 @@ public class ParchmentMappings extends Mappings {
         this.parsedVersion = version;
     }
 
-    @Override
-    public boolean isPrimary() {
-        return false;
-    }
-
     // Maybe download the maven-metadata.xml for the MC version and pick the latest one?
     @Override
     public Mappings withMCVersion(String mcVer) {

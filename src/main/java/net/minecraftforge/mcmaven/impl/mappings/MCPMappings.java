@@ -6,7 +6,6 @@ package net.minecraftforge.mcmaven.impl.mappings;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -35,11 +34,6 @@ public class MCPMappings extends Mappings {
     @Override
     public Mappings withMCVersion(String version) {
         return this;
-    }
-
-    @Override
-    public boolean isPrimary() {
-        return false;
     }
 
     @Override

@@ -189,7 +189,7 @@ public final class ForgeRepo extends Repo {
         // So check if we are using the 'correct' mappings, and if not throw and exception
         if (fgVersion == FGVersion.v1 || fgVersion == FGVersion.v1_1) {
             var required = StupidHacks.getDefaultMappings(new ComparableVersion(version));
-            if (!required.channel().equals(mappings.channel()) || !required.version().equals(mappings.version()))
+            if (!required.equals(mappings))
                 throw new IllegalStateException("Can not setup " + name + " as it requires you to us the explicit mappings: " + required.toString());
             sourcesTask = dev.getSourcesWithJavadocs();
         } else if (!mappings.channel().equals("srg")) {
@@ -527,6 +527,7 @@ public final class ForgeRepo extends Repo {
                 throw new RuntimeException(e);
             }
         }
+        @SuppressWarnings("unused")
         private static List<PendingArtifact> gatherVariants(MavenCache cache, String version, @Nullable FGVersion fg) {
             var userdev = getUserdev(version);
             if  (fg == null)

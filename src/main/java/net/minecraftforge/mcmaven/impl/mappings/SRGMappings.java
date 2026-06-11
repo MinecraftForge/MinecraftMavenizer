@@ -38,11 +38,6 @@ public class SRGMappings extends Mappings {
     }
 
     @Override
-    public boolean isPrimary() {
-        return false;
-    }
-
-    @Override
     public ResolvedMappings withContext(MCPSide side) {
         return this.resolved.computeIfAbsent(side, _ -> withContextImpl(side));
     }

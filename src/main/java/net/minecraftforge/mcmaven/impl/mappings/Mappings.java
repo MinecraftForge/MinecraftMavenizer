@@ -24,7 +24,10 @@ public abstract class Mappings {
         var split = mappingsNotation.split(":", 2);
         var channel = split[0];
         var version = split.length > 1 ? split[1] : null;
+        return of(channel, version);
+    }
 
+    public static Mappings of(String channel, @Nullable String version) {
         switch (channel) {
             case "parchment":
                 return new ParchmentMappings(version);
@@ -38,7 +41,7 @@ public abstract class Mappings {
             case "srg":
                 return new SRGMappings("srg", version);
         }
-        throw new IllegalArgumentException("Unsupported Mappings: " + mappingsNotation);
+        throw new IllegalArgumentException("Unsupported Mappings: " + channel + (version == null ? "" : ':' + version));
     }
 
     public Mappings(String channel, @Nullable String version) {
@@ -54,6 +57,20 @@ public abstract class Mappings {
         return this.version;
     }
 
+    public boolean equals(ResolvedMappings other) {
+        return equals(other.channel(), other.version());
+    }
+    public boolean equals(Mappings other) {
+        return equals(other.channel(), other.version());
+    }
+    public boolean equals(String channel, @Nullable String version) {
+        if (!this.channel().equals(channel))
+            return false;
+        if (this.version() == null)
+            return version == null;
+        return this.version().equals(version);
+    }
+
     @Override
     public String toString() {
         return channel() + (version() == null ? "" : '-' + version());
@@ -62,12 +79,6 @@ public abstract class Mappings {
     public File getFolder(File root) {
         return new File(root, channel() + '/' + version());
     }
-
-    // This is the 'primary' mapping and thus what we publish as the root artifacts.
-    // Not as gradle module metadata only variants.
-    // Basically the thing that looks like a normal maven artifact
-    // This is only true for 'official' mappings
-    public abstract boolean isPrimary();
 
     public abstract Mappings withMCVersion(String version);
 

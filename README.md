@@ -16,14 +16,16 @@ As such anything that can call a executable jar, should be able to use this. Ope
 #### Broad Features
   - Functional:
     - MCPConfig based artifacts: Vanilla Minecraft (1.12.2+)
-    - UserDev3+ Forge libraries, these are versions of Forge that use ForgeGradle 3+ (Minecraft 1.13+, and some builds of 1.12.2)
+    - ForgeGradle 1 Forge Libraries: 1.7.2 -> 1.7.10 and some builds of 1.6.9
+    - ForgeGradle 2 Forge Libraries: 1.8 -> 1.12.2
+    - ForgeGradle 3 Forge Libraries: 1.13+ and some builds of 1.12.2
     - Parchment and Official mappings.
+    - Facade and Access Transformer static post processors
   - TODO:
     - Legacy Forge versions.
-       - Forge Gradle has gone through many eras, and before that we had a python based build system. It will take some time but the plan is to eventually support every version of Forge that has been released.
+       - Python based Forge versions are not implemented yet. It will take some time but the plan is to eventually support every version of Forge that has been released.
      - Support Artifact Transformers allowing ModLauncher/Mixin/Whatever to apply static transformation of artifacts? Probably not needed.
      - Deobfuscating arbitrary dependencies. Basically a replacement for `fg.deobf` allowing mods to be used in different mappings then they are released.
-     - Better cacheing management, and debug information on cache misses.
 
 ## Usage
 
@@ -51,7 +53,7 @@ The only task consumers should care about is the `--maven` task, and thus is the
 | --forge               |                            | Shorthand for `--artifact net.minecraftforge:forge`
 | --mapping-data        |                            | Shorthand for `--artifact net.minecraft:mappings`
 | --mc                  |                            | Shorthand for `--artifact net.minecraft:joined`
-| --mappings `String`   | `official`                 | Mappings to use for this artifact. Formatted as `channel:version`. If version is missing, will attempt use the detected `minecraft` version of the artifact.
+| --mappings `String`   |                            | Mappings to use for this artifact. Formatted as `channel:version`. If version is missing, will attempt use the detected `minecraft` version of the artifact. If omitted, will attempt to use the recommended mappings.
 | --parchment `version` |                            | Version of parchment mappings to use, snapshots are not supported. Shorthand for `--mappings parchment:version`
 | --output `File`       | `./output`                 | Root directory to generate the maven repository.
 | --cache `File`        | `./cache`                  | The directory to use for caching things used for building.

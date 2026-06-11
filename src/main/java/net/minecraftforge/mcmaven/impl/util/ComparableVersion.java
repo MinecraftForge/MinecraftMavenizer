@@ -63,6 +63,10 @@ import java.util.Properties;
  * @author <a href="mailto:hboutemy@apache.org">Hervé Boutemy</a>
  */
 public class ComparableVersion implements Comparable<ComparableVersion> {
+    public static ComparableVersion of(String version) {
+        return new ComparableVersion(version);
+    }
+
     private static final int MAX_INTITEM_LENGTH = 9;
 
     private static final int MAX_LONGITEM_LENGTH = 18;

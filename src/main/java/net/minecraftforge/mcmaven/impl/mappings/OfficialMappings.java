@@ -37,11 +37,6 @@ class OfficialMappings extends Mappings {
     }
 
     @Override
-    public boolean isPrimary() {
-        return true;
-    }
-
-    @Override
     public Mappings withMCVersion(String version) {
         if (Objects.equals(version(), version))
             return this;
