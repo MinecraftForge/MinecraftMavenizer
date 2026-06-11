@@ -16,7 +16,7 @@ As such anything that can call a executable jar, should be able to use this. Ope
 #### Broad Features
   - Functional:
     - MCPConfig based artifacts: Vanilla Minecraft (1.12.2+)
-    - ForgeGradle 1 Forge Libraries: 1.7.2 -> 1.7.10 and some builds of 1.6.9
+    - ForgeGradle 1 Forge Libraries: 1.7.2 -> 1.7.10 and some builds of 1.6.4
     - ForgeGradle 2 Forge Libraries: 1.8 -> 1.12.2
     - ForgeGradle 3 Forge Libraries: 1.13+ and some builds of 1.12.2
     - Parchment and Official mappings.
