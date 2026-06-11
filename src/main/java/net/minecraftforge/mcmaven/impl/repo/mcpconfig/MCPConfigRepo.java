@@ -194,6 +194,12 @@ public final class MCPConfigRepo extends Repo {
             );
         }
 
+        if (outputJson != null) {
+            outputJson.put("mcp.version", mcp.getName()::getVersion);
+            outputJson.put("mcp.artifact", mcp.getName()::toString);
+            outputJson.put("mc.version", mcp.getMinecraftTasks()::getVersion);
+        }
+
         var mappingArtifacts = mappingArtifacts(build, mappings, mcVersion, outputJson);
         if (isMappings)
             return mappingArtifacts;
@@ -269,6 +275,7 @@ public final class MCPConfigRepo extends Repo {
         if (outputJson != null) {
             outputJson.put("mappings.obf.artifact", m2o.artifact()::toString);
             outputJson.put("mappings.obf.file", m2o.task().filePathSupplier());
+            outputJson.put("mc.version", tasks::getVersion);
         }
 
         if ("mappings".equals(artifact.getName())) {
@@ -327,8 +334,11 @@ public final class MCPConfigRepo extends Repo {
         var metadata = pending("Metadata", metadata(build, artifact.getName(), tasks), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
         var pom = pending("Maven POM", tasks.joinedPom(), name.withExtension("pom"), false);
 
-        if (outputJson != null)
+        if (outputJson != null) {
+            outputJson.put("mcp.version", mcp.getName()::getVersion);
+            outputJson.put("mcp.artifact", mcp.getName()::toString);
             outputJson.put("mc.version", tasks::getVersion);
+        }
 
         var ret = new ArrayList<PendingArtifact>();
         ret.addAll(mappingArtifacts);
