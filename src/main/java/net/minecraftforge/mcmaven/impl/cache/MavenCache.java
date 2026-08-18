@@ -246,7 +246,7 @@ public sealed class MavenCache permits MinecraftMavenCache {
 
                     try {
                         var chash = func.hash(target);
-                        if (!chash.equals(rhash)) {
+                        if (!rhash.startsWith(chash)) {
                             LOGGER.error("Outdated cached file: " + target.getAbsolutePath());
                             LOGGER.error("Expected: " + rhash);
                             LOGGER.error("Actual:   " + chash);
