@@ -37,6 +37,7 @@ import net.minecraftforge.util.hash.HashStore;
 
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
+import net.minecraftforge.util.os.OS;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -238,7 +239,8 @@ class MCPTask {
         this.prefix = "mcp/" + artifact.getVersion() + '/' + pipeline;
 
         var deps = new TreeSet<String>();
-        this.side.forAllLibraries(art -> deps.add(art.getDescriptor()));
+        this.side.forAllLibraries(art -> deps.add(art.getDescriptor()), dep -> dep.hasNoOs() || dep.getOs().contains(OS.current()));
+
         this.data.put("dependencies", deps.stream().collect(Collectors.joining(",")));
 
         this.data.put("extra", local(side.getTasks().getExtra().execute(), prefix + "/extra.jar"));
