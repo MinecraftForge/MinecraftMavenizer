@@ -52,14 +52,6 @@ public final class LegacyPackageMappings {
 
             var path = line.substring(pathStart, pathEnd).replace('\\', '/');
 
-            var slash = path.indexOf('/');
-            if (slash != -1) {
-                var prefix = path.substring(0, slash);
-                if ("minecraft".equals(prefix) || "minecraft_patched".equals(prefix) || "src".equals(prefix)) {
-                    path = path.substring(slash + 1);
-                }
-            }
-
             lines[i] = line.substring(0, pathStart) + path + line.substring(pathEnd);
         }
         return String.join("\n", lines).getBytes(StandardCharsets.UTF_8);

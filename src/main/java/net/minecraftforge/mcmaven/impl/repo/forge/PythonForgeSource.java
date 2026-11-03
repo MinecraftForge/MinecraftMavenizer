@@ -24,7 +24,7 @@ final class PythonForgeSource {
     private static final String ROOT = "forge/";
     private static final String FML = ROOT + "fml/";
     private static final String CONF = FML + "conf/";
-    private static final String FORMAT = "python-src-v6";
+    private static final String FORMAT = "python-src-v7";
 
     private PythonForgeSource() {}
 
