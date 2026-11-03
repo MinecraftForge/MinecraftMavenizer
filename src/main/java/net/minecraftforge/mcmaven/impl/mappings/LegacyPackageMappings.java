@@ -29,30 +29,29 @@ public final class LegacyPackageMappings {
     public static byte[] repackage(byte[] mappings, byte[] packages) throws IOException {
         var classPackages = readPackages(packages);
         var input = new String(mappings, StandardCharsets.UTF_8);
-        return replaceClasses(input, classPackages, LEGACY_CLASS).getBytes(StandardCharsets.UTF_8);
+        return replaceClasses(input, classPackages, LEGACY_CLASS, '/').getBytes(StandardCharsets.UTF_8);
     }
 
     public static byte[] repackagePatch(byte[] patchBytes, byte[] packages) throws IOException {
         var classPackages = readPackages(packages);
         var patch = new String(patchBytes, StandardCharsets.UTF_8);
-        patch = replaceClasses(patch, classPackages, LEGACY_PATCH_CLASS);
+        patch = replaceClasses(patch, classPackages, LEGACY_PATCH_CLASS, '\\');
 
         var lines = patch.split("\n", -1);
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i];
-            if (!line.startsWith("--- ") && !line.startsWith("+++ ")) {
-                continue;
+
+            if (line.startsWith("--- ") || line.startsWith("+++ ")) {
+                var tab = line.indexOf('\t');
+                var end = (tab != -1) ? tab : line.length();
+
+                var path = line.substring(4, end).replace('/', '\\');
+
+                lines[i] = line.substring(0, 4) + path + line.substring(end);
+
+            } else if (line.startsWith("diff -r ")) {
+                lines[i] = line.replace('/', '\\');
             }
-
-            var pathStart = 4;
-            var pathEnd = line.indexOf('\t', pathStart);
-            if (pathEnd == -1) {
-                pathEnd = line.length();
-            }
-
-            var path = line.substring(pathStart, pathEnd).replace('\\', '/');
-
-            lines[i] = line.substring(0, pathStart) + path + line.substring(pathEnd);
         }
         return String.join("\n", lines).getBytes(StandardCharsets.UTF_8);
     }
@@ -80,7 +79,7 @@ public final class LegacyPackageMappings {
         return classPackages;
     }
 
-    private static String replaceClasses(String input, Map<String, String> classPackages, Pattern pattern) {
+    private static String replaceClasses(String input, Map<String, String> classPackages, Pattern pattern, char sep) {
         var matcher = pattern.matcher(input);
         var output = new StringBuffer(input.length());
         while (matcher.find()) {
@@ -93,7 +92,9 @@ public final class LegacyPackageMappings {
             }
 
             if (targetPackage != null) {
-                String fullPath = targetPackage.isEmpty() ? simpleName : (targetPackage + '/' + simpleName);
+                String pkg = targetPackage.replace('/', sep).replace('\\', sep);
+                String fullPath = pkg.isEmpty() ? simpleName : (pkg + sep + simpleName);
+
                 matcher.appendReplacement(output, Matcher.quoteReplacement(fullPath));
             }
         }
