@@ -268,8 +268,7 @@ public class Util {
     private static final File getArtifact(Cache cache, Artifact artifact) {
         // Some libraries are on Minecraft's maven. Such as launchwrapper.
         // Rather then configure Forge's server to proxy Mojang's I add this check.
-        if ("net.minecraft".equals(artifact.getGroup())
-            || ("lzma".equals(artifact.getGroup()) && "lzma".equals(artifact.getName())))
+        if ("net.minecraft".equals(artifact.getGroup()))
             return cache.minecraft().download(artifact);
         try {
             return cache.maven().download(artifact);
