@@ -70,6 +70,7 @@ public final class ForgeRepo extends Repo {
     private static final ComparableVersion USERDEV3_END = new ComparableVersion("1.12.3"); //There is no 1.12.3, but I haven't disabled Userdev3 for 1.12.2 yet, so
     private static final ComparableVersion PYTHON_START = new ComparableVersion("1.1-1.3.2.1");
     private static final ComparableVersion PYTHON_END = new ComparableVersion("1.7.2-10.12.0.967");
+    private static final ComparableVersion CONVERTABLE_PYTHON_START = new ComparableVersion("1.6.1-8.9.0.749");
 
     final MCPConfigRepo mcpconfig;
     final File globalBuild;
@@ -89,7 +90,7 @@ public final class ForgeRepo extends Repo {
     public static boolean isSupported(String version) {
         var fg = FGVersion.fromForge(version);
         if (fg == null)
-            return isPython(version);
+            return isPython(version) && isConvertablePython(version);
 
         // Early versions of 1.8.8 use a old '2.0' build with funkey fernflower
         // The mcp artifact was also updated behind the scenes, so it won't apply correctly
@@ -106,6 +107,11 @@ public final class ForgeRepo extends Repo {
         return ver.compareTo(PYTHON_START) >= 0 && ver.compareTo(PYTHON_END) < 0;
     }
 
+    private static boolean isConvertablePython(String version) {
+        var ver = new ComparableVersion(version);
+        return ver.compareTo(CONVERTABLE_PYTHON_START) >= 0;
+    }
+
     @Override
     public List<PendingArtifact> process(Artifact artifact, Mappings mappings, Map<String, Supplier<String>> outputJson) {
         var module = artifact.getGroup() + ':' + artifact.getName();
@@ -120,13 +126,16 @@ public final class ForgeRepo extends Repo {
             // TODO [MCMavenizer][Backporting] You know what has to be done eventually...
             if (fg == null) {
                 if (isPython(version)) {
-                    var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
-                    var output = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "userdev", "jar");
-                    PythonForgeSource.prepare(
-                        new File(this.cache.maven().getFolder(), output.getLocalPath()),
-                        this.cache.maven().download(source)
-                    );
-                    return processV2(version, mappings, outputJson, FGVersion.v1);
+                    if (isConvertablePython(version)) {
+                        var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
+                        var output = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "userdev", "jar");
+                        PythonForgeSource.prepare(
+                                new File(this.cache.maven().getFolder(), output.getLocalPath()),
+                                this.cache.maven().download(source)
+                        );
+                        return processV2(version, mappings, outputJson, FGVersion.v1);
+                    }
+                    throw new IllegalArgumentException("Unsupported python version!");
                 }
                 throw new IllegalArgumentException("Unknown Forge version " + version);
             }
