@@ -8,8 +8,10 @@ import net.minecraftforge.mcmaven.impl.cache.Cache;
 import net.minecraftforge.mcmaven.impl.cache.MavenCache;
 import net.minecraftforge.mcmaven.impl.data.GradleModule;
 import net.minecraftforge.mcmaven.impl.mappings.Mappings;
+import net.minecraftforge.mcmaven.impl.mappings.PythonMappings;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
+import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPLegacy;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPSide;
 import net.minecraftforge.mcmaven.impl.tasks.RecompileTask;
 import net.minecraftforge.mcmaven.impl.tasks.RenameTask;
@@ -26,6 +28,7 @@ import net.minecraftforge.srgutils.IMappingFile;
 import net.minecraftforge.util.data.json.JsonData;
 import net.minecraftforge.util.data.json.RunConfig;
 import net.minecraftforge.util.file.FileUtils;
+import net.minecraftforge.util.download.DownloadUtils;
 import net.minecraftforge.util.hash.HashFunction;
 
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
@@ -90,7 +93,7 @@ public final class ForgeRepo extends Repo {
     public static boolean isSupported(String version) {
         var fg = FGVersion.fromForge(version);
         if (fg == null)
-            return isPython(version) && isConvertablePython(version);
+            return isPython(version);
 
         // Early versions of 1.8.8 use a old '2.0' build with funkey fernflower
         // The mcp artifact was also updated behind the scenes, so it won't apply correctly
@@ -135,7 +138,7 @@ public final class ForgeRepo extends Repo {
                         );
                         return processV2(version, mappings, outputJson, FGVersion.v1);
                     }
-                    throw new IllegalArgumentException("Unsupported python version!");
+                    return processPython(version, mappings, outputJson);
                 }
                 throw new IllegalArgumentException("Unknown Forge version " + version);
             }
@@ -162,6 +165,57 @@ public final class ForgeRepo extends Repo {
         } finally {
             LOGGER.pop(indent);
         }
+    }
+
+    private List<PendingArtifact> processPython(String version, Mappings baseMappings, Map<String, Supplier<String>> outputJson) {
+        var sourceArtifact = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
+        var sourceZip = this.cache.maven().download(sourceArtifact);
+        var mcVersion = Util.forgeToMcVersion(version);
+        var mappingVersion = PythonForgePre16Source.getSnapshotVersion(sourceZip);
+        if ("snapshot".equals(baseMappings.channel()) && !mappingVersion.equals(baseMappings.version()))
+            throw new IllegalArgumentException("Forge " + version + " bundles snapshot:" + mappingVersion
+                + " mappings, but snapshot:" + baseMappings.version() + " was requested");
+        var distribution = PythonForgePre16Source.readMcpDistribution(sourceZip, mcVersion);
+        var output = new File(this.cache.root(), "mcp/legacy/" + distribution.filename());
+        var mcpZip = PythonForgePre16Source.downloadPythonMcp(output, distribution.md5());
+        var srgZip = this.cache.maven().download(MCPLegacy.artifact(mcVersion));
+
+        var build = new File(this.cache.root(), "forge/" + version + "/python");
+        var assets = new File(build, "source-assets.zip");
+        var python = distribution.filename().replace(".zip", "") + '-' + version + ".zip";
+        var preparedMcp = new File(this.cache.root(), "mcp/legacy/" + python);
+        PythonForgePre16Source.prepare(assets, preparedMcp, sourceZip, mcpZip, srgZip);
+
+        var legacy = this.mcpconfig.legacy(mcVersion, python);
+        Mappings mappings;
+        if ("srg".equals(baseMappings.channel()))
+            mappings = baseMappings;
+        else
+            mappings = new PythonMappings(baseMappings.channel(), mappingVersion);
+        var resolved = mappings.withContext(legacy);
+        var pipeline = new PythonForgePipeline(build, Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version), sourceZip, assets, legacy);
+
+        var srgSources = pipeline.getSources();
+        Task sourcesTask = mappings.channel().equals("srg")
+            ? srgSources
+            : new RenameTask(build, Constants.FORGE_NAME, srgSources, resolved, true, legacy.getMappings(), mcVersion);
+        var name = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version);
+        var classesTask = new RecompileTask(build, name, this.cache.jdks(), legacy.getJavaTarget(), pipeline::getClasspath, sourcesTask, resolved);
+        var mappingCoords = resolved.getArtifact();
+        var mappingArtifacts = mappingArtifacts(build, resolved, mcVersion, outputJson);
+
+        var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(baseMappings));
+        var classes = pending("Classes", classesTask, name, false, () -> classVariants(baseMappings, pipeline, mappingCoords));
+        var metadata = pending("Metadata", metadata(build, pipeline, pipeline.getRuns()), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
+        var pom = pending("Maven POM", pom(resolved.getFolder(build), pipeline, version, null, mappingCoords), name.withExtension("pom"), false);
+        var classifiers = getClassifieres(name, pipeline.getLibraries(), new HashMap<>());
+        addJsonData(outputJson, pipeline);
+
+        var ret = new ArrayList<PendingArtifact>();
+        ret.addAll(mappingArtifacts);
+        ret.addAll(List.of(sources, classes, pom, metadata));
+        ret.addAll(classifiers.values());
+        return ret;
     }
 
     private static Artifact getUserdev(String forge) {
@@ -421,7 +475,11 @@ public final class ForgeRepo extends Repo {
 
             var cache = Util.cache(output)
                 .addKnown("data", forge.getDataHash())
-                .addKnown("code-version", "1");
+                .addKnown("code-version", "1")
+                .addKnown("libraries", String.join(",", forge.getLibraries().stream()
+                    .map(Artifact::toString)
+                    .sorted()
+                    .toList()));
 
             if (clientExtra != null)
                 cache.addKnown("extra", clientExtra.toString());

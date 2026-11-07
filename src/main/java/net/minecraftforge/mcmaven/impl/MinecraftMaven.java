@@ -10,6 +10,7 @@ import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
 import net.minecraftforge.mcmaven.impl.repo.Repo.PendingArtifact;
 import net.minecraftforge.mcmaven.impl.repo.forge.ForgeRepo;
+import net.minecraftforge.mcmaven.impl.repo.forge.PythonForgePre16Source;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPLegacy;
@@ -209,7 +210,7 @@ public record MinecraftMaven(
                 if (!ForgeRepo.isSupported(ver))
                     continue;
 
-                var primary = StupidHacks.getDefaultMappings(cver).withMCVersion(mcVersion);
+                var primary = getForgeMappings(cver);
                 if (this.mappings == null) {
                     if (mappings == null || !mappings.equals(primary))
                         LOGGER.info("Using Mappings: " + primary);
@@ -234,12 +235,26 @@ public record MinecraftMaven(
                 throw new IllegalArgumentException("Forge version " + artifact.getVersion() + " has been blacklisted for technical reasons, pick a different Forge version");
 
             var mcVersion = Util.forgeToMcVersion(version);
-            var primary = StupidHacks.getDefaultMappings(new ComparableVersion(version)).withMCVersion(mcVersion);
-            var mappings = resolve(primary, mcVersion);
+            var primary = getForgeMappings(new ComparableVersion(version));
+            var mappings = this.mappings == null ? primary : resolve(primary, mcVersion);
 
             var artifacts = repo.process(artifact, mappings, outputJson);
             finalize(artifact, mappings, artifacts, mappings.equals(primary));
         }
+    }
+
+    private Mappings getForgeMappings(ComparableVersion forgeVersion) {
+        var version = forgeVersion.toString();
+        var mcVersion = Util.forgeToMcVersion(version);
+        if (this.mappings != null)
+            return this.mappings.withMCVersion(mcVersion);
+
+        if (!StupidHacks.hasDefaultMappings(ComparableVersion.of(version))) {
+            var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
+            var sourceZip = this.cache.maven().download(source);
+            StupidHacks.mappings(version, "snapshot:" + PythonForgePre16Source.getSnapshotVersion(sourceZip));
+        }
+        return StupidHacks.getDefaultMappings(forgeVersion).withMCVersion(mcVersion);
     }
 
     protected void createMinecraft(Artifact artifact, MCPConfigRepo mcprepo, Map<String, Supplier<String>> outputJson) {

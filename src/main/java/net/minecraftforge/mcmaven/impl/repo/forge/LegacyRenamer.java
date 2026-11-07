@@ -124,7 +124,6 @@ class LegacyRenamer {
         return newLines;
     }
 
-
     // FG 1.0 didn't use the itnermediate javadoc markers
     // And didnt take annotations into account when inserting javadocs
     private static List<String> renameFG_1_0(MCPNames names, List<String> lines) {

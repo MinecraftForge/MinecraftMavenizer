@@ -510,7 +510,8 @@ public class MCPLegacy {
                     continue;
 
                 var newEntry = new ZipEntry(entry.getName());
-                newEntry.setSize(entry.getSize());
+                if (entry.getSize() > 0)
+                    newEntry.setSize(entry.getSize());
                 newEntry.setTime(entry.getTime());
                 zout.putNextEntry(newEntry);
                 zin.transferTo(zout);
