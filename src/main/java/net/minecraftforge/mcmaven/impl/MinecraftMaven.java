@@ -10,7 +10,7 @@ import net.minecraftforge.mcmaven.impl.mappings.Mappings;
 import net.minecraftforge.mcmaven.impl.repo.Repo;
 import net.minecraftforge.mcmaven.impl.repo.Repo.PendingArtifact;
 import net.minecraftforge.mcmaven.impl.repo.forge.ForgeRepo;
-import net.minecraftforge.mcmaven.impl.repo.forge.PythonForgePre16Source;
+import net.minecraftforge.mcmaven.impl.repo.forge.PythonForgeSource;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCP;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPConfigRepo;
 import net.minecraftforge.mcmaven.impl.repo.mcpconfig.MCPLegacy;
@@ -252,7 +252,7 @@ public record MinecraftMaven(
         if (!StupidHacks.hasDefaultMappings(ComparableVersion.of(version))) {
             var source = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
             var sourceZip = this.cache.maven().download(source);
-            StupidHacks.mappings(version, "snapshot:" + PythonForgePre16Source.getSnapshotVersion(sourceZip));
+            StupidHacks.mappings(version, "snapshot:" + PythonForgeSource.getSnapshotVersion(sourceZip));
         }
         return StupidHacks.getDefaultMappings(forgeVersion).withMCVersion(mcVersion);
     }

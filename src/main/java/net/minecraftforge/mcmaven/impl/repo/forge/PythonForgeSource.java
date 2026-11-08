@@ -8,6 +8,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -18,13 +21,13 @@ import net.minecraftforge.mcmaven.impl.Mavenizer;
 import net.minecraftforge.mcmaven.impl.util.Util;
 import net.minecraftforge.util.file.FileUtils;
 
-final class PythonForgeSource {
+public class PythonForgeSource {
     private static final String ROOT = "forge/";
     private static final String FML = ROOT + "fml/";
     private static final String CONF = FML + "conf/";
     private static final String FORMAT = "python-src-v9";
 
-    private PythonForgeSource() {}
+    PythonForgeSource() {}
 
     static void prepare(File output, File sourceZip) {
         try (var source = new ZipFile(sourceZip)) {
@@ -36,7 +39,7 @@ final class PythonForgeSource {
                 return;
 
             var entries = new LinkedHashMap<String, byte[]>();
-            addRequired(source, entries, "dev.json", FML + "fml.json");
+            addOptional(source, entries, "dev.json", FML + "fml.json");
 
             for (var csv : new String[]{"fields.csv", "methods.csv", "params.csv"})
                 addRequired(source, entries, "mappings/" + csv, FML + "conf/" + csv);
@@ -66,23 +69,7 @@ final class PythonForgeSource {
         }
     }
 
-    private static String readMcpVersion(ZipFile source) throws IOException {
-        var entry = source.getEntry(FML + "conf/version.cfg");
-        if (entry == null)
-            throw new IllegalStateException("Python-era Forge source archive is missing " + FML + "conf/version.cfg");
-
-        var properties = new Properties();
-        try (var input = source.getInputStream(entry)) {
-            properties.load(input);
-        }
-
-        var version = properties.getProperty("MCPVersion");
-        if (version == null || version.isBlank())
-            throw new IllegalStateException("Missing MCPVersion in " + FML + "conf/version.cfg");
-        return version.trim();
-    }
-
-    private static void addRequired(ZipFile source, Map<String, byte[]> entries, String outputName, String sourceName) throws IOException {
+    protected static void addRequired(ZipFile source, Map<String, byte[]> entries, String outputName, String sourceName) throws IOException {
         if (!addOptional(source, entries, outputName, sourceName))
             throw new IllegalStateException("Python-era Forge source archive is missing " + sourceName);
     }
@@ -112,7 +99,7 @@ final class PythonForgeSource {
         }
     }
 
-    private static void addPatchArchive(ZipFile source, Map<String, byte[]> entries, String outputName, String prefix) throws IOException {
+    protected static void addPatchArchive(ZipFile source, Map<String, byte[]> entries, String outputName, String prefix) throws IOException {
         var patches = new ByteArrayOutputStream();
         try (var out = new ZipOutputStream(patches)) {
             for (var enumeration = source.entries(); enumeration.hasMoreElements(); ) {
@@ -132,7 +119,7 @@ final class PythonForgeSource {
         entries.put(outputName, patches.toByteArray());
     }
 
-    private static void addSourceTree(ZipFile source, Map<String, byte[]> entries, String prefix) throws IOException {
+    protected static void addSourceTree(ZipFile source, Map<String, byte[]> entries, String prefix) throws IOException {
         for (var enumeration = source.entries(); enumeration.hasMoreElements(); ) {
             var entry = enumeration.nextElement();
             if (entry.isDirectory() || !entry.getName().startsWith(prefix))
@@ -146,7 +133,7 @@ final class PythonForgeSource {
         }
     }
 
-    private static String safeRelative(String name) {
+    protected static String safeRelative(String name) {
         var normalized = name.replace('\\', '/');
         if (normalized.isBlank() || normalized.startsWith("/") || normalized.contains(":"))
             throw new IllegalStateException("Invalid path in Python-era Forge source archive: " + name);
@@ -155,5 +142,65 @@ final class PythonForgeSource {
                 throw new IllegalStateException("Invalid path in Python-era Forge source archive: " + name);
         }
         return normalized;
+    }
+
+    public static String getSnapshotVersion(File source) {
+        try (var mcp = new ZipFile(source)) {
+            var fields = mcp.getEntry(CONF+ "fields.csv");
+            if (fields == null)
+                throw new IllegalStateException("Python-era MCP archive is missing conf/fields.csv: " + source);
+            var modified = fields.getTime();
+            if (modified < 0)
+                throw new IllegalStateException("Python-era MCP conf/fields.csv has no modification time: " + source);
+
+            var versionEntry = mcp.getEntry(CONF+ "version.cfg");
+            if (versionEntry == null)
+                throw new IllegalStateException("Python-era MCP archive is missing conf/version.cfg: " + source);
+            var properties = new Properties();
+            try (var input = mcp.getInputStream(versionEntry)) {
+                properties.load(input);
+            }
+            var minecraftVersion = properties.getProperty("ClientVersion");
+            if (minecraftVersion == null || minecraftVersion.isBlank())
+                throw new IllegalStateException("Python-era MCP conf/version.cfg is missing ClientVersion: " + source);
+
+            var date = Instant.ofEpochMilli(modified).atZone(ZoneOffset.UTC).toLocalDate();
+            return DateTimeFormatter.BASIC_ISO_DATE.format(date) + '-' + minecraftVersion.trim();
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to read Python-era MCP archive " + source.getAbsolutePath(), e);
+        }
+    }
+
+    public static void makeMappings(File sourceZip, File output) {
+        try (var source = new ZipFile(sourceZip)) {
+            var cache = Util.cache(output)
+                    .add("source", sourceZip)
+                    .addKnown("format", FORMAT);
+            if (Mavenizer.checkCache(output, cache))
+                return;
+
+            var entries = new LinkedHashMap<String, byte[]>();
+            for (var csv : new String[]{"fields.csv", "methods.csv", "params.csv"})
+                addRequired(source, entries,  csv, FML + "conf/" + csv);
+
+            FileUtils.ensureParent(output);
+
+            try (var out = new ZipOutputStream(new FileOutputStream(output))) {
+                for (var entry : entries.entrySet()) {
+                    out.putNextEntry(FileUtils.getStableEntry(entry.getKey()));
+                    out.write(entry.getValue());
+                    out.closeEntry();
+                }
+            }
+
+            cache.save();
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to make mappings zip for "+ sourceZip.getAbsolutePath());
+        }
+    }
+
+    protected static void putEntry(Map<String, byte[]> entries, String name, byte[] data) {
+        if (entries.putIfAbsent(name, data) != null)
+            throw new IllegalStateException("Duplicate entry in Python-era Forge source archive: " + name);
     }
 }
