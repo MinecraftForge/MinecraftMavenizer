@@ -43,6 +43,27 @@ public class StupidHacks {
         // scala did some releases overwriting their own files, so we host them ourselves, but
     }
 
+    private static final Map<String, List<Artifact>> FML_LIBRARIES_PRE_1_6 = Map.ofEntries(
+            Map.entry(
+                    "1.4",
+                    List.of(
+                            Artifact.from("com.google.guava:guava:12.0.1"),
+                            Artifact.from("net.sourceforge.argo:argo:2.25"),
+                            Artifact.from("org.bouncycastle:bcprov-jdk15on:1.47"),
+                            Artifact.from("org.ow2.asm:asm-all:4.0")
+                    )
+            ),
+            Map.entry(
+                    "1.5",
+                    List.of(
+                            Artifact.from("com.google.guava:guava:14.0-rc3"),
+                            Artifact.from("org.bouncycastle:bcprov-jdk15on:1.48"),
+                            Artifact.from("org.ow2.asm:asm-all:4.1"),
+                            Artifact.from("net.sourceforge.argo:argo:3.2")
+                    )
+            )
+    );
+
     private static Map<String, String> FORGE_FIXES = Map.of(
         // They changed the hashes for a while, then changed them back
         "org.scala-lang.plugins:scala-continuations-library_2.11:1.0.2_mc", "org.scala-lang.plugins:scala-continuations-library_2.11:1.0.2",
@@ -284,6 +305,14 @@ public class StupidHacks {
         if ("1.7.10".equals(artifact.getVersion()))
             return artifact.withVersion("1.7.10-fixed");
         return artifact;
+    }
+
+    public static List<Artifact> getPre16Deps(String version) {
+        return FML_LIBRARIES_PRE_1_6.entrySet().stream()
+                .filter(e -> version.startsWith(e.getKey()))
+                .findFirst()
+                .map(Map.Entry::getValue)
+                .orElse(List.of());
     }
 
 
