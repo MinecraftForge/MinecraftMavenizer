@@ -77,7 +77,7 @@ public final class RecompileTask implements Task {
             return output;
 
         // OSX doesn't have java < 8, so we need to grab 8 and set the --target argument
-        int jdkTarget = javaTarget < 8 ? 8 : javaTarget;
+        int jdkTarget = Math.max(javaTarget, 8);
 
         File jdk;
         try {

@@ -23,7 +23,7 @@ As such anything that can call a executable jar, should be able to use this. Ope
     - Facade and Access Transformer static post processors
   - TODO:
     - Legacy Forge versions.
-       - Python based Forge versions are not implemented yet. It will take some time but the plan is to eventually support every version of Forge that has been released.
+       - Python based Forge versions below 1.6.x are not supported. It will take some time but the plan is to eventually support every version of Forge that has been released.
      - Support Artifact Transformers allowing ModLauncher/Mixin/Whatever to apply static transformation of artifacts? Probably not needed.
      - Deobfuscating arbitrary dependencies. Basically a replacement for `fg.deobf` allowing mods to be used in different mappings then they are released.
 

@@ -43,6 +43,28 @@ public class StupidHacks {
         // scala did some releases overwriting their own files, so we host them ourselves, but
     }
 
+    private static final Map<String, List<Artifact>> FML_LIBRARIES_PRE_1_6 = Map.ofEntries(
+            Map.entry(
+                    "1.4",
+                    List.of(
+                            Artifact.from("com.google.guava:guava:12.0.1"),
+                            Artifact.from("net.sourceforge.argo:argo:2.25"),
+                            Artifact.from("org.bouncycastle:bcprov-jdk15on:1.47"),
+                            Artifact.from("org.ow2.asm:asm-all:4.0")
+                    )
+            ),
+            Map.entry(
+                    "1.5",
+                    List.of(
+                            Artifact.from("com.google.guava:guava:14.0-rc3"),
+                            Artifact.from("org.bouncycastle:bcprov-jdk15on:1.48"),
+                            Artifact.from("org.ow2.asm:asm-all:4.1"),
+                            Artifact.from("net.sourceforge.argo:argo:3.2"),
+                            Artifact.from("net.minecraftforge:legacyfixer:1.0")
+                    )
+            )
+    );
+
     private static Map<String, String> FORGE_FIXES = Map.of(
         // They changed the hashes for a while, then changed them back
         "org.scala-lang.plugins:scala-continuations-library_2.11:1.0.2_mc", "org.scala-lang.plugins:scala-continuations-library_2.11:1.0.2",
@@ -150,6 +172,8 @@ public class StupidHacks {
     }
     static {
         // FG 1.x, these were packed in the userdev. Manually uploaded
+        mappings("1.5.2-7.8.0.684",          "snapshot:20130617-1.5.2");
+        mappings("1.6.2-9.10.0.776",         "snapshot:20130915-1.6.2");
         mappings("1.6.3-9.11.0.873",         "snapshot:20130918-1.6.3");
         mappings("1.7.2-10.12.0.967",        "snapshot:20131226-1.7.2");
         mappings("1.7.2-10.12.0.1024",       "snapshot:20140205-1.7.2");
@@ -184,6 +208,17 @@ public class StupidHacks {
         if (version == null)
             throw new IllegalStateException("Could not determine default mappings for " + forgeVersion);
         return Mappings.of(version);
+    }
+
+    public static boolean hasDefaultMappings(ComparableVersion forgeVersion) {
+        String version = null;
+        for (var map : FORGE_MAPPINGS) {
+            if (forgeVersion.compareTo(map.start) < 0)
+                break;
+            version = map.mappings();
+        }
+
+        return version != null;
     }
 
     // List of 'bad' forge builds that are just broke for some reason and we explicitly don't want to support
@@ -269,6 +304,14 @@ public class StupidHacks {
         if ("1.7.10".equals(artifact.getVersion()))
             return artifact.withVersion("1.7.10-fixed");
         return artifact;
+    }
+
+    public static List<Artifact> getPre16Deps(String version) {
+        return FML_LIBRARIES_PRE_1_6.entrySet().stream()
+                .filter(e -> version.startsWith(e.getKey()))
+                .findFirst()
+                .map(Map.Entry::getValue)
+                .orElse(List.of());
     }
 
 

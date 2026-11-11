@@ -21,12 +21,18 @@ import javax.xml.parsers.ParserConfigurationException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.zip.ZipFile;
 
 import static net.minecraftforge.mcmaven.impl.Mavenizer.LOGGER;
 
@@ -270,9 +276,43 @@ public sealed class MavenCache permits MinecraftMavenCache {
 
         Mavenizer.assertNotCacheOnly();
         Mavenizer.assertOnline();
-        downloadFile(target, path);
+        var targetPath = target.toPath();
+        Files.createDirectories(targetPath.getParent());
+        var temporary = Files.createTempFile(targetPath.getParent(), target.getName() + '.', ".part");
+        try {
+            downloadFile(temporary.toFile(), path);
+            if (isZipArchive(path))
+                validateZipArchive(temporary, path);
+            try {
+                Files.move(temporary, targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporary, targetPath, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
         HashUtils.updateHash(target, knownHashes);
         return target;
+    }
+
+    private static boolean isZipArchive(String path) {
+        var lower = path.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".zip") || lower.endsWith(".jar");
+    }
+
+    private void validateZipArchive(java.nio.file.Path archive, String path) throws IOException {
+        try (var zip = new ZipFile(archive.toFile())) {
+            for (var entries = zip.entries(); entries.hasMoreElements(); ) {
+                var entry = entries.nextElement();
+                if (entry.isDirectory())
+                    continue;
+                try (var input = zip.getInputStream(entry)) {
+                    input.transferTo(OutputStream.nullOutputStream());
+                }
+            }
+        } catch (IOException e) {
+            throw new IOException("Downloaded incomplete or invalid ZIP archive from " + this.repo + path, e);
+        }
     }
 
     /**

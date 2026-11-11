@@ -510,7 +510,8 @@ public class MCPLegacy {
                     continue;
 
                 var newEntry = new ZipEntry(entry.getName());
-                newEntry.setSize(entry.getSize());
+                if (entry.getSize() > 0)
+                    newEntry.setSize(entry.getSize());
                 newEntry.setTime(entry.getTime());
                 zout.putNextEntry(newEntry);
                 zin.transferTo(zout);
@@ -1130,6 +1131,7 @@ public class MCPLegacy {
     }
 
     // The main difference between FG versions was the decompiler we invoked/embeded
+    private static final ComparableVersion MC_1_5    = new ComparableVersion("1.5");
     private static final ComparableVersion MC_1_6_1  = new ComparableVersion("1.6.1");
     private static final ComparableVersion MC_1_6_4  = new ComparableVersion("1.6.4");
     private static final ComparableVersion MC_1_7_2  = new ComparableVersion("1.7.2");
@@ -1181,8 +1183,10 @@ public class MCPLegacy {
                 args = List.of("--fix-generic-params", "--fml", "--fernflower");
             } else if (mc.compareTo(MC_1_7_2) >= 0) {
                 args = List.of("--mode", "1.7.2");
-            } else {
+            } else if (mc.compareTo(MC_1_5) >= 0){
                 args = List.of("--mode", "1.6.4");
+            } else {
+                args = List.of("--mode","1.4.7");
             }
             return new Cleanup(Constants.MCPCLEANUP, args);
         }

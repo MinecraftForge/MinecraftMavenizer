@@ -75,11 +75,12 @@ public class FG2Userdev implements ForgeVersionCommon {
 
         try (var zip = new ZipFile(data)) {
             var entry = zip.getEntry("dev.json");
-            if (entry == null)
-                throw except("Missing dev.json");
-
-            var cfg_data = zip.getInputStream(entry).readAllBytes();
-            this.config = JsonData.minecraftVersion(cfg_data);
+            if (entry != null) {
+                var cfg_data = zip.getInputStream(entry).readAllBytes();
+                this.config = JsonData.minecraftVersion(cfg_data);
+            } else {
+                this.config = getDefaultConfig(Util.forgeToMcVersion(name.getVersion()));
+            }
 
             entry = zip.getEntry("merged.srg");
             this.extraMappings = entry == null ? null : zip.getInputStream(entry).readAllBytes();
@@ -138,6 +139,10 @@ public class FG2Userdev implements ForgeVersionCommon {
 
     public MCPLegacy getMCP() {
         return this.mcp;
+    }
+
+    public MCPLegacy.Child getMcpChild() {
+        return mcpChild;
     }
 
     public @Nullable byte[] getExtraMappings() {
@@ -220,6 +225,7 @@ public class FG2Userdev implements ForgeVersionCommon {
         var ret = new ArrayList<Artifact>();
         // We don't support OS specific/classified libraries on these old versions because they were made before
         // Mojang supported them. So just get them all via the name like FG2 does
+
         for (var lib : this.config.libraries)
             ret.add(Artifact.from(lib.name));
         return ret;
@@ -492,7 +498,7 @@ public class FG2Userdev implements ForgeVersionCommon {
         }
     }
 
-    private Task injectLegacy() {
+    protected Task injectLegacy() {
         var input = this.mcpChild.getFinalStep();
         return Task.named("inject",
             Task.deps(input),
@@ -500,7 +506,7 @@ public class FG2Userdev implements ForgeVersionCommon {
         );
     }
 
-    private File injectLegacy(File input) {
+    protected File injectLegacy(File input) {
         var output = new File(this.build, "injected.jar");
         var cache = Util.cache(output)
             .add("input", input)
@@ -662,6 +668,25 @@ public class FG2Userdev implements ForgeVersionCommon {
         }
         ret.client = client;
         ret.env = env;
+        return ret;
+    }
+
+    private MinecraftVersion getDefaultConfig(String version) {
+        if (ComparableVersion.of(version).compareTo(ComparableVersion.of("1.6")) >= 0)
+            except("missing dev.json");
+        var ret = new MinecraftVersion();
+
+        ret.id = version;
+        ret.inheritsFrom = null;
+
+        ret.libraries = StupidHacks.getPre16Deps(version).stream()
+                .map(artifact -> {
+                    var lib = new MinecraftVersion.Library();
+                    lib.name = artifact.toString();
+                    return lib;
+                })
+                .toArray(MinecraftVersion.Library[]::new);
+
         return ret;
     }
 }
