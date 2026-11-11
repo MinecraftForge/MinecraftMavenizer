@@ -134,8 +134,6 @@ public final class ForgeRepo extends Repo {
                             new File(this.cache.maven().getFolder(), output.getLocalPath()),
                             this.cache.maven().download(source)
                     );
-                    if (!isConvertablePython(version))
-                        return processPython(version, mappings, outputJson);
 
                     return processV2(version, mappings, outputJson, FGVersion.v1);
                 }
@@ -164,56 +162,6 @@ public final class ForgeRepo extends Repo {
         } finally {
             LOGGER.pop(indent);
         }
-    }
-
-    private List<PendingArtifact> processPython(String version, Mappings baseMappings, Map<String, Supplier<String>> outputJson) {
-        var sourceArtifact = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version, "src", "zip");
-        var sourceZip = this.cache.maven().download(sourceArtifact);
-        var mcVersion = Util.forgeToMcVersion(version);
-        var mappingVersion = PythonForgeSource.getSnapshotVersion(sourceZip);
-        if ("snapshot".equals(baseMappings.channel()) && !mappingVersion.equals(baseMappings.version()))
-            throw new IllegalArgumentException("Forge " + version + " bundles snapshot:" + mappingVersion
-                    + " mappings, but snapshot:" + baseMappings.version() + " was requested");
-        var userdev = getUserdev(version);
-        var build = new File(this.cache.root(), "forge/" + userdev.getFolder());
-
-        var legacy = this.mcpconfig.legacy(mcVersion);
-        Mappings mappings;
-        if ("srg".equals(baseMappings.channel()))
-            mappings = baseMappings;
-        else
-            mappings = Mappings.of(baseMappings.channel(), mappingVersion);
-
-        Artifact mappingsArtifact = Artifact.from("de.oceanlabs.mcp", "mcp_" + baseMappings.channel(), baseMappings.version(), null, "zip");
-        PythonForgeSource.makeMappings(
-                sourceZip,
-                new File(cache.maven().getFolder(), mappingsArtifact.getLocalPath())
-        );
-
-        var resolved = mappings.withContext(legacy);
-        var name = Artifact.from(Constants.FORGE_GROUP, Constants.FORGE_NAME, version);
-        var pipeline = new LegacyUserdev(build, this, userdev);
-
-        var srgSources = pipeline.getSources();
-        Task sourcesTask = mappings.channel().equals("srg")
-                ? srgSources
-                : new RenameTask(build, Constants.FORGE_NAME, srgSources, resolved, true, legacy.getMappings(), mcVersion);
-        var classesTask = new RecompileTask(build, name, this.cache.jdks(), legacy.getJavaTarget(), pipeline::getClasspath, sourcesTask, resolved);
-        var mappingCoords = resolved.getArtifact();
-        var mappingArtifacts = mappingArtifacts(build, resolved, mcVersion, outputJson);
-
-        var sources = pending("Sources", sourcesTask, name.withClassifier("sources"), true, sourceVariant(baseMappings));
-        var classes = pending("Classes", classesTask, name, false, () -> classVariants(baseMappings, pipeline, mappingCoords));
-        var metadata = pending("Metadata", metadata(build, pipeline, pipeline.getRuns()), name.withClassifier("metadata").withExtension("zip"), false, metadataVariant());
-        var pom = pending("Maven POM", pom(resolved.getFolder(build), pipeline, version, null, mappingCoords), name.withExtension("pom"), false);
-        var classifiers = getClassifieres(name, pipeline.getLibraries(), new HashMap<>());
-        addJsonData(outputJson, pipeline);
-
-        var ret = new ArrayList<PendingArtifact>();
-        ret.addAll(mappingArtifacts);
-        ret.addAll(List.of(sources, classes, pom, metadata));
-        ret.addAll(classifiers.values());
-        return ret;
     }
 
     private static Artifact getUserdev(String forge) {

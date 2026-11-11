@@ -59,7 +59,8 @@ public class StupidHacks {
                             Artifact.from("com.google.guava:guava:14.0-rc3"),
                             Artifact.from("org.bouncycastle:bcprov-jdk15on:1.48"),
                             Artifact.from("org.ow2.asm:asm-all:4.1"),
-                            Artifact.from("net.sourceforge.argo:argo:3.2")
+                            Artifact.from("net.sourceforge.argo:argo:3.2"),
+                            Artifact.from("net.minecraftforge:legacyfixer:1.0")
                     )
             )
     );
@@ -166,14 +167,12 @@ public class StupidHacks {
     // So I scanned Forge's git history and found each mapping change.
     private record ForgeMappings(ComparableVersion start, String mappings) {}
     private static final List<ForgeMappings> FORGE_MAPPINGS = new ArrayList<ForgeMappings>();
-    public static void mappings(String forge, String mappings) {
-        var forgeVersion = new ComparableVersion(forge);
-        FORGE_MAPPINGS.removeIf(map -> map.start().compareTo(forgeVersion) == 0);
-        FORGE_MAPPINGS.add(new ForgeMappings(forgeVersion, mappings));
-        FORGE_MAPPINGS.sort((left, right) -> left.start().compareTo(right.start()));
+    private static void mappings(String forge, String mappings) {
+        FORGE_MAPPINGS.add(new ForgeMappings(new ComparableVersion(forge), mappings));
     }
     static {
         // FG 1.x, these were packed in the userdev. Manually uploaded
+        mappings("1.5.2-7.8.0.684",          "snapshot:20130617-1.5.2");
         mappings("1.6.2-9.10.0.776",         "snapshot:20130915-1.6.2");
         mappings("1.6.3-9.11.0.873",         "snapshot:20130918-1.6.3");
         mappings("1.7.2-10.12.0.967",        "snapshot:20131226-1.7.2");

@@ -79,7 +79,7 @@ public class FG2Userdev implements ForgeVersionCommon {
                 var cfg_data = zip.getInputStream(entry).readAllBytes();
                 this.config = JsonData.minecraftVersion(cfg_data);
             } else {
-                this.config = null;
+                this.config = getDefaultConfig(Util.forgeToMcVersion(name.getVersion()));
             }
 
             entry = zip.getEntry("merged.srg");
@@ -225,7 +225,6 @@ public class FG2Userdev implements ForgeVersionCommon {
         var ret = new ArrayList<Artifact>();
         // We don't support OS specific/classified libraries on these old versions because they were made before
         // Mojang supported them. So just get them all via the name like FG2 does
-        if (this.config == null) return ret;
 
         for (var lib : this.config.libraries)
             ret.add(Artifact.from(lib.name));
@@ -263,8 +262,6 @@ public class FG2Userdev implements ForgeVersionCommon {
             // We just want the group:name and clssifier, in case they have updated the version since we were built
             seen.put(artifact.withVersion(null).toString(), artifact);
         }
-
-        if (this.config == null) return classpath;
 
         if (this.config.inheritsFrom == null) {
             // If there is no inherits, this is before Mojang added that feature to the launcher
@@ -671,6 +668,25 @@ public class FG2Userdev implements ForgeVersionCommon {
         }
         ret.client = client;
         ret.env = env;
+        return ret;
+    }
+
+    private MinecraftVersion getDefaultConfig(String version) {
+        if (ComparableVersion.of(version).compareTo(ComparableVersion.of("1.6")) >= 0)
+            except("missing dev.json");
+        var ret = new MinecraftVersion();
+
+        ret.id = version;
+        ret.inheritsFrom = null;
+
+        ret.libraries = StupidHacks.getPre16Deps(version).stream()
+                .map(artifact -> {
+                    var lib = new MinecraftVersion.Library();
+                    lib.name = artifact.toString();
+                    return lib;
+                })
+                .toArray(MinecraftVersion.Library[]::new);
+
         return ret;
     }
 }
